@@ -5,6 +5,7 @@ import { Show, SignInButton, UserButton } from '@clerk/nextjs';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 import { MapPreview } from '@/components/MapPreview';
 import type { GeocodeSuggestion } from '@/lib/geocoding';
+import { reverseGeocodeNearest } from '@/lib/geocoding';
 import { fetchPropertyData, type PropertyData } from '@/lib/propertyData';
 import { calculateFrontage } from '@/lib/propertyGeometry';
 
@@ -37,6 +38,25 @@ export default function Home() {
   const handleSelect = (s: GeocodeSuggestion) => {
     setQuery(s.displayName);
     setSite({ lat: s.lat, lon: s.lon, label: s.displayName });
+  };
+
+  const handleParcelClick = async (lonLat: [number, number]) => {
+    const [lon, lat] = lonLat;
+    setSite({ lat, lon, label: `${lat.toFixed(5)}, ${lon.toFixed(5)}` });
+    setQuery('');
+    try {
+      const hit = await reverseGeocodeNearest(lon, lat);
+      if (hit) {
+        setQuery(hit.result.displayName);
+        setSite({
+          lat: hit.result.lat,
+          lon: hit.result.lon,
+          label: hit.result.displayName,
+        });
+      }
+    } catch (err) {
+      console.warn('[page] reverse geocode failed', err);
+    }
   };
 
   useEffect(() => {
@@ -75,7 +95,11 @@ export default function Home() {
         onSelect={handleSelect}
       />
       <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
-        <MapPanel site={site} data={data} />
+        <MapPanel
+          site={site}
+          data={data}
+          onParcelClick={handleParcelClick}
+        />
         <DataPanel
           activeTab={activeTab}
           onTabChange={setActiveTab}
@@ -140,9 +164,11 @@ function Header({
 function MapPanel({
   site,
   data,
+  onParcelClick,
 }: {
   site: SelectedSite;
   data: PropertyData | null;
+  onParcelClick: (lonLat: [number, number]) => void;
 }) {
   const lat = site?.lat ?? MELBOURNE_CBD.lat;
   const lon = site?.lon ?? MELBOURNE_CBD.lon;
@@ -158,6 +184,7 @@ function MapPanel({
         polygon={data?.parcel ?? null}
         easements={data?.easements ?? []}
         buildings={data?.buildings ?? []}
+        onParcelClick={onParcelClick}
         className="absolute inset-0 h-full w-full border-0"
       />
       {!site && (
