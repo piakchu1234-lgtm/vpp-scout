@@ -1,10 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Show, SignInButton, UserButton } from '@clerk/nextjs';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 import { MapPreview } from '@/components/MapPreview';
 import type { GeocodeSuggestion } from '@/lib/geocoding';
+import { fetchPropertyData, type PropertyData } from '@/lib/propertyData';
+import { calculateFrontage } from '@/lib/propertyGeometry';
 
 type TabId = 'details' | 'zoning' | 'report';
 
@@ -22,15 +24,48 @@ type SelectedSite = {
   label: string;
 } | null;
 
+type LoadState = 'idle' | 'loading' | 'ready' | 'error';
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState<TabId>('details');
   const [query, setQuery] = useState('');
   const [site, setSite] = useState<SelectedSite>(null);
+  const [data, setData] = useState<PropertyData | null>(null);
+  const [loadState, setLoadState] = useState<LoadState>('idle');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleSelect = (s: GeocodeSuggestion) => {
     setQuery(s.displayName);
     setSite({ lat: s.lat, lon: s.lon, label: s.displayName });
   };
+
+  useEffect(() => {
+    if (!site) {
+      setData(null);
+      setLoadState('idle');
+      setErrorMsg(null);
+      return;
+    }
+    let cancelled = false;
+    setLoadState('loading');
+    setErrorMsg(null);
+    fetchPropertyData(site.label, site.lon, site.lat)
+      .then((result) => {
+        if (cancelled) return;
+        setData(result);
+        setLoadState('ready');
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const msg = err instanceof Error ? err.message : 'Failed to load property data';
+        console.warn('[page] fetchPropertyData failed', err);
+        setErrorMsg(msg);
+        setLoadState('error');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [site]);
 
   return (
     <div className="flex h-screen flex-col bg-zinc-50 text-zinc-900">
@@ -40,11 +75,14 @@ export default function Home() {
         onSelect={handleSelect}
       />
       <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
-        <MapPanel site={site} />
+        <MapPanel site={site} data={data} />
         <DataPanel
           activeTab={activeTab}
           onTabChange={setActiveTab}
           site={site}
+          data={data}
+          loadState={loadState}
+          errorMsg={errorMsg}
         />
       </div>
     </div>
@@ -99,7 +137,13 @@ function Header({
   );
 }
 
-function MapPanel({ site }: { site: SelectedSite }) {
+function MapPanel({
+  site,
+  data,
+}: {
+  site: SelectedSite;
+  data: PropertyData | null;
+}) {
   const lat = site?.lat ?? MELBOURNE_CBD.lat;
   const lon = site?.lon ?? MELBOURNE_CBD.lon;
   return (
@@ -111,6 +155,9 @@ function MapPanel({ site }: { site: SelectedSite }) {
         key={`${lat},${lon}`}
         lat={lat}
         lon={lon}
+        polygon={data?.parcel ?? null}
+        easements={data?.easements ?? []}
+        buildings={data?.buildings ?? []}
         className="absolute inset-0 h-full w-full border-0"
       />
       {!site && (
@@ -128,10 +175,16 @@ function DataPanel({
   activeTab,
   onTabChange,
   site,
+  data,
+  loadState,
+  errorMsg,
 }: {
   activeTab: TabId;
   onTabChange: (id: TabId) => void;
   site: SelectedSite;
+  data: PropertyData | null;
+  loadState: LoadState;
+  errorMsg: string | null;
 }) {
   return (
     <aside className="flex flex-1 flex-col overflow-hidden border-zinc-200 bg-white lg:basis-[40%] lg:border-l">
@@ -164,8 +217,17 @@ function DataPanel({
       </nav>
 
       <div className="flex-1 overflow-y-auto">
-        {activeTab === 'details' && <PropertyDetailsPanel site={site} />}
-        {activeTab === 'zoning' && <ZoningPanel />}
+        {activeTab === 'details' && (
+          <PropertyDetailsPanel
+            site={site}
+            data={data}
+            loadState={loadState}
+            errorMsg={errorMsg}
+          />
+        )}
+        {activeTab === 'zoning' && (
+          <ZoningPanel data={data} loadState={loadState} errorMsg={errorMsg} />
+        )}
         {activeTab === 'report' && <AiReportPanel site={site} />}
       </div>
     </aside>
@@ -221,7 +283,22 @@ function MetricRow({
   );
 }
 
-function PropertyDetailsPanel({ site }: { site: SelectedSite }) {
+function PropertyDetailsPanel({
+  site,
+  data,
+  loadState,
+  errorMsg,
+}: {
+  site: SelectedSite;
+  data: PropertyData | null;
+  loadState: LoadState;
+  errorMsg: string | null;
+}) {
+  const lotAreaM2 = data?.area.valueM2 ?? null;
+  const frontageM = data?.parcel ? calculateFrontage(data.parcel) : null;
+  const councilLabel = data?.councilName ?? data?.council.contact?.name ?? null;
+  const spi = data?.spi ?? null;
+
   return (
     <PanelShell
       number="01"
@@ -241,66 +318,177 @@ function PropertyDetailsPanel({ site }: { site: SelectedSite }) {
           </p>
         </div>
       )}
+
+      <LoadBanner loadState={loadState} errorMsg={errorMsg} />
+
       <div className="rounded-md border border-zinc-200">
         <div className="px-4">
-          <MetricRow label="Lot area" value="—" hint="Square metres" />
-          <MetricRow label="Frontage" value="—" hint="Primary street" />
-          <MetricRow label="Site coverage" value="—" hint="Existing built form" />
-          <MetricRow label="Front setback" value="—" />
-          <MetricRow label="Side setbacks" value="—" />
-          <MetricRow label="Rear setback" value="—" />
+          <MetricRow
+            label="Lot area"
+            value={lotAreaM2 != null ? `${lotAreaM2.toLocaleString()} m²` : '—'}
+            hint={areaSourceHint(data)}
+          />
+          <MetricRow
+            label="Frontage"
+            value={frontageM != null ? `${frontageM.toFixed(1)} m` : '—'}
+            hint="Shortest cadastral edge"
+          />
+          <MetricRow
+            label="Council"
+            value={councilLabel ?? '—'}
+            hint="Vicmap_Admin"
+          />
+          <MetricRow
+            label="SPI"
+            value={spi ?? '—'}
+            hint="Standard Parcel Identifier"
+          />
+          <MetricRow
+            label="Site coverage"
+            value="—"
+            hint="Existing built form"
+          />
+          <MetricRow label="Setbacks" value="—" hint="Front / side / rear" />
         </div>
       </div>
+
       {!site && (
         <p className="mt-4 text-[11px] leading-relaxed text-zinc-400">
-          Select a parcel on the map to populate these values.
+          Search an address above to populate these values.
         </p>
       )}
     </PanelShell>
   );
 }
 
-function ZoningPanel() {
+function areaSourceHint(data: PropertyData | null): string {
+  if (!data) return 'Square metres';
+  switch (data.area.source) {
+    case 'verified':
+      return 'Verified record';
+    case 'vicmap':
+      return 'Vicmap cadastral';
+    case 'domain':
+      return 'Domain enrichment';
+    default:
+      return 'Square metres';
+  }
+}
+
+function LoadBanner({
+  loadState,
+  errorMsg,
+}: {
+  loadState: LoadState;
+  errorMsg: string | null;
+}) {
+  if (loadState === 'loading') {
+    return (
+      <div className="mb-4 rounded-md border border-zinc-200 bg-white px-3 py-2 text-[11px] text-zinc-500">
+        Loading planning data…
+      </div>
+    );
+  }
+  if (loadState === 'error') {
+    return (
+      <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+        {errorMsg ?? 'Failed to load planning data.'}
+      </div>
+    );
+  }
+  return null;
+}
+
+function ZoningPanel({
+  data,
+  loadState,
+  errorMsg,
+}: {
+  data: PropertyData | null;
+  loadState: LoadState;
+  errorMsg: string | null;
+}) {
+  const zoneCode = data?.vicPlan.zoneCode ?? null;
+  const zoneDescription = data?.vicPlan.zoneDescription ?? null;
+  const overlayCodes = data?.vicPlan.overlayCodes ?? [];
+  const overlayRaw = data?.vicPlan.overlayRaw ?? [];
+
   return (
     <PanelShell
       number="02"
       title="Zoning & ResCode"
       description="Victoria Planning Provisions context for this site, including overlays and ResCode standards (Clauses 54 / 55)."
     >
+      <LoadBanner loadState={loadState} errorMsg={errorMsg} />
+
       <div className="space-y-3">
-        <ScaffoldCard en="Zone" zh="分区" body="Awaiting parcel selection." />
-        <ScaffoldCard
-          en="Overlays"
-          zh="规划覆盖区"
-          body="HO, BMO, FO and SBO checks will surface here."
-        />
-        <ScaffoldCard
-          en="ResCode standards"
-          zh="ResCode 标准"
-          body="Clause 54 / 55 setback, site coverage and amenity tests."
-        />
+        <div className="rounded-md border border-zinc-200 bg-white px-4 py-3">
+          <div className="flex items-center gap-2">
+            <p className="text-xs font-medium text-zinc-900">Zone</p>
+            <span className="text-[11px] text-zinc-400">分区</span>
+          </div>
+          {zoneCode ? (
+            <div className="mt-2">
+              <p className="font-mono text-sm tracking-tight text-zinc-900">
+                {zoneCode}
+              </p>
+              {zoneDescription && (
+                <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
+                  {zoneDescription}
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+              Awaiting parcel selection.
+            </p>
+          )}
+        </div>
+
+        <div className="rounded-md border border-zinc-200 bg-white px-4 py-3">
+          <div className="flex items-center gap-2">
+            <p className="text-xs font-medium text-zinc-900">Overlays</p>
+            <span className="text-[11px] text-zinc-400">规划覆盖区</span>
+          </div>
+          {overlayCodes.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {overlayCodes.map((c) => (
+                <span
+                  key={c}
+                  className="rounded-sm border border-zinc-300 bg-zinc-50 px-2 py-0.5 font-mono text-[11px] text-zinc-800"
+                >
+                  {c}
+                </span>
+              ))}
+            </div>
+          ) : data ? (
+            <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+              No HO / BMO / FO / SBO / DDO intersections at this point.
+            </p>
+          ) : (
+            <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+              HO, BMO, FO and SBO checks will surface here.
+            </p>
+          )}
+          {overlayRaw.length > 0 && (
+            <p className="mt-2 font-mono text-[10px] leading-relaxed text-zinc-400">
+              Scheme codes: {overlayRaw.join(', ')}
+            </p>
+          )}
+        </div>
+
+        <div className="rounded-md border border-zinc-200 bg-white px-4 py-3">
+          <div className="flex items-center gap-2">
+            <p className="text-xs font-medium text-zinc-900">ResCode standards</p>
+            <span className="text-[11px] text-zinc-400">ResCode 标准</span>
+          </div>
+          <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+            Clause 54 / 55 setback, site coverage and amenity tests run against
+            the lot geometry once selected.
+          </p>
+        </div>
       </div>
     </PanelShell>
-  );
-}
-
-function ScaffoldCard({
-  en,
-  zh,
-  body,
-}: {
-  en: string;
-  zh: string;
-  body: string;
-}) {
-  return (
-    <div className="rounded-md border border-zinc-200 bg-white px-4 py-3">
-      <div className="flex items-center gap-2">
-        <p className="text-xs font-medium text-zinc-900">{en}</p>
-        <span className="text-[11px] text-zinc-400">{zh}</span>
-      </div>
-      <p className="mt-1 text-xs leading-relaxed text-zinc-500">{body}</p>
-    </div>
   );
 }
 
