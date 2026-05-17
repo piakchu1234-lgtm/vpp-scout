@@ -9,9 +9,15 @@ import type {
 
 export const runtime = 'edge';
 
-const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
+const ANTHROPIC_DEFAULT_BASE_URL = 'https://api.anthropic.com';
 const ANTHROPIC_MODEL = 'claude-sonnet-4-5';
 const ANTHROPIC_VERSION = '2023-06-01';
+
+function resolveAnthropicUrl(): string {
+  const base = process.env.ANTHROPIC_BASE_URL?.trim() || ANTHROPIC_DEFAULT_BASE_URL;
+  const trimmed = base.replace(/\/+$/, '');
+  return `${trimmed}/v1/messages`;
+}
 
 const SECTION_KEYS = [
   'verdict',
@@ -173,7 +179,7 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  const upstream = await fetch(ANTHROPIC_URL, {
+  const upstream = await fetch(resolveAnthropicUrl(), {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
