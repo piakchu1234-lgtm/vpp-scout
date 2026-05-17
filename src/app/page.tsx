@@ -394,17 +394,35 @@ function PropertyDetailsPanel({
           />
           <MetricRow
             label="Front setback"
-            value={setbacks ? `${setbacks.frontM.toFixed(1)} m` : '—'}
+            value={
+              setbacks
+                ? `${setbacks.frontM.toFixed(1)} m`
+                : data?.parcel
+                ? 'Vacant lot'
+                : '—'
+            }
             hint="Longest edge → nearest building corner"
           />
           <MetricRow
             label="Side setback (min)"
-            value={setbacks ? `${setbacks.sideMinM.toFixed(1)} m` : '—'}
+            value={
+              setbacks
+                ? `${setbacks.sideMinM.toFixed(1)} m`
+                : data?.parcel
+                ? 'No building detected'
+                : '—'
+            }
             hint="Binding side edge"
           />
           <MetricRow
             label="Rear setback"
-            value={setbacks ? `${setbacks.rearM.toFixed(1)} m` : '—'}
+            value={
+              setbacks
+                ? `${setbacks.rearM.toFixed(1)} m`
+                : data?.parcel
+                ? 'Vacant lot'
+                : '—'
+            }
             hint="Opposite the frontage"
           />
         </div>
