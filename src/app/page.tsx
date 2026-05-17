@@ -9,6 +9,12 @@ import { reverseGeocodeNearest } from '@/lib/geocoding';
 import { fetchPropertyData, type PropertyData } from '@/lib/propertyData';
 import { calculateFrontage } from '@/lib/propertyGeometry';
 import { computeSetbacks, computeSiteCoverage } from '@/lib/spatial';
+import type {
+  FeasibilityReport,
+  ReportRequest,
+  ReportResponse,
+  ReportSiteMetrics,
+} from '@/lib/report';
 
 type TabId = 'details' | 'zoning' | 'report';
 
@@ -256,7 +262,7 @@ function DataPanel({
         {activeTab === 'zoning' && (
           <ZoningPanel data={data} loadState={loadState} errorMsg={errorMsg} />
         )}
-        {activeTab === 'report' && <AiReportPanel site={site} />}
+        {activeTab === 'report' && <AiReportPanel site={site} data={data} />}
       </div>
     </aside>
   );
@@ -568,7 +574,70 @@ function ZoningPanel({
   );
 }
 
-function AiReportPanel({ site }: { site: SelectedSite }) {
+function AiReportPanel({
+  site,
+  data,
+}: {
+  site: SelectedSite;
+  data: PropertyData | null;
+}) {
+  const [generating, setGenerating] = useState(false);
+  const [report, setReport] = useState<FeasibilityReport | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const canGenerate = Boolean(site && data);
+
+  const handleGenerate = async () => {
+    if (!site || !data) return;
+    setGenerating(true);
+    setError(null);
+    setReport(null);
+
+    const frontageM = data.parcel ? calculateFrontage(data.parcel) : null;
+    const coverage = data.parcel
+      ? computeSiteCoverage(data.parcel, data.buildings)
+      : null;
+    const setbacks = data.parcel
+      ? computeSetbacks(data.parcel, data.buildings)
+      : null;
+
+    const metrics: ReportSiteMetrics = {
+      address: site.label,
+      lat: site.lat,
+      lon: site.lon,
+      spi: data.spi,
+      council: data.councilName ?? data.council.contact?.name ?? null,
+      zoneCode: data.vicPlan.zoneCode,
+      zoneDescription: data.vicPlan.zoneDescription,
+      overlayCodes: data.vicPlan.overlayCodes,
+      overlayRaw: data.vicPlan.overlayRaw,
+      lotAreaM2: data.area.valueM2,
+      frontageM,
+      siteCoveragePct: coverage ? coverage.pct : null,
+      setbackFrontM: setbacks ? setbacks.frontM : null,
+      setbackSideMinM: setbacks ? setbacks.sideMinM : null,
+      setbackRearM: setbacks ? setbacks.rearM : null,
+    };
+
+    try {
+      const res = await fetch('/api/report', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ metrics } satisfies ReportRequest),
+      });
+      const json = (await res.json()) as ReportResponse;
+      if (!json.ok) {
+        setError(json.error);
+      } else {
+        setReport(json.report);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Network error');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   return (
     <PanelShell
       number="03"
@@ -576,24 +645,79 @@ function AiReportPanel({ site }: { site: SelectedSite }) {
       description="Generate a Senior-Architect-grade feasibility memo for the selected site. Powered by SSD 2026 + NCC 2026 logic."
     >
       <div className="rounded-md border border-zinc-200 bg-zinc-50 p-4">
-        <p className="text-xs font-medium text-zinc-900">Feasibility memo</p>
+        <p className="text-xs font-medium text-zinc-900">Bilingual feasibility brief</p>
         <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
-          A multi-page PDF covering lot capacity, overlay impact, ResCode
-          compliance, and a draft built-form envelope.
+          Side-by-side English and Mandarin assessment of development capacity,
+          zoning context, ResCode considerations, and risk.
         </p>
         <button
           type="button"
-          disabled={!site}
+          onClick={handleGenerate}
+          disabled={!canGenerate || generating}
           className="mt-4 inline-flex h-9 items-center justify-center rounded-md bg-zinc-900 px-4 text-xs font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Generate report
+          {generating ? 'Generating…' : 'Generate report'}
         </button>
-        {!site && (
+        {!canGenerate && (
           <p className="mt-2 text-[10px] uppercase tracking-wider text-zinc-400">
             Available once a site is selected
           </p>
         )}
       </div>
+
+      {error && (
+        <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+          {error}
+        </div>
+      )}
+
+      {report && <ReportView report={report} />}
     </PanelShell>
+  );
+}
+
+function ReportView({ report }: { report: FeasibilityReport }) {
+  const sections: { key: keyof FeasibilityReport; title: string }[] = [
+    { key: 'verdict', title: 'Verdict' },
+    { key: 'summary', title: 'Summary' },
+    { key: 'developmentCapacity', title: 'Development capacity' },
+    { key: 'zoningAnalysis', title: 'Zoning analysis' },
+    { key: 'rescodeConsiderations', title: 'ResCode considerations' },
+    { key: 'risks', title: 'Risks' },
+    { key: 'recommendation', title: 'Recommendation' },
+  ];
+  return (
+    <div className="mt-6 space-y-5">
+      {sections.map(({ key, title }) => (
+        <div
+          key={key}
+          className="overflow-hidden rounded-md border border-zinc-200"
+        >
+          <div className="border-b border-zinc-200 bg-zinc-50 px-3 py-1.5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+              {title}
+            </p>
+          </div>
+          <div className="grid grid-cols-1 divide-y divide-zinc-200 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+            <div className="px-3 py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+                EN
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-zinc-800">
+                {report[key].en}
+              </p>
+            </div>
+            <div className="px-3 py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+                ZH
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-zinc-800">
+                {report[key].zh}
+              </p>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
