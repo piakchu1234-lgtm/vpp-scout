@@ -47,3 +47,6 @@ next-env.d.ts
 /.open-next/
 /.wrangler/
 /cloudflare-env.d.ts
+
+# Claude Code local session / tool settings (per-machine, never shared)
+/.claude/
