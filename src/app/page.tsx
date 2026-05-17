@@ -16,6 +16,12 @@ import {
   type School,
 } from '@/lib/schoolApi';
 import {
+  fetchPlanningPermits,
+  type PermitStatus,
+  type PlanningHistory,
+  type PlanningPermit,
+} from '@/lib/planningHistory';
+import {
   computeSetbacks,
   computeSiteCoverage,
   type Setbacks,
@@ -184,6 +190,40 @@ const T = {
   riskHeritage: { en: 'Heritage', zh: '遗产' },
   riskEnvironment: { en: 'Environment', zh: '环境' },
   riskLandslide: { en: 'Landslide', zh: '山体滑坡' },
+  permitsTitle: { en: 'Planning Permit History', zh: '规划许可历史' },
+  permitsLoading: { en: 'Loading permits…', zh: '正在加载许可记录…' },
+  permitsEmpty: {
+    en: 'No permit records on file for this parcel.',
+    zh: '该地块暂无许可记录。',
+  },
+  permitsDemo: {
+    en: 'Seeded demo records — connect a council ePathway feed to upgrade.',
+    zh: '示例记录 — 接入 council ePathway 数据源后将自动升级。',
+  },
+  permitsLodged: { en: 'Lodged', zh: '提交日期' },
+  permitsDecision: { en: 'Decision', zh: '决定日期' },
+  permitsApplicant: { en: 'Applicant', zh: '申请方' },
+  documentsTitle: { en: 'Order Property Documents', zh: '订购物业文件' },
+  documentsIntro: {
+    en: 'Authoritative title, plan, and Section 32 packs sourced from LANDATA, delivered as signed PDFs.',
+    zh: '通过 LANDATA 出具的权威产权、地块及 Section 32 文件，以签署版 PDF 交付。',
+  },
+  docTitle: { en: 'Copy of Title', zh: '产权证副本' },
+  docPlan: { en: 'Plan of Subdivision', zh: '分割图 (Plan of Subdivision)' },
+  docS32: { en: 'Full Section 32 Package', zh: 'Section 32 完整资料包' },
+  docOrder: { en: 'Order', zh: '订购' },
+  docConfirmTitle: { en: 'Confirm document order', zh: '确认文件订购' },
+  docConfirmBody: {
+    en: 'You\'re about to order the following document for this site. The full LANDATA storefront is in private beta — for now, we\'ll log the request and route it to our internal processing queue.',
+    zh: '您即将为本地块订购以下文件。LANDATA 完整商店仍处内测中 — 当前将记录请求并送往内部处理队列。',
+  },
+  docConfirm: { en: 'Confirm order', zh: '确认订购' },
+  docCancel: { en: 'Cancel', zh: '取消' },
+  docOrderLogged: { en: 'Order logged', zh: '订购已记录' },
+  docOrderLoggedBody: {
+    en: 'Your request has been queued. A confirmation email will be sent once LANDATA delivery is wired up.',
+    zh: '您的请求已加入队列。LANDATA 投递通道接入后将通过邮件发送确认。',
+  },
 };
 
 function t(key: keyof typeof T, lang: Lang): string {
@@ -203,6 +243,12 @@ type SelectedSite = {
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 
+type DocOrderRequest = {
+  docId: 'title' | 'plan' | 's32';
+  label: string;
+  priceAud: number;
+};
+
 export default function Home() {
   const [lang, setLang] = useState<Lang>('en');
   const [activeTab, setActiveTab] = useState<TabId>('details');
@@ -217,6 +263,11 @@ export default function Home() {
   const [distancePoints, setDistancePoints] = useState<[number, number][]>([]);
   const [areaPoints, setAreaPoints] = useState<[number, number][]>([]);
   const [schools, setSchools] = useState<NearestSchools | null>(null);
+  const [permits, setPermits] = useState<PlanningHistory | null>(null);
+  const [pendingDocOrder, setPendingDocOrder] = useState<DocOrderRequest | null>(
+    null,
+  );
+  const [docOrderLogged, setDocOrderLogged] = useState(false);
 
   const handleSelect = (s: GeocodeSuggestion) => {
     setQuery(s.displayName);
@@ -248,6 +299,7 @@ export default function Home() {
       setLoadState('idle');
       setErrorMsg(null);
       setSchools(null);
+      setPermits(null);
       setDistancePoints([]);
       setAreaPoints([]);
       return;
@@ -255,11 +307,18 @@ export default function Home() {
     let cancelled = false;
     setLoadState('loading');
     setErrorMsg(null);
+    setPermits(null);
     fetchPropertyData(site.label, site.lon, site.lat)
       .then((result) => {
         if (cancelled) return;
         setData(result);
         setLoadState('ready');
+        const councilName = result.councilName ?? result.council.contact?.name ?? null;
+        return fetchPlanningPermits(site.lat, site.lon, councilName);
+      })
+      .then((history) => {
+        if (cancelled || !history) return;
+        setPermits(history);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -341,6 +400,7 @@ export default function Home() {
           site={site}
           data={data}
           schools={schools}
+          permits={permits}
           loadState={loadState}
           errorMsg={errorMsg}
           frontageM={frontageM}
@@ -348,6 +408,10 @@ export default function Home() {
           setbacks={setbacks}
           onOverlayClick={(entry) => setGlossaryEntry(entry)}
           onPrint={(p) => setPrintable(p)}
+          onOrderDocument={(req) => {
+            setPendingDocOrder(req);
+            setDocOrderLogged(false);
+          }}
         />
       </div>
 
@@ -367,6 +431,31 @@ export default function Home() {
         >
           <PrintableSummary payload={printable} lang={lang} />
         </div>
+      )}
+
+      {pendingDocOrder && (
+        <DocumentOrderModal
+          lang={lang}
+          site={site}
+          data={data}
+          request={pendingDocOrder}
+          confirmed={docOrderLogged}
+          onConfirm={() => {
+            console.info('[documents] order intent', {
+              docId: pendingDocOrder.docId,
+              priceAud: pendingDocOrder.priceAud,
+              address: site?.label ?? null,
+              spi: data?.spi ?? null,
+              lat: site?.lat ?? null,
+              lon: site?.lon ?? null,
+            });
+            setDocOrderLogged(true);
+          }}
+          onClose={() => {
+            setPendingDocOrder(null);
+            setDocOrderLogged(false);
+          }}
+        />
       )}
     </div>
   );
@@ -592,6 +681,7 @@ function DataPanel({
   site,
   data,
   schools,
+  permits,
   loadState,
   errorMsg,
   frontageM,
@@ -599,6 +689,7 @@ function DataPanel({
   setbacks,
   onOverlayClick,
   onPrint,
+  onOrderDocument,
 }: {
   lang: Lang;
   activeTab: TabId;
@@ -606,6 +697,7 @@ function DataPanel({
   site: SelectedSite;
   data: PropertyData | null;
   schools: NearestSchools | null;
+  permits: PlanningHistory | null;
   loadState: LoadState;
   errorMsg: string | null;
   frontageM: number | null;
@@ -613,6 +705,7 @@ function DataPanel({
   setbacks: Setbacks | null;
   onOverlayClick: (entry: GlossaryEntry) => void;
   onPrint: (payload: PrintablePayload) => void;
+  onOrderDocument: (req: DocOrderRequest) => void;
 }) {
   const tabs: TabId[] = ['details', 'zoning', 'profit', 'report'];
   return (
@@ -658,12 +751,14 @@ function DataPanel({
             frontageM={frontageM}
             coverage={coverage}
             setbacks={setbacks}
+            onOrderDocument={onOrderDocument}
           />
         )}
         {activeTab === 'zoning' && (
           <ZoningPanel
             lang={lang}
             data={data}
+            permits={permits}
             loadState={loadState}
             errorMsg={errorMsg}
             onOverlayClick={onOverlayClick}
@@ -781,6 +876,7 @@ function PropertyDetailsPanel({
   frontageM,
   coverage,
   setbacks,
+  onOrderDocument,
 }: {
   lang: Lang;
   site: SelectedSite;
@@ -791,6 +887,7 @@ function PropertyDetailsPanel({
   frontageM: number | null;
   coverage: SiteCoverage | null;
   setbacks: Setbacks | null;
+  onOrderDocument: (req: DocOrderRequest) => void;
 }) {
   const lotAreaM2 = data?.area.valueM2 ?? null;
   const councilLabel = data?.councilName ?? data?.council.contact?.name ?? null;
@@ -903,6 +1000,11 @@ function PropertyDetailsPanel({
       <MarketCard lang={lang} data={data} />
       <StreetViewCard lang={lang} site={site} />
       <SchoolsCard lang={lang} schools={schools} />
+      <DocumentsCard
+        lang={lang}
+        site={site}
+        onOrderDocument={onOrderDocument}
+      />
     </PanelShell>
   );
 }
@@ -924,12 +1026,14 @@ function areaSourceHint(data: PropertyData | null): string {
 function ZoningPanel({
   lang,
   data,
+  permits,
   loadState,
   errorMsg,
   onOverlayClick,
 }: {
   lang: Lang;
   data: PropertyData | null;
+  permits: PlanningHistory | null;
   loadState: LoadState;
   errorMsg: string | null;
   onOverlayClick: (entry: GlossaryEntry) => void;
@@ -1041,6 +1145,7 @@ function ZoningPanel({
         </div>
 
         <RiskAccordion lang={lang} data={data} />
+        <PlanningHistoryAccordion lang={lang} permits={permits} />
       </div>
     </PanelShell>
   );
@@ -1916,6 +2021,279 @@ function RiskAccordion({
           />
         </div>
       )}
+    </div>
+  );
+}
+
+// ---------- Planning Permit History (Zoning tab accordion) ----------
+
+const PERMIT_STATUS_STYLES: Record<
+  PermitStatus,
+  { dot: string; label: string }
+> = {
+  Approved: { dot: '#16a34a', label: 'text-emerald-700' },
+  'Under Review': { dot: '#E9E778', label: 'text-zinc-700' },
+  Refused: { dot: '#dc2626', label: 'text-rose-700' },
+  Withdrawn: { dot: '#94a3b8', label: 'text-zinc-500' },
+  Lapsed: { dot: '#a8a29e', label: 'text-zinc-500' },
+};
+
+function PlanningHistoryAccordion({
+  lang,
+  permits,
+}: {
+  lang: Lang;
+  permits: PlanningHistory | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const count = permits?.permits.length ?? 0;
+
+  return (
+    <div className="rounded-md border border-zinc-200 bg-white">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+        aria-expanded={open}
+      >
+        <div>
+          <p className="text-xs font-medium text-zinc-900">
+            {t('permitsTitle', lang)}
+          </p>
+          <p className="mt-0.5 text-[11px] text-zinc-500">
+            {permits == null
+              ? t('permitsLoading', lang)
+              : count === 0
+              ? t('permitsEmpty', lang)
+              : `${count} record${count === 1 ? '' : 's'}`}
+          </p>
+        </div>
+        <span
+          className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
+          style={{
+            background: count > 0 ? LIME : '#e4e4e7',
+            color: '#1a1a14',
+          }}
+        >
+          {count > 0 ? count : '—'}
+        </span>
+      </button>
+      {open && permits && (
+        <div className="border-t border-zinc-100 px-4 py-3">
+          {permits.isDemoData && (
+            <p className="mb-2 text-[10px] leading-relaxed text-zinc-400">
+              {t('permitsDemo', lang)}
+            </p>
+          )}
+          <ul className="space-y-3">
+            {permits.permits.map((p) => (
+              <PermitRow key={p.reference} lang={lang} permit={p} />
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PermitRow({ lang, permit }: { lang: Lang; permit: PlanningPermit }) {
+  const style = PERMIT_STATUS_STYLES[permit.status];
+  return (
+    <li className="border-l-2 pl-3" style={{ borderColor: style.dot }}>
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="font-mono text-[11px] text-zinc-900">{permit.reference}</p>
+        <span className={`text-[10px] font-semibold uppercase tracking-wider ${style.label}`}>
+          {permit.status}
+        </span>
+      </div>
+      <p className="mt-1 text-[11px] leading-relaxed text-zinc-700">
+        {permit.description}
+      </p>
+      <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-zinc-500">
+        <span>
+          {t('permitsLodged', lang)}: <span className="font-mono">{permit.lodgedDate}</span>
+        </span>
+        <span>
+          {t('permitsDecision', lang)}:{' '}
+          <span className="font-mono">{permit.decisionDate ?? '—'}</span>
+        </span>
+        <span>
+          {t('permitsApplicant', lang)}:{' '}
+          <span className="text-zinc-600">{permit.applicant}</span>
+        </span>
+      </div>
+    </li>
+  );
+}
+
+// ---------- Documents storefront (Property Details bottom card) ----------
+
+const DOC_PRODUCTS: { id: DocOrderRequest['docId']; titleKey: keyof typeof T; priceAud: number }[] = [
+  { id: 'title', titleKey: 'docTitle', priceAud: 49 },
+  { id: 'plan', titleKey: 'docPlan', priceAud: 65 },
+  { id: 's32', titleKey: 'docS32', priceAud: 249 },
+];
+
+function DocumentsCard({
+  lang,
+  site,
+  onOrderDocument,
+}: {
+  lang: Lang;
+  site: SelectedSite;
+  onOrderDocument: (req: DocOrderRequest) => void;
+}) {
+  const disabled = !site;
+  return (
+    <CardShell
+      title={t('documentsTitle', lang)}
+      subtitle={t('documentsIntro', lang)}
+    >
+      <ul className="space-y-2">
+        {DOC_PRODUCTS.map((p) => {
+          const label = t(p.titleKey, lang);
+          return (
+            <li
+              key={p.id}
+              className="flex items-center justify-between gap-3 rounded-md border border-zinc-200 bg-white px-3 py-2.5"
+            >
+              <div className="min-w-0">
+                <p className="truncate text-xs font-medium text-zinc-900">
+                  {label}
+                </p>
+                <p className="mt-0.5 font-mono text-[10px] text-zinc-400">
+                  LANDATA · {p.id.toUpperCase()}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xs tabular-nums text-zinc-900">
+                  {formatAud(p.priceAud)}
+                </span>
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() =>
+                    onOrderDocument({
+                      docId: p.id,
+                      label,
+                      priceAud: p.priceAud,
+                    })
+                  }
+                  className="inline-flex h-7 items-center justify-center rounded-md px-3 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
+                  style={{ background: LIME, color: '#1a1a14' }}
+                >
+                  {t('docOrder', lang)}
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </CardShell>
+  );
+}
+
+function DocumentOrderModal({
+  lang,
+  site,
+  data,
+  request,
+  confirmed,
+  onConfirm,
+  onClose,
+}: {
+  lang: Lang;
+  site: SelectedSite;
+  data: PropertyData | null;
+  request: DocOrderRequest;
+  confirmed: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    function handleEscape(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-md border bg-white shadow-2xl"
+        style={{ borderColor: '#e4e4e7', borderTopWidth: '3px', borderTopColor: LIME }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-5 py-4">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+            {t('documentsTitle', lang)}
+          </p>
+          <h2 className="mt-1 text-base font-semibold tracking-tight text-zinc-900">
+            {confirmed ? t('docOrderLogged', lang) : t('docConfirmTitle', lang)}
+          </h2>
+          <p className="mt-2 text-xs leading-relaxed text-zinc-600">
+            {confirmed
+              ? t('docOrderLoggedBody', lang)
+              : t('docConfirmBody', lang)}
+          </p>
+
+          <div className="mt-4 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2">
+            <div className="flex items-baseline justify-between gap-3">
+              <p className="text-xs font-medium text-zinc-900">
+                {request.label}
+              </p>
+              <p className="font-mono text-sm tabular-nums text-zinc-900">
+                {formatAud(request.priceAud)}
+              </p>
+            </div>
+            {site && (
+              <p className="mt-1 truncate text-[11px] text-zinc-600">
+                {site.label}
+              </p>
+            )}
+            {data?.spi && (
+              <p className="mt-0.5 font-mono text-[10px] text-zinc-400">
+                SPI {data.spi}
+              </p>
+            )}
+          </div>
+
+          <div className="mt-5 flex items-center justify-end gap-2">
+            {!confirmed ? (
+              <>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="inline-flex h-8 items-center justify-center rounded-md border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50"
+                >
+                  {t('docCancel', lang)}
+                </button>
+                <button
+                  type="button"
+                  onClick={onConfirm}
+                  className="inline-flex h-8 items-center justify-center rounded-md px-3 text-xs font-semibold transition"
+                  style={{ background: '#1a1a14', color: LIME }}
+                >
+                  {t('docConfirm', lang)}
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={onClose}
+                className="inline-flex h-8 items-center justify-center rounded-md px-3 text-xs font-semibold transition"
+                style={{ background: LIME, color: '#1a1a14' }}
+              >
+                {t('docCancel', lang)}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
