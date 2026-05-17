@@ -3,12 +3,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Show, SignInButton, UserButton } from '@clerk/nextjs';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
-import { MapPreview } from '@/components/MapPreview';
+import { MapPreview, type MapTool } from '@/components/MapPreview';
 import { RegulatoryModal } from '@/components/RegulatoryModal';
+import { RiskMatrix } from '@/components/RiskMatrix';
 import type { GeocodeSuggestion } from '@/lib/geocoding';
 import { reverseGeocodeNearest } from '@/lib/geocoding';
 import { fetchPropertyData, type PropertyData } from '@/lib/propertyData';
 import { calculateFrontage } from '@/lib/propertyGeometry';
+import {
+  fetchNearestSchools,
+  type NearestSchools,
+  type School,
+} from '@/lib/schoolApi';
+import { getStreetViewUrl } from '@/lib/streetView';
 import {
   computeSetbacks,
   computeSiteCoverage,
@@ -141,6 +148,42 @@ const T = {
   },
   risks: { en: 'Risks', zh: '风险评估' },
   recommendation: { en: 'Recommendation', zh: '建议' },
+  toolPan: { en: 'Pan', zh: '平移' },
+  toolDistance: { en: 'Distance', zh: '距离' },
+  toolArea: { en: 'Area', zh: '面积' },
+  toolClear: { en: 'Clear', zh: '清除' },
+  marketTitle: { en: 'Market & Sales', zh: '市场与成交' },
+  lastSold: { en: 'Last sold', zh: '最近成交价' },
+  lastSoldDate: { en: 'Sale date', zh: '成交日期' },
+  comparables: { en: 'Comparable sales', zh: '近期可比成交' },
+  noComparables: { en: 'No comparable sales available.', zh: '暂无可比成交数据。' },
+  streetViewTitle: { en: 'Street View', zh: '街景' },
+  streetViewShow: { en: 'Show street view', zh: '查看街景' },
+  streetViewHide: { en: 'Hide street view', zh: '隐藏街景' },
+  streetViewDemo: {
+    en: 'Demo image — set NEXT_PUBLIC_GOOGLE_PLACES_API_KEY to enable live Street View.',
+    zh: '示例图 — 请配置 NEXT_PUBLIC_GOOGLE_PLACES_API_KEY 以启用实时街景。',
+  },
+  schoolsTitle: { en: 'School Catchments', zh: '学区' },
+  schoolsPrimary: { en: 'Primary', zh: '小学' },
+  schoolsSecondary: { en: 'Secondary', zh: '中学' },
+  schoolsLoading: { en: 'Loading schools…', zh: '正在加载学校数据…' },
+  schoolsDemo: {
+    en: 'Seeded demo data — connect a live boundary feed to upgrade.',
+    zh: '示例数据 — 接入实时学区数据后将自动升级。',
+  },
+  riskTitle: { en: 'Safety & Hazard Risk', zh: '安全与灾害风险' },
+  riskOpen: { en: 'Open risk matrix', zh: '展开风险矩阵' },
+  riskClose: { en: 'Close risk matrix', zh: '收起风险矩阵' },
+  riskVerdictClear: { en: 'No hazard overlays detected', zh: '未检测到灾害类覆盖区' },
+  riskVerdictPresent: {
+    en: 'Hazard overlay present — review the matrix below',
+    zh: '存在灾害类覆盖区 — 请查看下方矩阵',
+  },
+  riskBushfire: { en: 'Bushfire', zh: '山火' },
+  riskFlood: { en: 'Flood', zh: '洪水' },
+  riskHeritage: { en: 'Heritage', zh: '遗产' },
+  riskEnvironment: { en: 'Environment', zh: '环境' },
 };
 
 function t(key: keyof typeof T, lang: Lang): string {
@@ -170,6 +213,10 @@ export default function Home() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [glossaryEntry, setGlossaryEntry] = useState<GlossaryEntry | null>(null);
   const [printable, setPrintable] = useState<PrintablePayload | null>(null);
+  const [mapTool, setMapTool] = useState<MapTool>('pan');
+  const [distancePoints, setDistancePoints] = useState<[number, number][]>([]);
+  const [areaPoints, setAreaPoints] = useState<[number, number][]>([]);
+  const [schools, setSchools] = useState<NearestSchools | null>(null);
 
   const handleSelect = (s: GeocodeSuggestion) => {
     setQuery(s.displayName);
@@ -200,6 +247,9 @@ export default function Home() {
       setData(null);
       setLoadState('idle');
       setErrorMsg(null);
+      setSchools(null);
+      setDistancePoints([]);
+      setAreaPoints([]);
       return;
     }
     let cancelled = false;
@@ -218,10 +268,31 @@ export default function Home() {
         setErrorMsg(msg);
         setLoadState('error');
       });
+    fetchNearestSchools(site.lat, site.lon)
+      .then((result) => {
+        if (!cancelled) setSchools(result);
+      })
+      .catch((err) => {
+        if (!cancelled) console.warn('[page] fetchNearestSchools failed', err);
+      });
     return () => {
       cancelled = true;
     };
   }, [site]);
+
+  const handleMapClick = (lonLat: [number, number]) => {
+    if (mapTool === 'distance') {
+      setDistancePoints((prev) => [...prev, lonLat]);
+    } else if (mapTool === 'area') {
+      setAreaPoints((prev) => [...prev, lonLat]);
+    }
+  };
+
+  const handleClearMeasurements = () => {
+    setDistancePoints([]);
+    setAreaPoints([]);
+    setMapTool('pan');
+  };
 
   // Print on next paint after the printable root mounts.
   useEffect(() => {
@@ -256,6 +327,12 @@ export default function Home() {
           data={data}
           onParcelClick={handleParcelClick}
           lang={lang}
+          mapTool={mapTool}
+          onToolChange={setMapTool}
+          distancePoints={distancePoints}
+          areaPoints={areaPoints}
+          onMapClick={handleMapClick}
+          onClearMeasurements={handleClearMeasurements}
         />
         <DataPanel
           lang={lang}
@@ -263,6 +340,7 @@ export default function Home() {
           onTabChange={setActiveTab}
           site={site}
           data={data}
+          schools={schools}
           loadState={loadState}
           errorMsg={errorMsg}
           frontageM={frontageM}
@@ -382,11 +460,23 @@ function MapPanel({
   data,
   onParcelClick,
   lang,
+  mapTool,
+  onToolChange,
+  distancePoints,
+  areaPoints,
+  onMapClick,
+  onClearMeasurements,
 }: {
   site: SelectedSite;
   data: PropertyData | null;
   onParcelClick: (lonLat: [number, number]) => void;
   lang: Lang;
+  mapTool: MapTool;
+  onToolChange: (t: MapTool) => void;
+  distancePoints: [number, number][];
+  areaPoints: [number, number][];
+  onMapClick: (lonLat: [number, number]) => void;
+  onClearMeasurements: () => void;
 }) {
   const lat = site?.lat ?? MELBOURNE_CBD.lat;
   const lon = site?.lon ?? MELBOURNE_CBD.lon;
@@ -404,7 +494,18 @@ function MapPanel({
         easements={data?.easements ?? []}
         buildings={data?.buildings ?? []}
         onParcelClick={onParcelClick}
+        tool={mapTool}
+        distancePoints={distancePoints}
+        areaPoints={areaPoints}
+        onMapClick={onMapClick}
         className="absolute inset-0 h-full w-full border-0"
+      />
+      <MapToolbar
+        lang={lang}
+        mapTool={mapTool}
+        onToolChange={onToolChange}
+        onClear={onClearMeasurements}
+        canClear={distancePoints.length > 0 || areaPoints.length > 0}
       />
       {!site && (
         <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center px-4">
@@ -414,6 +515,56 @@ function MapPanel({
         </div>
       )}
     </section>
+  );
+}
+
+function MapToolbar({
+  lang,
+  mapTool,
+  onToolChange,
+  onClear,
+  canClear,
+}: {
+  lang: Lang;
+  mapTool: MapTool;
+  onToolChange: (t: MapTool) => void;
+  onClear: () => void;
+  canClear: boolean;
+}) {
+  const tools: { id: MapTool; label: string }[] = [
+    { id: 'pan', label: t('toolPan', lang) },
+    { id: 'distance', label: t('toolDistance', lang) },
+    { id: 'area', label: t('toolArea', lang) },
+  ];
+  return (
+    <div className="absolute left-3 top-3 z-20 flex items-center gap-1 rounded-md border border-white/10 bg-black/55 p-1 text-[11px] font-medium text-zinc-200 backdrop-blur-md">
+      {tools.map((tool) => {
+        const active = mapTool === tool.id;
+        return (
+          <button
+            key={tool.id}
+            type="button"
+            onClick={() => onToolChange(tool.id)}
+            className="rounded px-2 py-1 transition"
+            style={{
+              background: active ? LIME : 'transparent',
+              color: active ? '#1a1a14' : '#e4e4e7',
+            }}
+          >
+            {tool.label}
+          </button>
+        );
+      })}
+      <div className="mx-1 h-4 w-px bg-white/20" />
+      <button
+        type="button"
+        onClick={onClear}
+        disabled={!canClear}
+        className="rounded px-2 py-1 text-zinc-200 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        {t('toolClear', lang)}
+      </button>
+    </div>
   );
 }
 
@@ -440,6 +591,7 @@ function DataPanel({
   onTabChange,
   site,
   data,
+  schools,
   loadState,
   errorMsg,
   frontageM,
@@ -453,6 +605,7 @@ function DataPanel({
   onTabChange: (id: TabId) => void;
   site: SelectedSite;
   data: PropertyData | null;
+  schools: NearestSchools | null;
   loadState: LoadState;
   errorMsg: string | null;
   frontageM: number | null;
@@ -499,6 +652,7 @@ function DataPanel({
             lang={lang}
             site={site}
             data={data}
+            schools={schools}
             loadState={loadState}
             errorMsg={errorMsg}
             frontageM={frontageM}
@@ -621,6 +775,7 @@ function PropertyDetailsPanel({
   lang,
   site,
   data,
+  schools,
   loadState,
   errorMsg,
   frontageM,
@@ -630,6 +785,7 @@ function PropertyDetailsPanel({
   lang: Lang;
   site: SelectedSite;
   data: PropertyData | null;
+  schools: NearestSchools | null;
   loadState: LoadState;
   errorMsg: string | null;
   frontageM: number | null;
@@ -743,6 +899,10 @@ function PropertyDetailsPanel({
           />
         </div>
       </div>
+
+      <MarketCard lang={lang} data={data} />
+      <StreetViewCard lang={lang} site={site} />
+      <SchoolsCard lang={lang} schools={schools} />
     </PanelShell>
   );
 }
@@ -879,6 +1039,8 @@ function ZoningPanel({
             {t('rescodeBody', lang)}
           </p>
         </div>
+
+        <RiskAccordion lang={lang} data={data} />
       </div>
     </PanelShell>
   );
@@ -1406,3 +1568,326 @@ function PrintableProfitBody({
     </table>
   );
 }
+
+// ---------- Property Details supplementary cards ----------
+
+function CardShell({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="mt-4 rounded-md border border-zinc-200 bg-white">
+      <div className="border-b border-zinc-100 px-4 py-2">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+          {title}
+        </p>
+        {subtitle && (
+          <p className="mt-0.5 text-[11px] text-zinc-400">{subtitle}</p>
+        )}
+      </div>
+      <div className="px-4 py-3">{children}</div>
+    </div>
+  );
+}
+
+function MarketCard({
+  lang,
+  data,
+}: {
+  lang: Lang;
+  data: PropertyData | null;
+}) {
+  if (!data) return null;
+  const domain = data.domain;
+  const lastSoldPrice = domain?.lastSoldPrice ?? null;
+  const lastSoldDate = domain?.lastSoldDate ?? null;
+  const comparables = (domain?.comparableSales ?? []).slice(0, 4);
+  const isDemo = domain?.isDemoData ?? false;
+
+  if (!lastSoldPrice && comparables.length === 0) return null;
+
+  return (
+    <CardShell
+      title={t('marketTitle', lang)}
+      subtitle={
+        isDemo
+          ? lang === 'en'
+            ? 'Seeded demo — connect Domain API key to upgrade.'
+            : '示例数据 — 配置 Domain API 密钥后将自动升级。'
+          : 'Domain enrichment'
+      }
+    >
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-zinc-400">
+            {t('lastSold', lang)}
+          </p>
+          <p className="mt-0.5 font-mono text-sm tabular-nums text-zinc-900">
+            {lastSoldPrice ? formatAud(lastSoldPrice) : '—'}
+          </p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-zinc-400">
+            {t('lastSoldDate', lang)}
+          </p>
+          <p className="mt-0.5 font-mono text-sm tabular-nums text-zinc-900">
+            {lastSoldDate ?? '—'}
+          </p>
+        </div>
+      </div>
+      <div className="mt-4">
+        <p className="text-[10px] uppercase tracking-wider text-zinc-400">
+          {t('comparables', lang)}
+        </p>
+        {comparables.length === 0 ? (
+          <p className="mt-1 text-[11px] text-zinc-500">
+            {t('noComparables', lang)}
+          </p>
+        ) : (
+          <table className="mt-2 w-full text-[11px]">
+            <tbody>
+              {comparables.map((c, i) => (
+                <tr
+                  key={`${c.address}-${i}`}
+                  className="border-t border-zinc-100 first:border-t-0"
+                >
+                  <td className="py-1.5 pr-2 text-zinc-700">{c.address}</td>
+                  <td className="py-1.5 pr-2 text-right font-mono tabular-nums text-zinc-900">
+                    {formatAud(c.price)}
+                  </td>
+                  <td className="py-1.5 text-right font-mono tabular-nums text-zinc-400">
+                    {c.saleDate}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </CardShell>
+  );
+}
+
+function StreetViewCard({
+  lang,
+  site,
+}: {
+  lang: Lang;
+  site: SelectedSite;
+}) {
+  const [open, setOpen] = useState(false);
+  if (!site) return null;
+  const sv = getStreetViewUrl(site.lat, site.lon);
+  return (
+    <CardShell title={t('streetViewTitle', lang)}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex h-8 items-center justify-center rounded-md border border-zinc-300 px-3 text-xs font-medium text-zinc-800 transition hover:bg-zinc-50"
+      >
+        {open ? t('streetViewHide', lang) : t('streetViewShow', lang)}
+      </button>
+      {open && (
+        <div className="mt-3">
+          <div className="overflow-hidden rounded-md border border-zinc-200">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={sv.url}
+              alt="Street view"
+              className="block h-auto w-full"
+            />
+          </div>
+          {sv.isDemoData && (
+            <p className="mt-2 text-[10px] leading-relaxed text-zinc-400">
+              {t('streetViewDemo', lang)}
+            </p>
+          )}
+        </div>
+      )}
+    </CardShell>
+  );
+}
+
+function SchoolsCard({
+  lang,
+  schools,
+}: {
+  lang: Lang;
+  schools: NearestSchools | null;
+}) {
+  if (!schools) {
+    return (
+      <CardShell title={t('schoolsTitle', lang)}>
+        <p className="text-[11px] text-zinc-500">{t('schoolsLoading', lang)}</p>
+      </CardShell>
+    );
+  }
+  return (
+    <CardShell
+      title={t('schoolsTitle', lang)}
+      subtitle={schools.isDemoData ? t('schoolsDemo', lang) : undefined}
+    >
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <SchoolColumn label={t('schoolsPrimary', lang)} list={schools.primary} />
+        <SchoolColumn
+          label={t('schoolsSecondary', lang)}
+          list={schools.secondary}
+        />
+      </div>
+    </CardShell>
+  );
+}
+
+function SchoolColumn({ label, list }: { label: string; list: School[] }) {
+  return (
+    <div>
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+        {label}
+      </p>
+      <ul className="mt-1 space-y-1.5">
+        {list.map((s) => (
+          <li
+            key={s.name}
+            className="flex items-baseline justify-between border-b border-zinc-100 pb-1 text-[11px]"
+          >
+            <span className="text-zinc-800">{s.name}</span>
+            <span className="font-mono tabular-nums text-zinc-500">
+              {s.distanceM} m
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// ---------- Risk matrix (Zoning tab) ----------
+
+type RiskRow = {
+  category: string;
+  label: string;
+  status: 'pass' | 'fail' | 'warning';
+  detail?: string;
+};
+
+function buildRiskCriteria(
+  data: PropertyData | null,
+  lang: Lang,
+): RiskRow[] {
+  const overlays = data?.vicPlan.overlayCodes ?? [];
+  const has = (c: string) => overlays.includes(c as never);
+  const en = lang === 'en';
+
+  return [
+    {
+      category: t('riskBushfire', lang),
+      label: en ? 'Bushfire Management Overlay (BMO)' : '山火管理覆盖区 (BMO)',
+      status: has('BMO') ? 'fail' : 'pass',
+      detail: has('BMO')
+        ? en
+          ? 'BMO present — bushfire attack level (BAL) assessment required; construction must meet AS 3959.'
+          : '存在 BMO — 需进行 BAL 山火攻击等级评估，建造须符合 AS 3959。'
+        : en
+        ? 'No BMO intersection at this point.'
+        : '此处未与 BMO 相交。',
+    },
+    {
+      category: t('riskFlood', lang),
+      label: en
+        ? 'Flood / LSIO / SBO overlays'
+        : 'Flood / LSIO / SBO 覆盖区',
+      status: has('FO') ? 'fail' : 'pass',
+      detail: has('FO')
+        ? en
+          ? 'Flood-related overlay present (FO, LSIO or SBO) — habitable floor levels and stormwater flow paths trigger planning permit requirements.'
+          : '存在 FO / LSIO / SBO 类覆盖区 — 可居住楼层高程与雨洪排放路径将触发规划许可要求。'
+        : en
+        ? 'No FO / LSIO / SBO intersection.'
+        : '未检测到 FO / LSIO / SBO 相交。',
+    },
+    {
+      category: t('riskHeritage', lang),
+      label: en ? 'Heritage Overlay (HO)' : '遗产覆盖区 (HO)',
+      status: has('HO') ? 'warning' : 'pass',
+      detail: has('HO')
+        ? en
+          ? 'HO present — demolition, external alteration, and subdivision require a planning permit; SSD pathway likely inapplicable.'
+          : '存在 HO — 拆除、外立面改建与分割均需规划许可；SSD 路径通常不适用。'
+        : en
+        ? 'No HO intersection.'
+        : '未检测到 HO 相交。',
+    },
+    {
+      category: t('riskEnvironment', lang),
+      label: en
+        ? 'Environmental overlays (DDO / VPO / DCPO)'
+        : '环境类覆盖区 (DDO / VPO / DCPO)',
+      status:
+        has('DDO') || has('DCPO') || has('VPO') ? 'warning' : 'pass',
+      detail:
+        has('DDO') || has('DCPO') || has('VPO')
+          ? en
+            ? 'Design / vegetation / contribution overlay present — additional permit conditions and built-form controls apply.'
+            : '存在设计 / 植被 / 贡献类覆盖区 — 附加许可条件与建筑形态管控生效。'
+          : en
+          ? 'No environmental-overlay intersection.'
+          : '未检测到环境类覆盖区相交。',
+    },
+  ];
+}
+
+function RiskAccordion({
+  lang,
+  data,
+}: {
+  lang: Lang;
+  data: PropertyData | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const criteria = buildRiskCriteria(data, lang);
+  const hasHazard = criteria.some((c) => c.status !== 'pass');
+  const verdict = hasHazard
+    ? t('riskVerdictPresent', lang)
+    : t('riskVerdictClear', lang);
+
+  return (
+    <div className="rounded-md border border-zinc-200 bg-white">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+        aria-expanded={open}
+      >
+        <div>
+          <p className="text-xs font-medium text-zinc-900">
+            {t('riskTitle', lang)}
+          </p>
+          <p className="mt-0.5 text-[11px] text-zinc-500">{verdict}</p>
+        </div>
+        <span
+          className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
+          style={{
+            background: hasHazard ? '#FEF3C7' : '#E9E778',
+            color: '#1a1a14',
+          }}
+        >
+          {hasHazard ? '!' : '✓'}
+        </span>
+      </button>
+      {open && (
+        <div className="border-t border-zinc-100 px-2 pb-2">
+          <RiskMatrix
+            lang={lang}
+            criteria={criteria}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
