@@ -7,6 +7,8 @@
  */
 
 import type { ParcelPolygon } from './vicPlanApi';
+import { polygonCentroid } from './vicPlanApi';
+import { area as turfArea } from '@turf/area';
 
 type LonLat = [number, number];
 
@@ -139,4 +141,221 @@ export function computeSplitLine(
     [minLon, midLat],
     [maxLon, midLat],
   ];
+}
+
+// ---------- Built-form metrics ----------
+// Site coverage and setback derivations operate on the parcel outer ring
+// plus the Vicmap building footprints returned by `fetchVicBuildingsForArea`.
+// Buildings outside the parcel are filtered out via a centroid point-in-polygon
+// test; that's adequate for cadastral building data, which rarely straddles
+// lot lines. Distances are reconstructed in the local tangent plane around
+// the parcel centroid using `metresPerDegree(lat)` — sub-metre error at
+// parcel scale.
+
+function pointInRing(lon: number, lat: number, ring: number[][]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    const intersect =
+      yi > lat !== yj > lat &&
+      lon < ((xj - xi) * (lat - yi)) / (yj - yi || 1e-12) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+export function filterBuildingsInParcel(
+  parcel: ParcelPolygon,
+  buildings: ParcelPolygon[],
+): ParcelPolygon[] {
+  const ring = parcel.coordinates[0];
+  if (!ring || ring.length < 3) return [];
+  return buildings.filter((b) => {
+    const bRing = b.coordinates[0];
+    if (!bRing || bRing.length < 3) return false;
+    const [cLon, cLat] = polygonCentroid(bRing);
+    return pointInRing(cLon, cLat, ring);
+  });
+}
+
+export type SiteCoverage = {
+  coveredM2: number;
+  lotM2: number;
+  pct: number;
+};
+
+export function computeSiteCoverage(
+  parcel: ParcelPolygon,
+  buildings: ParcelPolygon[],
+): SiteCoverage | null {
+  const ring = parcel.coordinates[0];
+  if (!ring || ring.length < 3) return null;
+  const lotM2 = turfArea({ type: 'Polygon', coordinates: parcel.coordinates });
+  if (lotM2 <= 0) return null;
+  const onLot = filterBuildingsInParcel(parcel, buildings);
+  let coveredM2 = 0;
+  for (const b of onLot) {
+    coveredM2 += turfArea({ type: 'Polygon', coordinates: b.coordinates });
+  }
+  return {
+    coveredM2: Math.round(coveredM2),
+    lotM2: Math.round(lotM2),
+    pct: Math.min(100, (coveredM2 / lotM2) * 100),
+  };
+}
+
+// Project a lon/lat point into the local tangent plane (metres) anchored
+// at `origin`. Distances and dot products in this plane are accurate to
+// sub-metre at parcel scale.
+function toLocalMetres(
+  origin: LonLat,
+  point: LonLat,
+): { x: number; y: number } {
+  const m = metresPerDegree(origin[1]);
+  return {
+    x: (point[0] - origin[0]) * m.lon,
+    y: (point[1] - origin[1]) * m.lat,
+  };
+}
+
+function pointToSegmentDistanceM(
+  origin: LonLat,
+  p: LonLat,
+  a: LonLat,
+  b: LonLat,
+): number {
+  const pm = toLocalMetres(origin, p);
+  const am = toLocalMetres(origin, a);
+  const bm = toLocalMetres(origin, b);
+  const dx = bm.x - am.x;
+  const dy = bm.y - am.y;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) {
+    const ex = pm.x - am.x;
+    const ey = pm.y - am.y;
+    return Math.sqrt(ex * ex + ey * ey);
+  }
+  let t = ((pm.x - am.x) * dx + (pm.y - am.y) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  const cx = am.x + t * dx;
+  const cy = am.y + t * dy;
+  const ex = pm.x - cx;
+  const ey = pm.y - cy;
+  return Math.sqrt(ex * ex + ey * ey);
+}
+
+function segmentLengthM(origin: LonLat, a: LonLat, b: LonLat): number {
+  const am = toLocalMetres(origin, a);
+  const bm = toLocalMetres(origin, b);
+  const dx = bm.x - am.x;
+  const dy = bm.y - am.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+export type Setbacks = {
+  frontM: number;
+  rearM: number;
+  sideMinM: number;
+};
+
+/**
+ * Derive minimum front / rear / side setbacks by measuring the gap between
+ * each cadastral edge and the nearest corner of any on-lot building.
+ *
+ * Convention: the longest edge of the parcel ring is treated as the street
+ * frontage (matches `detectOrientation` in propertyGeometry.ts). The edge
+ * with the largest centroid-to-centroid offset perpendicular to the front
+ * is the rear; the remaining two edges are sides, and we surface the
+ * smaller of the two as the binding side setback.
+ *
+ * Returns `null` when there are no on-lot buildings — an empty lot has
+ * no setbacks to report.
+ */
+export function computeSetbacks(
+  parcel: ParcelPolygon,
+  buildings: ParcelPolygon[],
+): Setbacks | null {
+  const ring = parcel.coordinates[0];
+  if (!ring || ring.length < 4) return null;
+  const onLot = filterBuildingsInParcel(parcel, buildings);
+  if (onLot.length === 0) return null;
+
+  // Closed ring may repeat the first vertex; iterate the open version.
+  const closed =
+    ring[0][0] === ring[ring.length - 1][0] &&
+    ring[0][1] === ring[ring.length - 1][1];
+  const verts = closed ? ring.slice(0, -1) : ring;
+  if (verts.length < 3) return null;
+
+  const origin: LonLat = polygonCentroid(ring);
+
+  type Edge = {
+    a: LonLat;
+    b: LonLat;
+    mid: LonLat;
+    lengthM: number;
+  };
+  const edges: Edge[] = [];
+  for (let i = 0; i < verts.length; i++) {
+    const a = verts[i] as LonLat;
+    const b = verts[(i + 1) % verts.length] as LonLat;
+    edges.push({
+      a,
+      b,
+      mid: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2],
+      lengthM: segmentLengthM(origin, a, b),
+    });
+  }
+
+  // Front = longest edge.
+  let frontIdx = 0;
+  for (let i = 1; i < edges.length; i++) {
+    if (edges[i].lengthM > edges[frontIdx].lengthM) frontIdx = i;
+  }
+  const front = edges[frontIdx];
+
+  // Rear = edge whose midpoint is farthest from the front midpoint.
+  let rearIdx = frontIdx;
+  let bestRearDist = -Infinity;
+  for (let i = 0; i < edges.length; i++) {
+    if (i === frontIdx) continue;
+    const d = segmentLengthM(origin, front.mid, edges[i].mid);
+    if (d > bestRearDist) {
+      bestRearDist = d;
+      rearIdx = i;
+    }
+  }
+  const rear = edges[rearIdx];
+
+  // Sides = the remaining edges.
+  const sides = edges.filter((_, i) => i !== frontIdx && i !== rearIdx);
+
+  // Building corner cloud (all on-lot building vertices).
+  const corners: LonLat[] = [];
+  for (const b of onLot) {
+    for (const p of b.coordinates[0]) corners.push(p as LonLat);
+  }
+  if (corners.length === 0) return null;
+
+  const minDistToEdge = (edge: Edge): number => {
+    let best = Infinity;
+    for (const c of corners) {
+      const d = pointToSegmentDistanceM(origin, c, edge.a, edge.b);
+      if (d < best) best = d;
+    }
+    return best;
+  };
+
+  const frontM = minDistToEdge(front);
+  const rearM = minDistToEdge(rear);
+  const sideMinM = sides.length
+    ? Math.min(...sides.map(minDistToEdge))
+    : Math.min(frontM, rearM);
+
+  return {
+    frontM: Math.round(frontM * 10) / 10,
+    rearM: Math.round(rearM * 10) / 10,
+    sideMinM: Math.round(sideMinM * 10) / 10,
+  };
 }

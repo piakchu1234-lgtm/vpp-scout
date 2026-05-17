@@ -8,6 +8,7 @@ import type { GeocodeSuggestion } from '@/lib/geocoding';
 import { reverseGeocodeNearest } from '@/lib/geocoding';
 import { fetchPropertyData, type PropertyData } from '@/lib/propertyData';
 import { calculateFrontage } from '@/lib/propertyGeometry';
+import { computeSetbacks, computeSiteCoverage } from '@/lib/spatial';
 
 type TabId = 'details' | 'zoning' | 'report';
 
@@ -325,6 +326,12 @@ function PropertyDetailsPanel({
   const frontageM = data?.parcel ? calculateFrontage(data.parcel) : null;
   const councilLabel = data?.councilName ?? data?.council.contact?.name ?? null;
   const spi = data?.spi ?? null;
+  const coverage = data?.parcel
+    ? computeSiteCoverage(data.parcel, data.buildings)
+    : null;
+  const setbacks = data?.parcel
+    ? computeSetbacks(data.parcel, data.buildings)
+    : null;
 
   return (
     <PanelShell
@@ -372,10 +379,34 @@ function PropertyDetailsPanel({
           />
           <MetricRow
             label="Site coverage"
-            value="—"
-            hint="Existing built form"
+            value={
+              coverage
+                ? `${coverage.pct.toFixed(1)}%`
+                : data?.parcel
+                ? '0%'
+                : '—'
+            }
+            hint={
+              coverage
+                ? `${coverage.coveredM2.toLocaleString()} m² of ${coverage.lotM2.toLocaleString()} m²`
+                : 'Built form ÷ lot'
+            }
           />
-          <MetricRow label="Setbacks" value="—" hint="Front / side / rear" />
+          <MetricRow
+            label="Front setback"
+            value={setbacks ? `${setbacks.frontM.toFixed(1)} m` : '—'}
+            hint="Longest edge → nearest building corner"
+          />
+          <MetricRow
+            label="Side setback (min)"
+            value={setbacks ? `${setbacks.sideMinM.toFixed(1)} m` : '—'}
+            hint="Binding side edge"
+          />
+          <MetricRow
+            label="Rear setback"
+            value={setbacks ? `${setbacks.rearM.toFixed(1)} m` : '—'}
+            hint="Opposite the frontage"
+          />
         </div>
       </div>
 
