@@ -10,7 +10,7 @@ import type {
 export const runtime = 'edge';
 
 const ANTHROPIC_DEFAULT_BASE_URL = 'https://api.anthropic.com';
-const ANTHROPIC_MODEL = 'claude-opus-4-7';
+const ANTHROPIC_MODEL = 'claude-opus-4-5-20250929';
 const ANTHROPIC_VERSION = '2023-06-01';
 
 function resolveAnthropicUrl(): string {
