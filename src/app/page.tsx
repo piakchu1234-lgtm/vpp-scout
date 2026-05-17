@@ -15,7 +15,6 @@ import {
   type NearestSchools,
   type School,
 } from '@/lib/schoolApi';
-import { getStreetViewUrl } from '@/lib/streetView';
 import {
   computeSetbacks,
   computeSiteCoverage,
@@ -184,6 +183,7 @@ const T = {
   riskFlood: { en: 'Flood', zh: '洪水' },
   riskHeritage: { en: 'Heritage', zh: '遗产' },
   riskEnvironment: { en: 'Environment', zh: '环境' },
+  riskLandslide: { en: 'Landslide', zh: '山体滑坡' },
 };
 
 function t(key: keyof typeof T, lang: Lang): string {
@@ -1682,7 +1682,10 @@ function StreetViewCard({
 }) {
   const [open, setOpen] = useState(false);
   if (!site) return null;
-  const sv = getStreetViewUrl(site.lat, site.lon);
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY;
+  const embedSrc = apiKey
+    ? `https://www.google.com/maps/embed/v1/streetview?key=${apiKey}&location=${site.lat},${site.lon}&heading=0&pitch=0&fov=80`
+    : null;
   return (
     <CardShell title={t('streetViewTitle', lang)}>
       <button
@@ -1694,18 +1697,26 @@ function StreetViewCard({
       </button>
       {open && (
         <div className="mt-3">
-          <div className="overflow-hidden rounded-md border border-zinc-200">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={sv.url}
-              alt="Street view"
-              className="block h-auto w-full"
-            />
-          </div>
-          {sv.isDemoData && (
-            <p className="mt-2 text-[10px] leading-relaxed text-zinc-400">
-              {t('streetViewDemo', lang)}
-            </p>
+          {embedSrc ? (
+            <div className="overflow-hidden rounded-md border border-zinc-200">
+              <iframe
+                src={embedSrc}
+                title="Google Street View"
+                allow="accelerometer; gyroscope"
+                allowFullScreen
+                referrerPolicy="no-referrer-when-downgrade"
+                className="block aspect-[5/3] w-full"
+              />
+            </div>
+          ) : (
+            <div className="rounded-md border border-dashed border-zinc-300 bg-zinc-50 px-4 py-6 text-center">
+              <p className="text-[11px] text-zinc-500">
+                {t('streetViewDemo', lang)}
+              </p>
+              <p className="mt-1 font-mono text-[10px] text-zinc-400">
+                NEXT_PUBLIC_GOOGLE_MAPS_KEY
+              </p>
+            </div>
           )}
         </div>
       )}
@@ -1780,8 +1791,12 @@ function buildRiskCriteria(
   lang: Lang,
 ): RiskRow[] {
   const overlays = data?.vicPlan.overlayCodes ?? [];
+  const overlayRaw = data?.vicPlan.overlayRaw ?? [];
   const has = (c: string) => overlays.includes(c as never);
+  const hasRawPrefix = (prefix: string) =>
+    overlayRaw.some((code) => code.toUpperCase().startsWith(prefix));
   const en = lang === 'en';
+  const hasEmo = hasRawPrefix('EMO');
 
   return [
     {
@@ -1837,6 +1852,20 @@ function buildRiskCriteria(
           : en
           ? 'No environmental-overlay intersection.'
           : '未检测到环境类覆盖区相交。',
+    },
+    {
+      category: t('riskLandslide', lang),
+      label: en
+        ? 'Erosion Management Overlay (EMO)'
+        : '侵蚀管理覆盖区 (EMO)',
+      status: hasEmo ? 'fail' : 'pass',
+      detail: hasEmo
+        ? en
+          ? 'EMO present — geotechnical assessment required; siting, footings, and stormwater design must address slope-stability and erosion risk under the responsible authority\'s conditions.'
+          : '存在 EMO — 须进行岩土工程评估；选址、基础与雨洪排放设计须满足责任机构对边坡稳定与侵蚀风险的条件。'
+        : en
+        ? 'No EMO intersection — landslide hazard not flagged at this point.'
+        : '未检测到 EMO 相交 — 此处未标记山体滑坡风险。',
     },
   ];
 }
