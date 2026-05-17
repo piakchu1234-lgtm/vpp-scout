@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
 
 import {
   geocodeSuggestions,
@@ -11,6 +11,15 @@ import {
 
 const DEBOUNCE_MS = 350;
 const MIN_CHARS = 3;
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function extractLeadingHouseNumber(s: string): string | null {
+  const m = s.match(/^([0-9]+[A-Za-z]?)\s+/);
+  return m ? m[1] : null;
+}
 
 type Props = {
   value: string;
@@ -96,16 +105,54 @@ export function AddressAutocomplete({
 
   function selectSuggestion(s: GeocodeSuggestion) {
     abortRef.current?.abort();
-    // Preserve the user-typed unit prefix (e.g. "3/") if the geocoder result
-    // has dropped it — the address line must accurately reflect what was
-    // entered, not just what the map dataset returned.
+    // Preserve what the user typed when the geocoder returns a truncated
+    // result. Two failure modes we guard against:
+    //   1. `s.displayName` lost the unit prefix entirely — e.g. user typed
+    //      "1/34 Edwin Street" and Vicmap returned "34 Edwin Street …".
+    //   2. `s.displayName` kept the unit but lost the parent house number —
+    //      e.g. "1/ Edwin Street …" or "1 Edwin Street …". This happens
+    //      when Vicmap resolves the unit row independently of the lot
+    //      row, dropping `house_number_1`.
+    // In both cases we splice the typed values back in so the address
+    // header reads "1/34 Edwin Street" — what the user entered.
     const typed = value.trim();
-    const userUnitMatch = typed.match(/^([0-9A-Za-z]+)\s*\//);
-    const userUnit = userUnitMatch ? userUnitMatch[1] : null;
-    const finalDisplay =
-      userUnit && !s.displayName.startsWith(`${userUnit}/`)
-        ? `${userUnit}/${s.displayName}`
-        : s.displayName;
+    const typedMatch = typed.match(
+      /^([0-9A-Za-z]+)\s*\/\s*([0-9]+[A-Za-z]?)\s+(.+)$/,
+    );
+    const userUnit = typedMatch
+      ? typedMatch[1]
+      : typed.match(/^([0-9A-Za-z]+)\s*\//)?.[1] ?? null;
+    const userHouse = typedMatch ? typedMatch[2] : null;
+
+    const looksLikeFullAddress =
+      s.displayName.length >= 8 && /\s/.test(s.displayName);
+
+    let finalDisplay = s.displayName;
+    if (userUnit && looksLikeFullAddress) {
+      // Strip any existing unit fragment to normalise, then rebuild.
+      // Matches "1/", "1 /", "1/ ", "1 / " — and the "1 " orphan case where
+      // the slash itself was lost. The trailing capture is the road portion.
+      const stripped = finalDisplay
+        .replace(
+          new RegExp(
+            `^${escapeRegExp(userUnit)}\\s*\\/?\\s*(?:[0-9]+[A-Za-z]?\\s+)?`,
+            'i',
+          ),
+          '',
+        )
+        .trim();
+      const houseToUse = userHouse ?? extractLeadingHouseNumber(stripped);
+      if (houseToUse) {
+        // Drop any leading house number on `stripped` so we don't double it
+        // when re-attaching. e.g. stripped = "34 Edwin Street …" + houseToUse
+        // "34" → "Edwin Street …".
+        const rest = stripped.replace(/^[0-9]+[A-Za-z]?\s+/, '').trim();
+        finalDisplay = `${userUnit}/${houseToUse} ${rest}`;
+      } else if (!finalDisplay.startsWith(`${userUnit}/`)) {
+        finalDisplay = `${userUnit}/${stripped}`;
+      }
+    }
+
     const finalSelection: GeocodeSuggestion =
       finalDisplay === s.displayName ? s : { ...s, displayName: finalDisplay };
 
@@ -166,15 +213,6 @@ export function AddressAutocomplete({
         aria-busy={disabled || showLoading ? true : undefined}
         className="flex-1 bg-transparent text-base outline-none placeholder:text-zinc-400"
       />
-      {showLoading && (
-        <span
-          aria-live="polite"
-          className="flex shrink-0 items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-400"
-        >
-          <Loader2 aria-hidden className="size-3 animate-spin" strokeWidth={1.75} />
-          {searchingLabel}
-        </span>
-      )}
       {showDropdown && (
         <ul
           id="address-suggestions"
@@ -184,7 +222,7 @@ export function AddressAutocomplete({
           {showFallbackNote && (
             <li
               role="presentation"
-              className="border-b border-zinc-200 bg-amber-50 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.18em] text-amber-800 dark:border-zinc-800 dark:bg-amber-950/30 dark:text-amber-300"
+              className="border-b border-zinc-200 bg-zinc-50 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-200"
             >
               {fallbackNote}
             </li>

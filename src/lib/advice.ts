@@ -36,6 +36,10 @@ const OPENING: Record<SSDStatus, Fragment> = {
     en: 'Initial review identifies planning constraints that disqualify the SSD permit-exempt pathway; a standard permit application is likely required.',
     zh: '初步评估识别出影响小型第二住宅豁免规划许可路径的限制因素,可能须按一般规划许可程序申请。',
   },
+  'Refinement Required': {
+    en: 'Initial review places the site in a commercial zone — the residential SSD pathway does not apply directly. Housing outcomes should be tested under Clause 34.01 (mixed-use / shop-top housing) instead.',
+    zh: '初步评估显示该地块位于商业分区,住宅型小型第二住宅路径不直接适用。建议改用 Clause 34.01(混合用途 / 临街店铺上层住宅)路径评估住宅可行性。',
+  },
 };
 
 const ZONE_HINT: Record<string, Fragment> = {
@@ -72,7 +76,23 @@ const OVERLAY_HINT: Record<OverlayCode, Fragment> = {
   },
   FO: {
     en: 'Inundation overlay applies; expect minimum floor-level controls and possible referral to the catchment management authority.',
-    zh: '淹水覆盖区适用最低楼面标高控制,可能需提交至流域管理局进行咨询。',
+    zh: 'LSIO 适用最低楼面标高控制,可能需提交至流域管理局进行咨询。',
+  },
+  SBO: {
+    en: 'Special Building Overlay applies — stormwater flow path detected. A planning permit is required regardless of SSD status; expect floor-level and drainage conditions.',
+    zh: '适用特殊建筑覆盖区(雨洪流径)。无论 SSD 状态如何,均需申请规划许可,并预期附带楼面标高与排水条件。',
+  },
+  PO: {
+    en: 'Parking Overlay applies. Existing car parking for the main dwelling must be retained.',
+    zh: '适用停车覆盖区。主住宅现有停车位须予保留。',
+  },
+  DDO: {
+    en: 'Design and Development Overlay applies. Built form controls may affect height, setbacks, or materials.',
+    zh: '适用设计与开发覆盖区。建筑形态控制可能影响高度、退界或材料选择。',
+  },
+  DCPO: {
+    en: 'Development Contributions Plan Overlay applies. Financial contributions to local infrastructure may be required.',
+    zh: '适用开发贡献计划覆盖区。可能需向地方基础设施缴纳开发贡献金。',
   },
 };
 

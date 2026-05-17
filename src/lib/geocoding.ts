@@ -73,6 +73,26 @@ type VicmapResponse = {
 
 function buildWhere(query: string): string {
   const escaped = query.replace(/'/g, "''").toUpperCase();
+  // Tolerate whitespace variants around the unit slash so "1/34 EDWIN ST"
+  // also matches Vicmap rows stored as "1 / 34 EDWIN ST" or "1 /34 EDWIN ST".
+  // Vicmap's `ezi_address` formatting has historically not been consistent
+  // across LGAs and the literal LIKE was dropping unit-prefixed queries.
+  const unitMatch = escaped.match(/^([0-9A-Z]+)\s*\/\s*(.+)$/);
+  if (unitMatch) {
+    const [, unit, rest] = unitMatch;
+    // Esri SQL LIKE uses single-character `_` wildcards; we cover the three
+    // observed Vicmap spellings (`U/L`, `U /L`, `U/ L`, `U / L`) by OR-ing
+    // explicit patterns rather than relying on undocumented regex support.
+    const variants = [
+      `${unit}/${rest}`,
+      `${unit} /${rest}`,
+      `${unit}/ ${rest}`,
+      `${unit} / ${rest}`,
+    ];
+    return variants
+      .map((v) => `UPPER(ezi_address) LIKE '${v}%'`)
+      .join(' OR ');
+  }
   return `UPPER(ezi_address) LIKE '${escaped}%'`;
 }
 
@@ -147,11 +167,23 @@ function vicmapDisplayName(attrs: VicmapAttrs): string | null {
   const postcode =
     typeof attrs.postcode === 'string' ? attrs.postcode.trim() : '';
 
-  const housePart = unit && house ? `${unit}/${house}` : house ?? '';
+  // House synthesis: keep the unit prefix even when `house_number_1` is
+  // missing (rare Vicmap rows where the unit row only carries unit fields).
+  // Without this guard, `unit && house` collapses to `''` and the unit is
+  // silently dropped — surfacing as "1/" in the UI when downstream callers
+  // re-prepend the user-typed unit prefix.
+  const housePart = unit && house
+    ? `${unit}/${house}`
+    : house ?? unit ?? '';
   const composed = [housePart, road, locality, postcode]
     .filter((s) => s.length > 0)
     .join(' ');
-  return composed.length > 0 ? composed : null;
+  // Reject results that only have a unit fragment with no road/locality —
+  // they would surface to the user as "1/" or "1/MENTONE" and confuse the
+  // selection flow more than dropping the row entirely.
+  if (composed.length === 0) return null;
+  if (road.length === 0 && !house) return null;
+  return composed;
 }
 
 function vicmapFeatureToResult(f: VicmapFeature): GeocodeResult | null {
@@ -317,6 +349,30 @@ export async function geocodeSuggestions(
       });
     }
     if (items.length > 0) return { items, source: 'vicmap' };
+
+    // Vicmap-internal fallback for unit queries: drop the unit prefix and
+    // retry the parent lot, then re-attach the user-typed unit to each
+    // suggestion's display name. Mirrors the lot-only retry in
+    // `geocodeAddress` so the dropdown doesn't silently fall back to
+    // Nominatim when Vicmap can resolve the lot but not the unit row.
+    if (userUnit) {
+      const slashIdx = trimmed.indexOf('/');
+      const lotOnly = trimmed.slice(slashIdx + 1).trim();
+      if (lotOnly.length > 0) {
+        const retried = await queryVicmap(lotOnly, 6, signal);
+        const retryItems: GeocodeSuggestion[] = [];
+        for (let i = 0; i < retried.length; i++) {
+          const r = vicmapFeatureToResult(retried[i]);
+          if (!r) continue;
+          const oid = retried[i].attributes.OBJECTID;
+          retryItems.push({
+            ...withUnitPrefix(r, userUnit),
+            placeId: typeof oid === 'number' ? oid : i,
+          });
+        }
+        if (retryItems.length > 0) return { items: retryItems, source: 'vicmap' };
+      }
+    }
     // Zero results is treated as "Vicmap worked but knows nothing" — still
     // try Nominatim so the user sees something rather than a dead dropdown.
   } catch (e) {

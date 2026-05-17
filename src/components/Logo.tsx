@@ -21,7 +21,7 @@ export function Logo({ size = 24, className, color = '#DC2626' }: Props) {
         width="20"
         height="20"
         stroke={color}
-        strokeWidth="2.25"
+        strokeWidth="2.75"
       />
       <line
         x1="12"
@@ -29,7 +29,7 @@ export function Logo({ size = 24, className, color = '#DC2626' }: Props) {
         x2="12"
         y2="14.5"
         stroke={color}
-        strokeWidth="2.25"
+        strokeWidth="2.75"
         strokeLinecap="round"
       />
       <line
@@ -38,7 +38,7 @@ export function Logo({ size = 24, className, color = '#DC2626' }: Props) {
         x2="14.5"
         y2="12"
         stroke={color}
-        strokeWidth="2.25"
+        strokeWidth="2.75"
         strokeLinecap="round"
       />
     </svg>

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { ClerkProvider } from '@clerk/nextjs';
 import "./globals.css";
 
 const inter = Inter({
@@ -8,9 +9,24 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "LandCheckFirst",
+  title: "SimplySite",
   description:
-    "LandCheckFirst — Victoria property feasibility for the 2026 Small Second Dwelling pathway.",
+    "SimplySite — Victoria property feasibility for the 2026 Small Second Dwelling pathway.",
+  icons: {
+    icon: "/favicon.svg",
+  },
+  openGraph: {
+    title: "SimplySite",
+    description:
+      "Victoria property feasibility for the 2026 Small Second Dwelling pathway.",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "SimplySite",
+    description:
+      "Victoria property feasibility for the 2026 Small Second Dwelling pathway.",
+  },
 };
 
 export default function RootLayout({
@@ -19,11 +35,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${inter.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
-    </html>
+    <ClerkProvider>
+      <html
+        lang="en"
+        className={`${inter.variable} h-full antialiased`}
+      >
+        <body className="min-h-full flex flex-col">{children}</body>
+      </html>
+    </ClerkProvider>
   );
 }

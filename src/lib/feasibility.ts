@@ -28,7 +28,7 @@ export const ZONES: Record<ZoneCode, Zone> = {
 
 // ---------- 叠加层 (Overlay) ----------
 
-export type OverlayCode = 'HO' | 'BMO' | 'FO';
+export type OverlayCode = 'HO' | 'BMO' | 'FO' | 'PO' | 'DDO' | 'DCPO' | 'SBO';
 
 export type Overlay = {
   code: OverlayCode;
@@ -42,15 +42,20 @@ export const OVERLAYS: Record<OverlayCode, Overlay> = {
   HO:  { code: 'HO',  zh: '遗产覆盖区',     en: 'Heritage Overlay',                   disqualifiesSSD: true },
   BMO: { code: 'BMO', zh: '山火管理覆盖区', en: 'Bushfire Management Overlay',        disqualifiesSSD: true },
   FO:  { code: 'FO',  zh: '淹水覆盖区',     en: 'Land Subject to Inundation Overlay', disqualifiesSSD: true },
+  SBO: { code: 'SBO', zh: '特殊建筑覆盖区', en: 'Special Building Overlay',          disqualifiesSSD: true },
+  PO:  { code: 'PO',  zh: '停车覆盖区',     en: 'Parking Overlay',                    disqualifiesSSD: false },
+  DDO: { code: 'DDO', zh: '设计与开发覆盖区', en: 'Design and Development Overlay',    disqualifiesSSD: false },
+  DCPO: { code: 'DCPO', zh: '开发贡献计划覆盖区', en: 'Development Contributions Plan Overlay', disqualifiesSSD: false },
 };
 
 // ---------- 可行性结果 (Feasibility result) ----------
 
-export type SSDStatus = 'Permit Exempt' | 'Permit Required';
+export type SSDStatus = 'Permit Exempt' | 'Permit Required' | 'Refinement Required';
 
 export const STATUS_LABELS: Record<SSDStatus, { zh: string; en: string }> = {
-  'Permit Exempt':   { zh: '豁免规划许可',   en: 'Planning Permit Exempt'   },
-  'Permit Required': { zh: '需申请规划许可', en: 'Planning Permit Required' },
+  'Permit Exempt':       { zh: '豁免规划许可',   en: 'Planning Permit Exempt'   },
+  'Permit Required':     { zh: '需申请规划许可', en: 'Planning Permit Required' },
+  'Refinement Required': { zh: '需进一步细化',   en: 'Refinement Required'      },
 };
 
 export type SSDReason = {
@@ -146,15 +151,39 @@ export type GardenInputs = {
 
 /**
  * Determine whether a lot qualifies for the 2026 小型第二住宅 (SSD)
- * permit-exempt pathway based on lot size, disqualifying overlays, the
- * three manual ResCode site checks, and ResCode Minimum Garden Area.
+ * permit-exempt pathway based on zone, lot size, disqualifying overlays,
+ * the manual ResCode site checks, and ResCode Minimum Garden Area.
+ *
+ * Commercial zones (C1Z, C2Z) short-circuit to "Refinement Required":
+ * the SSD pathway is residential-only, and housing in a commercial zone
+ * runs through Clause 34.01 (mixed-use / shop-top) rather than the
+ * permit-exempt SSD route.
  */
 export function checkSSDEligibility(
   lotSize: number,
   overlays: OverlayCode[],
   siteConditions: SiteConditions,
   garden: GardenInputs,
+  zoneCode?: string | null,
 ): SSDResult {
+  // Commercial zone short-circuit — the SSD pathway does not apply.
+  // Match C1Z / C2Z as both bare codes and schedule-suffixed (e.g. "C1Z1").
+  if (zoneCode) {
+    const z = zoneCode.toUpperCase();
+    if (z === 'C1Z' || z.startsWith('C1Z') || z === 'C2Z' || z.startsWith('C2Z')) {
+      return {
+        status: 'Refinement Required',
+        reasons: [
+          {
+            code: 'COMMERCIAL_ZONE_SSD_NA',
+            zh: `${zoneCode} 为商业分区,小型第二住宅(SSD)豁免规划许可路径不适用;住宅须依据 Clause 34.01 走规划许可或混合用途 / 临街店铺上层住宅(shop-top housing)路径。`,
+            en: `${zoneCode} is a commercial zone — the Small Second Dwelling permit-exempt pathway does not apply. Housing requires a planning permit or must satisfy mixed-use / shop-top housing parameters under Clause 34.01.`,
+          },
+        ],
+      };
+    }
+  }
+
   const failures: SSDReason[] = [];
 
   if (lotSize <= SSD_MIN_LOT_SIZE_M2) {

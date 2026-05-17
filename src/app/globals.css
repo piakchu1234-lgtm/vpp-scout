@@ -3,17 +3,23 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --charcoal: #241F21;
+  --lime: #E9E778;
+  --lime-ink: #1a1a14;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-charcoal: var(--charcoal);
+  --color-lime: var(--lime);
+  --color-lime-ink: var(--lime-ink);
   --font-sans: var(--font-inter);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
+    --background: #241F21;
     --foreground: #ededed;
   }
 }
@@ -22,4 +28,26 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+@keyframes progress {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+
+@media print {
+  @page { size: A4; margin: 0; }
+  body { background: white !important; color: black !important; }
+  body > *:not([data-print-root]) { display: none !important; }
+  [data-print-root] {
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    pointer-events: auto !important;
+  }
+  [data-print-root] > div {
+    width: 210mm;
+    min-height: 297mm;
+    margin: 0 auto;
+  }
 }
