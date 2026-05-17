@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 
-export const runtime = 'nodejs';
+export const runtime = 'edge';
 
 /**
  * Stripe webhook receiver.
@@ -34,13 +34,25 @@ export async function POST(request: NextRequest) {
   }
 
   // Stripe requires the raw request body to verify the signature; the SDK
-  // helper recomputes the HMAC over the exact bytes we received.
+  // helper recomputes the HMAC over the exact bytes we received. On the
+  // edge runtime the synchronous constructEvent (which uses Node crypto)
+  // is unavailable — we use constructEventAsync with the SDK's
+  // SubtleCrypto provider so HMAC-SHA256 verification runs on the
+  // platform-native Web Crypto API.
   const rawBody = await request.text();
-  const stripe = new Stripe(secret);
+  const stripe = new Stripe(secret, {
+    httpClient: Stripe.createFetchHttpClient(),
+  });
 
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
+    event = await stripe.webhooks.constructEventAsync(
+      rawBody,
+      signature,
+      webhookSecret,
+      undefined,
+      Stripe.createSubtleCryptoProvider(),
+    );
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown signature error';
     console.warn('[webhook/stripe] signature verification failed', msg);

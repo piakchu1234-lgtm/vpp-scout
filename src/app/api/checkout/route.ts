@@ -3,7 +3,7 @@ import Stripe from 'stripe';
 
 import { BETA_FREE } from '@/lib/betaConfig';
 
-export const runtime = 'nodejs';
+export const runtime = 'edge';
 
 const PREMIUM_REPORT_PRICE_AUD = 49;
 
@@ -47,7 +47,9 @@ export async function POST(request: NextRequest) {
   const address = (body.address ?? '').trim().slice(0, 240);
   const spi = (body.spi ?? '').trim().slice(0, 64);
 
-  const stripe = new Stripe(secret);
+  const stripe = new Stripe(secret, {
+    httpClient: Stripe.createFetchHttpClient(),
+  });
 
   try {
     const session = await stripe.checkout.sessions.create({
