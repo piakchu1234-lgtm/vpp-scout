@@ -30,6 +30,27 @@ body {
   font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
+/* Enterprise scrollbar reset — hide native chrome on every scroll
+   container so the dashboard reads as a single uninterrupted canvas. */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+*::-webkit-scrollbar {
+  display: none;
+}
+
+/* Strip the webkit number-input spinner so the Feasibility pro-forma
+   inputs render as plain monospace fields. */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
 @keyframes progress {
   0%   { transform: translateX(-100%); }
   100% { transform: translateX(400%); }

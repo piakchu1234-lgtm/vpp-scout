@@ -252,6 +252,7 @@ export default function LandingPage() {
                 role="combobox"
                 autoComplete="off"
                 spellCheck={false}
+                autoFocus
                 aria-busy={loading ? true : undefined}
                 className="w-full bg-transparent border-none text-white text-lg placeholder:text-zinc-500 focus:outline-none focus:ring-0 px-4 py-4"
               />

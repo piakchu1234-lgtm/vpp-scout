@@ -2,6 +2,7 @@
 
 import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowLeft, Download, Loader2, Map as MapIcon } from 'lucide-react';
 import area from '@turf/area';
 import PropertyDetailsTab from '@/components/sidebar/PropertyDetailsTab';
@@ -143,8 +144,8 @@ function AppCanvas() {
         </div>
       </header>
 
-      <div className="flex flex-col md:grid md:grid-cols-[1fr_420px] h-screen overflow-hidden">
-        <section className="h-[40vh] md:h-full w-full shrink-0 relative bg-[#241F21] overflow-hidden">
+      <div className="flex flex-col md:grid md:grid-cols-[1fr_420px] h-[100dvh] overflow-hidden">
+        <section className="h-[40vh] md:h-full relative bg-[#241F21] overflow-hidden">
           {hasCoords ? (
             <>
               <MapPreview
@@ -201,24 +202,34 @@ function AppCanvas() {
             })}
           </nav>
           <div className="p-6 overflow-y-auto flex-1">
-            {activeTab === 'property' && (
-              <PropertyDetailsTab
-                address={address}
-                lat={lat}
-                lon={lon}
-                landSizeM2={landSizeM2}
-                lotPlan={spi}
-              />
-            )}
-            {activeTab === 'planning' && (
-              <PlanningConstraintsTab
-                zoneCode={planData?.zoneCode ?? null}
-                zoneDescription={planData?.zoneDescription ?? null}
-                overlays={overlays}
-              />
-            )}
-            {activeTab === 'potential' && <DevelopmentPotentialTab />}
-            {activeTab === 'feasibility' && <FeasibilityTab />}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.18, ease: 'easeOut' }}
+              >
+                {activeTab === 'property' && (
+                  <PropertyDetailsTab
+                    address={address}
+                    lat={lat}
+                    lon={lon}
+                    landSizeM2={landSizeM2}
+                    lotPlan={spi}
+                  />
+                )}
+                {activeTab === 'planning' && (
+                  <PlanningConstraintsTab
+                    zoneCode={planData?.zoneCode ?? null}
+                    zoneDescription={planData?.zoneDescription ?? null}
+                    overlays={overlays}
+                  />
+                )}
+                {activeTab === 'potential' && <DevelopmentPotentialTab />}
+                {activeTab === 'feasibility' && <FeasibilityTab />}
+              </motion.div>
+            </AnimatePresence>
           </div>
 
           <div className="border-t border-white/10 bg-[#241F21] p-4">
