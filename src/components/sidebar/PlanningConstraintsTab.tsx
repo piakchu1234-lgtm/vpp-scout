@@ -24,8 +24,52 @@ const MOCK_PLANNING_DATA = {
   ]
 };
 
-export default function PlanningConstraintsTab() {
+const OVERLAY_CATEGORY_NAMES: Record<string, string> = {
+  HO: 'Heritage Overlay',
+  BMO: 'Bushfire Management Overlay',
+  FO: 'Flood Overlay',
+  LSIO: 'Land Subject to Inundation Overlay',
+  SBO: 'Special Building Overlay',
+  DDO: 'Design and Development Overlay',
+  PO: 'Parking Overlay',
+  DCPO: 'Development Contributions Plan Overlay',
+};
+
+function describeOverlayCode(raw: string): string {
+  const upper = raw.toUpperCase();
+  for (const prefix of Object.keys(OVERLAY_CATEGORY_NAMES)) {
+    if (upper.startsWith(prefix)) return OVERLAY_CATEGORY_NAMES[prefix];
+  }
+  return 'Planning Overlay';
+}
+
+export { describeOverlayCode };
+
+export type PlanningOverlay = { code: string; name: string };
+
+type Props = {
+  zoneCode?: string | null;
+  zoneDescription?: string | null;
+  overlays?: PlanningOverlay[] | null;
+};
+
+export default function PlanningConstraintsTab({
+  zoneCode,
+  zoneDescription,
+  overlays,
+}: Props = {}) {
   const data = MOCK_PLANNING_DATA;
+  const liveZoneCode = zoneCode?.trim();
+  const zone = liveZoneCode
+    ? {
+        code: liveZoneCode,
+        name: zoneDescription?.trim() || liveZoneCode,
+        description: zoneDescription?.trim()
+          ? 'Live data sourced from Vicmap planning scheme.'
+          : 'Zone description unavailable from Vicmap for this parcel.',
+      }
+    : data.zone;
+  const resolvedOverlays = overlays ?? data.overlays;
 
   return (
     <div className="flex flex-col gap-6 text-zinc-200 animate-in fade-in duration-300 pb-10">
@@ -37,11 +81,11 @@ export default function PlanningConstraintsTab() {
         </h3>
         <div className="flex items-start gap-4">
           <div className="px-3 py-1.5 bg-[#E9E778] text-[#241F21] rounded-md font-bold text-lg uppercase tracking-wider shrink-0">
-            {data.zone.code}
+            {zone.code}
           </div>
           <div>
-            <p className="font-semibold text-white mb-1">{data.zone.name}</p>
-            <p className="text-xs text-zinc-400 leading-relaxed">{data.zone.description}</p>
+            <p className="font-semibold text-white mb-1">{zone.name}</p>
+            <p className="text-xs text-zinc-400 leading-relaxed">{zone.description}</p>
           </div>
         </div>
       </div>
@@ -51,9 +95,9 @@ export default function PlanningConstraintsTab() {
         <h3 className="text-xs font-bold tracking-widest text-zinc-500 uppercase mb-4 flex items-center gap-2">
           <ShieldAlert className="w-4 h-4" /> Planning Overlays
         </h3>
-        {data.overlays.length > 0 ? (
+        {resolvedOverlays.length > 0 ? (
           <div className="flex flex-col gap-3">
-            {data.overlays.map((overlay, idx) => (
+            {resolvedOverlays.map((overlay, idx) => (
               <div key={idx} className="flex items-center gap-3 p-3 bg-black/20 border border-white/5 rounded-lg">
                 <span className="px-2 py-1 bg-zinc-800 text-white text-xs font-bold rounded">
                   {overlay.code}

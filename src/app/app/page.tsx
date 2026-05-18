@@ -1,16 +1,26 @@
 'use client';
 
-import React, { Suspense, useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2, Map as MapIcon } from 'lucide-react';
+import area from '@turf/area';
 import PropertyDetailsTab from '@/components/sidebar/PropertyDetailsTab';
-import PlanningConstraintsTab from '@/components/sidebar/PlanningConstraintsTab';
+import PlanningConstraintsTab, {
+  describeOverlayCode,
+  type PlanningOverlay,
+} from '@/components/sidebar/PlanningConstraintsTab';
 import DevelopmentPotentialTab from '@/components/sidebar/DevelopmentPotentialTab';
 import FeasibilityTab from '@/components/sidebar/FeasibilityTab';
 import { MapPreview } from '@/components/MapPreview';
-import { fetchVicParcelForPoint, type ParcelPolygon } from '@/lib/vicPlanApi';
+import {
+  fetchVicParcelForPoint,
+  fetchVicPlanForPoint,
+  type ParcelPolygon,
+  type VicPlanData,
+} from '@/lib/vicPlanApi';
 
 const MELBOURNE_FALLBACK = { lat: -37.8136, lon: 144.9631 };
+const VICMAP_TIMEOUT_MS = 5000;
 
 type TabId = 'property' | 'planning' | 'potential' | 'feasibility';
 
@@ -32,37 +42,79 @@ function AppCanvas() {
   const hasCoords = Number.isFinite(lat) && Number.isFinite(lon);
 
   const [polygon, setPolygon] = useState<ParcelPolygon | null>(null);
+  const [spi, setSpi] = useState<string | null>(null);
   const [parcelLoading, setParcelLoading] = useState(false);
-  const [parcelError, setParcelError] = useState<string | null>(null);
+  const [parcelMessage, setParcelMessage] = useState<string | null>(null);
+  const [planData, setPlanData] = useState<VicPlanData | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('property');
 
   useEffect(() => {
     if (!hasCoords) return;
     let stale = false;
     setParcelLoading(true);
-    setParcelError(null);
+    setParcelMessage(null);
     setPolygon(null);
+    setSpi(null);
+    setPlanData(null);
 
-    fetchVicParcelForPoint(lon, lat)
+    fetchVicParcelForPoint(lon, lat, VICMAP_TIMEOUT_MS)
       .then((result) => {
         if (stale) return;
         setPolygon(result?.polygon ?? null);
-        if (!result) setParcelError('No parcel at this point');
+        setSpi(result?.spi ?? null);
+        if (!result) setParcelMessage('No parcel found at this point');
       })
       .catch((err: unknown) => {
         if (stale) return;
-        const message = err instanceof Error ? err.message : 'Parcel lookup failed';
+        const isTimeout =
+          err instanceof Error && /timeout|ECONNABORTED/i.test(err.message);
         console.warn('[AppCanvas] parcel fetch failed', err);
-        setParcelError(message);
+        setParcelMessage(
+          isTimeout ? 'Vicmap timed out — no parcel rendered' : 'No parcel found at this point',
+        );
       })
       .finally(() => {
         if (!stale) setParcelLoading(false);
+      });
+
+    fetchVicPlanForPoint(lon, lat, VICMAP_TIMEOUT_MS)
+      .then((data) => {
+        if (stale) return;
+        setPlanData(data);
+      })
+      .catch((err: unknown) => {
+        if (stale) return;
+        console.warn('[AppCanvas] plan fetch failed', err);
+        setPlanData(null);
       });
 
     return () => {
       stale = true;
     };
   }, [hasCoords, lat, lon]);
+
+  const landSizeM2 = useMemo(() => {
+    if (!polygon) return null;
+    try {
+      const m2 = area({ type: 'Feature', properties: {}, geometry: polygon });
+      return Number.isFinite(m2) && m2 > 0 ? m2 : null;
+    } catch {
+      return null;
+    }
+  }, [polygon]);
+
+  const overlays: PlanningOverlay[] | null = useMemo(() => {
+    if (!planData) return null;
+    const seen = new Set<string>();
+    const out: PlanningOverlay[] = [];
+    for (const raw of planData.overlayRaw) {
+      const code = raw.toUpperCase();
+      if (seen.has(code)) continue;
+      seen.add(code);
+      out.push({ code, name: describeOverlayCode(code) });
+    }
+    return out;
+  }, [planData]);
 
   return (
     <div className="relative min-h-screen w-full bg-[#241F21] text-white font-sans selection:bg-[#E9E778] selection:text-[#241F21]">
@@ -99,16 +151,16 @@ function AppCanvas() {
                 polygon={polygon}
                 className="h-full w-full"
               />
-              {(parcelLoading || parcelError) && (
-                <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-3 py-1.5 rounded-full border bg-black/60 backdrop-blur-md text-xs font-medium tracking-wide pointer-events-none">
+              {(parcelLoading || parcelMessage) && (
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/10 bg-black/60 backdrop-blur-md text-xs font-medium tracking-wide pointer-events-none">
                   {parcelLoading && (
                     <>
                       <Loader2 className="w-3.5 h-3.5 text-[#E9E778] animate-spin" />
                       <span className="text-zinc-200">Resolving parcel…</span>
                     </>
                   )}
-                  {!parcelLoading && parcelError && (
-                    <span className="text-zinc-400">{parcelError}</span>
+                  {!parcelLoading && parcelMessage && (
+                    <span className="text-zinc-400">{parcelMessage}</span>
                   )}
                 </div>
               )}
@@ -147,8 +199,22 @@ function AppCanvas() {
             })}
           </nav>
           <div className="p-6 overflow-y-auto flex-1">
-            {activeTab === 'property' && <PropertyDetailsTab />}
-            {activeTab === 'planning' && <PlanningConstraintsTab />}
+            {activeTab === 'property' && (
+              <PropertyDetailsTab
+                address={address}
+                lat={lat}
+                lon={lon}
+                landSizeM2={landSizeM2}
+                lotPlan={spi}
+              />
+            )}
+            {activeTab === 'planning' && (
+              <PlanningConstraintsTab
+                zoneCode={planData?.zoneCode ?? null}
+                zoneDescription={planData?.zoneDescription ?? null}
+                overlays={overlays}
+              />
+            )}
             {activeTab === 'potential' && <DevelopmentPotentialTab />}
             {activeTab === 'feasibility' && <FeasibilityTab />}
           </div>

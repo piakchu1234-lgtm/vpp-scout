@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useMemo } from 'react';
-import { Calculator, DollarSign, Hammer, Percent, TrendingUp, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Calculator, DollarSign, Hammer, Percent, TrendingUp, AlertTriangle, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 export default function FeasibilityTab() {
   // --- 1. State: Editable Acquisition & Development Inputs ---
@@ -148,14 +148,15 @@ export default function FeasibilityTab() {
       <div className={`p-5 rounded-xl backdrop-blur-sm border transition-colors duration-500 ${
         metrics.roi >= 15 ? 'bg-[#E9E778]/10 border-[#E9E778]/30' :
         metrics.roi < 0 ? 'bg-red-500/10 border-red-500/30' :
-        'bg-white/5 border-white/10'
+        'bg-amber-500/10 border-amber-500/30'
       }`}>
         <h3 className="text-xs font-bold tracking-widest uppercase mb-4 flex items-center justify-between">
-          <span className={metrics.roi >= 15 ? 'text-[#E9E778]' : metrics.roi < 0 ? 'text-red-400' : 'text-zinc-500'}>
+          <span className={metrics.roi >= 15 ? 'text-[#E9E778]' : metrics.roi < 0 ? 'text-red-400' : 'text-amber-400'}>
             3. Project Performance
           </span>
           {metrics.roi >= 15 && <CheckCircle2 className="w-4 h-4 text-[#E9E778]" />}
           {metrics.roi < 0 && <AlertTriangle className="w-4 h-4 text-red-400" />}
+          {metrics.roi >= 0 && metrics.roi < 15 && <AlertCircle className="w-4 h-4 text-amber-400" />}
         </h3>
 
         <div className="flex flex-col gap-3 font-mono text-sm mb-4">
@@ -182,7 +183,7 @@ export default function FeasibilityTab() {
         <div className={`flex items-center justify-between p-3 rounded-lg ${
           metrics.roi >= 15 ? 'bg-[#E9E778] text-[#241F21]' :
           metrics.roi < 0 ? 'bg-red-500/20 text-red-400 border border-red-500/50' :
-          'bg-white/10 text-white'
+          'bg-amber-500/15 text-amber-400 border border-amber-500/40'
         }`}>
           <div className="flex items-center gap-2 font-bold uppercase tracking-wider text-sm">
             <Percent className="w-4 h-4" />

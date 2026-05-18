@@ -38,6 +38,7 @@ async function pointQuery(
   url: string,
   lon: number,
   lat: number,
+  timeoutMs = 20000,
 ): Promise<ArcgisFeature[]> {
   const params = {
     geometry: `${lon},${lat}`,
@@ -55,7 +56,7 @@ async function pointQuery(
 
   const { data } = await axios.get<ArcgisResponse>(url, {
     params,
-    timeout: 20000,
+    timeout: timeoutMs,
   });
 
   if (data.error) {
@@ -91,10 +92,11 @@ function classifyOverlay(raw: string): OverlayCode | null {
 export async function fetchVicPlanForPoint(
   lon: number,
   lat: number,
+  timeoutMs = 20000,
 ): Promise<VicPlanData> {
   const [zoneFeatures, overlayFeatures] = await Promise.all([
-    pointQuery(ZONES_URL, lon, lat),
-    pointQuery(OVERLAYS_URL, lon, lat),
+    pointQuery(ZONES_URL, lon, lat, timeoutMs),
+    pointQuery(OVERLAYS_URL, lon, lat, timeoutMs),
   ]);
 
   const zoneAttrs = zoneFeatures[0]?.attributes;
@@ -171,6 +173,7 @@ export type ParcelPointResult = {
 export async function fetchVicParcelForPoint(
   lon: number,
   lat: number,
+  timeoutMs = 20000,
 ): Promise<ParcelPointResult | null> {
   const params = {
     geometry: `${lon},${lat}`,
@@ -185,7 +188,7 @@ export async function fetchVicParcelForPoint(
 
   const { data } = await axios.get<ArcgisAttributedParcelResponse>(PARCEL_URL, {
     params,
-    timeout: 20000,
+    timeout: timeoutMs,
   });
 
   if (data.error) {

@@ -27,9 +27,31 @@ const MOCK_DOMAIN_DATA = {
   }
 };
 
-export default function PropertyDetailsTab() {
+type Props = {
+  address?: string | null;
+  lat?: number | null;
+  lon?: number | null;
+  landSizeM2?: number | null;
+  lotPlan?: string | null;
+};
+
+export default function PropertyDetailsTab({
+  address,
+  lat,
+  lon,
+  landSizeM2,
+  lotPlan,
+}: Props = {}) {
   const data = MOCK_DOMAIN_DATA;
   const googleMapsKey = (process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || '').trim().replace(/[\"']/g, '');
+  const displayAddress = address?.trim() || data.address;
+  const displayLotPlan = lotPlan?.trim() || data.lotPlan;
+  const displayLandSize =
+    typeof landSizeM2 === 'number' && Number.isFinite(landSizeM2) && landSizeM2 > 0
+      ? `${Math.round(landSizeM2)}m²`
+      : data.dimensions.landSize;
+  const streetViewLat = typeof lat === 'number' && Number.isFinite(lat) ? lat : -37.9622;
+  const streetViewLon = typeof lon === 'number' && Number.isFinite(lon) ? lon : 145.1764;
 
   return (
     <div className="flex flex-col gap-6 text-zinc-200 animate-in fade-in duration-300">
@@ -37,8 +59,8 @@ export default function PropertyDetailsTab() {
       {/* 1. Header & Dwelling Composition */}
       <div className="flex flex-col gap-4 bg-white/5 border border-white/10 p-5 rounded-xl backdrop-blur-sm">
         <div>
-          <h2 className="text-xl font-bold text-white mb-1">{data.address}</h2>
-          <p className="text-sm text-zinc-400 font-mono">Lot/Plan: {data.lotPlan}</p>
+          <h2 className="text-xl font-bold text-white mb-1">{displayAddress}</h2>
+          <p className="text-sm text-zinc-400 font-mono">Lot/Plan: {displayLotPlan}</p>
         </div>
 
         <div className="flex items-center gap-6 pt-3 border-t border-white/10">
@@ -66,7 +88,7 @@ export default function PropertyDetailsTab() {
               <Maximize className="w-4 h-4 text-[#E9E778]" />
               <span className="text-xs uppercase tracking-wide">Land Size</span>
             </div>
-            <p className="font-semibold text-lg">{data.dimensions.landSize}</p>
+            <p className="font-semibold text-lg">{displayLandSize}</p>
           </div>
           <div>
             <div className="flex items-center gap-2 text-zinc-400 mb-1">
@@ -153,7 +175,7 @@ export default function PropertyDetailsTab() {
               style={{ border: 0 }}
               loading="lazy"
               allowFullScreen
-              src={`https://www.google.com/maps/embed/v1/streetview?key=${googleMapsKey}&location=-37.9622,145.1764&heading=210&pitch=10&fov=90`}
+              src={`https://www.google.com/maps/embed/v1/streetview?key=${googleMapsKey}&location=${streetViewLat},${streetViewLon}&heading=210&pitch=10&fov=90`}
             ></iframe>
           ) : (
             <div className="flex items-center justify-center h-full text-xs text-zinc-500">
