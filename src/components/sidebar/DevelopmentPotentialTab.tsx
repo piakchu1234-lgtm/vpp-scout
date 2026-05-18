@@ -1,36 +1,19 @@
 'use client';
 import React from 'react';
 import { TrendingUp, Home, Building2, LayoutGrid, AlertTriangle, CheckCircle2, ChevronRight, Info } from 'lucide-react';
+import { calculateYield, emptyYield } from '@/lib/yieldEngine';
 
-const MOCK_YIELD_DATA = {
-  isFeasible: true,
-  summary: "Based on your zone (GRZ1), lot size (711m²), and local precedents, we predict strong subdivision potential. Townhouse yields are highly viable.",
-  scorecard: {
-    overall: "HIGH",
-    precedents: 85,
-    slope: 90,
-    complexity: 65,
-    riskFactors: 80
-  },
-  landUse: [
-    { type: "House", estimate: 1, max: 1, feasible: true },
-    { type: "Duplex", estimate: 2, max: 2, feasible: true },
-    { type: "Townhouse", estimate: 3, max: 4, feasible: true },
-    { type: "Apartment", estimate: 0, max: 0, feasible: false }
-  ],
-  constraints: {
-    maxHeight: "9m (2 Storeys)",
-    maxFootprint: "426m² (60%)",
-    minPermeability: "142m² (20%)"
-  },
-  permit: {
-    required: true,
-    reason: "Clause 55 (ResCode) triggered: Multi-dwelling development >= 2 units."
-  }
+type Props = {
+  landSize?: number | null;
+  zoneCode?: string | null;
 };
 
-export default function DevelopmentPotentialTab() {
-  const data = MOCK_YIELD_DATA;
+export default function DevelopmentPotentialTab({ landSize, zoneCode }: Props = {}) {
+  const hasLandSize =
+    typeof landSize === 'number' && Number.isFinite(landSize) && landSize > 0;
+  const data = hasLandSize
+    ? calculateYield(landSize as number, zoneCode ?? '')
+    : emptyYield('Awaiting Vicmap parcel geometry — yield model will populate once the lot resolves.');
 
   return (
     <div className="flex flex-col gap-6 text-zinc-200 animate-in fade-in duration-300">
@@ -43,7 +26,13 @@ export default function DevelopmentPotentialTab() {
         <div className="flex items-start gap-3">
           <TrendingUp className="w-5 h-5 text-[#E9E778] shrink-0 mt-1" />
           <div>
-            <h2 className="text-lg font-bold text-[#E9E778] mb-2">You have found a site with POTENTIAL!</h2>
+            <h2 className="text-lg font-bold text-[#E9E778] mb-2">
+              {data.isFeasible
+                ? 'You have found a site with POTENTIAL!'
+                : hasLandSize
+                  ? 'Single-dwelling site — limited yield uplift'
+                  : 'Awaiting parcel data'}
+            </h2>
             <p className="text-sm text-zinc-400 leading-relaxed">{data.summary}</p>
           </div>
         </div>

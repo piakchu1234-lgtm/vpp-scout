@@ -226,7 +226,12 @@ function AppCanvas() {
                     overlays={overlays}
                   />
                 )}
-                {activeTab === 'potential' && <DevelopmentPotentialTab />}
+                {activeTab === 'potential' && (
+                  <DevelopmentPotentialTab
+                    landSize={landSizeM2}
+                    zoneCode={planData?.zoneCode ?? null}
+                  />
+                )}
                 {activeTab === 'feasibility' && <FeasibilityTab />}
               </motion.div>
             </AnimatePresence>
