@@ -37,8 +37,8 @@ type Props = {
 
 export default function PropertyDetailsTab({
   address,
-  lat,
-  lon,
+  lat: latProp,
+  lon: lonProp,
   landSizeM2,
   lotPlan,
 }: Props = {}) {
@@ -50,8 +50,8 @@ export default function PropertyDetailsTab({
     typeof landSizeM2 === 'number' && Number.isFinite(landSizeM2) && landSizeM2 > 0
       ? `${Math.round(landSizeM2)}m²`
       : data.dimensions.landSize;
-  const streetViewLat = typeof lat === 'number' && Number.isFinite(lat) ? lat : -37.9622;
-  const streetViewLon = typeof lon === 'number' && Number.isFinite(lon) ? lon : 145.1764;
+  const lat = typeof latProp === 'number' && Number.isFinite(latProp) ? latProp : -37.9622;
+  const lon = typeof lonProp === 'number' && Number.isFinite(lonProp) ? lonProp : 145.1764;
 
   return (
     <div className="flex flex-col gap-6 text-zinc-200 animate-in fade-in duration-300">
@@ -175,7 +175,7 @@ export default function PropertyDetailsTab({
               style={{ border: 0 }}
               loading="lazy"
               allowFullScreen
-              src={`https://www.google.com/maps/embed/v1/streetview?key=${googleMapsKey}&location=${streetViewLat},${streetViewLon}&heading=210&pitch=10&fov=90`}
+              src={`https://www.google.com/maps/embed/v1/streetview?key=${googleMapsKey}&location=${lat},${lon}&heading=210&pitch=10&fov=90`}
             ></iframe>
           ) : (
             <div className="flex items-center justify-center h-full text-xs text-zinc-500">
