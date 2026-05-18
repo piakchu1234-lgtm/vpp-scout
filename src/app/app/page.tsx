@@ -4,6 +4,7 @@ import React, { Suspense, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2, Map as MapIcon } from 'lucide-react';
 import PropertyDetailsTab from '@/components/sidebar/PropertyDetailsTab';
+import PlanningConstraintsTab from '@/components/sidebar/PlanningConstraintsTab';
 import DevelopmentPotentialTab from '@/components/sidebar/DevelopmentPotentialTab';
 import FeasibilityTab from '@/components/sidebar/FeasibilityTab';
 import { MapPreview } from '@/components/MapPreview';
@@ -11,10 +12,11 @@ import { fetchVicParcelForPoint, type ParcelPolygon } from '@/lib/vicPlanApi';
 
 const MELBOURNE_FALLBACK = { lat: -37.8136, lon: 144.9631 };
 
-type TabId = 'property' | 'potential' | 'feasibility';
+type TabId = 'property' | 'planning' | 'potential' | 'feasibility';
 
 const TABS: { id: TabId; label: string; disabled?: boolean }[] = [
   { id: 'property', label: 'Property' },
+  { id: 'planning', label: 'Planning' },
   { id: 'potential', label: 'Potential' },
   { id: 'feasibility', label: 'Feasibility' },
 ];
@@ -146,6 +148,7 @@ function AppCanvas() {
           </nav>
           <div className="p-6 overflow-y-auto flex-1">
             {activeTab === 'property' && <PropertyDetailsTab />}
+            {activeTab === 'planning' && <PlanningConstraintsTab />}
             {activeTab === 'potential' && <DevelopmentPotentialTab />}
             {activeTab === 'feasibility' && <FeasibilityTab />}
           </div>
