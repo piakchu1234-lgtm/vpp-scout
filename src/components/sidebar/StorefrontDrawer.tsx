@@ -1,14 +1,45 @@
 'use client';
-import React from 'react';
-import { X, FileText, Download, Lock, ChevronRight, FileBadge2, CreditCard } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, FileText, Download, Lock, Loader2, ChevronRight, FileBadge2, CreditCard } from 'lucide-react';
 
 interface StorefrontDrawerProps {
   isOpen: boolean;
   onClose: () => void;
+  address?: string | null;
+  spi?: string | null;
 }
 
-export default function StorefrontDrawer({ isOpen, onClose }: StorefrontDrawerProps) {
+export default function StorefrontDrawer({ isOpen, onClose, address, spi }: StorefrontDrawerProps) {
+  const [isRedirecting, setIsRedirecting] = useState(false);
+
   if (!isOpen) return null;
+
+  async function handleCheckout() {
+    if (isRedirecting) return;
+    setIsRedirecting(true);
+    try {
+      const res = await fetch('/api/billing/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plan: 'credits',
+          quantity: 1,
+          address: address ?? null,
+          spi: spi ?? null,
+          lang: 'en',
+        }),
+      });
+      const data = (await res.json()) as { ok?: boolean; url?: string; error?: string };
+      if (!res.ok || !data.ok || !data.url) {
+        throw new Error(data.error || `Checkout responded ${res.status}`);
+      }
+      window.location.href = data.url;
+    } catch (err) {
+      console.warn('[StorefrontDrawer] checkout failed', err);
+      setIsRedirecting(false);
+      alert('Checkout failed. Please try again or log in.');
+    }
+  }
 
   return (
     <div className="absolute inset-0 z-50 flex flex-col bg-[#241F21] animate-in slide-in-from-bottom-full duration-300">
@@ -33,7 +64,7 @@ export default function StorefrontDrawer({ isOpen, onClose }: StorefrontDrawerPr
         <div>
           <h3 className="text-xs font-bold tracking-widest text-zinc-500 uppercase mb-3">AI Feasibility Reports</h3>
           <div className="flex flex-col gap-3">
-            <div className="bg-white/5 border border-[#E9E778]/30 rounded-xl p-4 relative overflow-hidden group cursor-pointer hover:bg-white/10 transition-colors">
+            <div className="bg-white/5 border border-[#E9E778]/30 rounded-xl p-4 relative overflow-hidden group">
               <div className="absolute top-0 right-0 px-3 py-1 bg-[#E9E778] text-[#241F21] text-[10px] font-bold uppercase tracking-wider rounded-bl-lg">
                 Popular
               </div>
@@ -44,8 +75,22 @@ export default function StorefrontDrawer({ isOpen, onClose }: StorefrontDrawerPr
                   <p className="text-xs text-zinc-400 mb-3">Full PDF report including yield models, ResCode compliance, and commercial pro-forma.</p>
                   <div className="flex items-center justify-between">
                     <span className="text-lg font-black text-white">$49.00</span>
-                    <button className="flex items-center gap-1.5 text-xs font-bold text-[#241F21] bg-[#E9E778] px-3 py-1.5 rounded-full">
-                      <Lock className="w-3 h-3" /> Purchase
+                    <button
+                      onClick={handleCheckout}
+                      disabled={isRedirecting}
+                      aria-busy={isRedirecting}
+                      className="flex items-center gap-1.5 text-xs font-bold text-[#241F21] bg-[#E9E778] px-3 py-1.5 rounded-full transition-colors hover:bg-[#d4d262] disabled:opacity-70 disabled:cursor-not-allowed"
+                    >
+                      {isRedirecting ? (
+                        <>
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          Redirecting…
+                        </>
+                      ) : (
+                        <>
+                          <Lock className="w-3 h-3" /> Purchase
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>

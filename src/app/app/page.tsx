@@ -143,8 +143,8 @@ function AppCanvas() {
         </div>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_420px] min-h-[calc(100vh-65px)]">
-        <section className="relative border-r border-white/10 bg-[#241F21] overflow-hidden">
+      <div className="flex flex-col md:grid md:grid-cols-[1fr_420px] h-screen overflow-hidden">
+        <section className="h-[40vh] md:h-full w-full relative shrink-0 md:border-r border-b md:border-b-0 border-white/10 bg-[#241F21] overflow-hidden">
           {hasCoords ? (
             <>
               <MapPreview
@@ -174,7 +174,7 @@ function AppCanvas() {
           )}
         </section>
 
-        <aside className="relative bg-[#241F21] flex flex-col overflow-hidden">
+        <aside className="flex-1 md:h-full flex flex-col overflow-hidden relative bg-[#241F21]">
           <nav className="flex items-center gap-1 px-6 pt-6 pb-3 border-b border-white/10 bg-[#241F21] sticky top-0 z-10">
             {TABS.map((tab) => {
               const active = activeTab === tab.id;
@@ -234,6 +234,8 @@ function AppCanvas() {
           <StorefrontDrawer
             isOpen={isStorefrontOpen}
             onClose={() => setIsStorefrontOpen(false)}
+            address={address}
+            spi={spi}
           />
         </aside>
       </div>
