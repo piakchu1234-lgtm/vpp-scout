@@ -121,7 +121,15 @@ export default function LandingPage() {
     if (e.key === 'Enter' && open && suggestions.length > 0) {
       e.preventDefault();
       const pick = suggestions[highlight >= 0 ? highlight : 0];
-      if (pick) selectSuggestion(pick);
+      if (pick) {
+        selectSuggestion(pick);
+        navigateToApp(pick);
+      }
+      return;
+    }
+    if (e.key === 'Enter' && selected) {
+      e.preventDefault();
+      navigateToApp(selected);
       return;
     }
     if (!open || suggestions.length === 0) return;

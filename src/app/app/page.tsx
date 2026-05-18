@@ -1,9 +1,18 @@
 'use client';
 
-import React, { Suspense } from 'react';
+import React, { Suspense, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Map as MapIcon } from 'lucide-react';
 import PropertyDetailsTab from '@/components/sidebar/PropertyDetailsTab';
+import DevelopmentPotentialTab from '@/components/sidebar/DevelopmentPotentialTab';
+
+type TabId = 'property' | 'potential' | 'feasibility';
+
+const TABS: { id: TabId; label: string; disabled?: boolean }[] = [
+  { id: 'property', label: 'Property' },
+  { id: 'potential', label: 'Potential' },
+  { id: 'feasibility', label: 'Feasibility', disabled: true },
+];
 
 function AppCanvas() {
   const params = useSearchParams();
@@ -11,6 +20,7 @@ function AppCanvas() {
   const address = params.get('address');
   const lat = params.get('lat');
   const lon = params.get('lon');
+  const [activeTab, setActiveTab] = useState<TabId>('property');
 
   return (
     <div className="relative min-h-screen w-full bg-[#241F21] text-white font-sans selection:bg-[#E9E778] selection:text-[#241F21]">
@@ -59,8 +69,39 @@ function AppCanvas() {
           </div>
         </section>
 
-        <aside className="bg-[#241F21] p-6 overflow-y-auto">
-          <PropertyDetailsTab />
+        <aside className="bg-[#241F21] flex flex-col overflow-hidden">
+          <nav className="flex items-center gap-1 px-6 pt-6 pb-3 border-b border-white/10 bg-[#241F21] sticky top-0 z-10">
+            {TABS.map((tab) => {
+              const active = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => !tab.disabled && setActiveTab(tab.id)}
+                  disabled={tab.disabled}
+                  aria-pressed={active}
+                  className={`relative px-3 py-2 text-xs font-bold uppercase tracking-widest transition-colors ${
+                    tab.disabled
+                      ? 'text-zinc-600 cursor-not-allowed'
+                      : active
+                        ? 'text-[#E9E778]'
+                        : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  {tab.label}
+                  {active && (
+                    <span className="absolute left-3 right-3 -bottom-[13px] h-0.5 bg-[#E9E778] rounded-full" />
+                  )}
+                  {tab.disabled && (
+                    <span className="ml-1.5 text-[9px] text-zinc-600 font-medium">SOON</span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+          <div className="p-6 overflow-y-auto flex-1">
+            {activeTab === 'property' && <PropertyDetailsTab />}
+            {activeTab === 'potential' && <DevelopmentPotentialTab />}
+          </div>
         </aside>
       </div>
     </div>
