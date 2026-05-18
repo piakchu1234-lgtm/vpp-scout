@@ -487,7 +487,7 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
           source: 'property-boundary',
           paint: {
             'fill-color': PARCEL_HIGHLIGHT_LIME,
-            'fill-opacity': 0.08,
+            'fill-opacity': 0,
           },
         });
         m.addLayer({

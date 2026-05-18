@@ -1,12 +1,13 @@
 'use client';
 
-import React, { Suspense, useState } from 'react';
+import React, { Suspense, useMemo, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Map as MapIcon } from 'lucide-react';
 import PropertyDetailsTab from '@/components/sidebar/PropertyDetailsTab';
 import DevelopmentPotentialTab from '@/components/sidebar/DevelopmentPotentialTab';
 import FeasibilityTab from '@/components/sidebar/FeasibilityTab';
 import { MapPreview } from '@/components/MapPreview';
+import { getMockParcelPolygon } from '@/lib/vicmap';
 
 const MELBOURNE_FALLBACK = { lat: -37.8136, lon: 144.9631 };
 
@@ -27,6 +28,10 @@ function AppCanvas() {
   const lat = latParam ? Number(latParam) : MELBOURNE_FALLBACK.lat;
   const lon = lonParam ? Number(lonParam) : MELBOURNE_FALLBACK.lon;
   const hasCoords = Number.isFinite(lat) && Number.isFinite(lon);
+  const parcel = useMemo(
+    () => (hasCoords ? getMockParcelPolygon(lat, lon) : null),
+    [hasCoords, lat, lon],
+  );
   const [activeTab, setActiveTab] = useState<TabId>('property');
 
   return (
@@ -57,7 +62,12 @@ function AppCanvas() {
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_420px] min-h-[calc(100vh-65px)]">
         <section className="relative border-r border-white/10 bg-[#241F21] overflow-hidden">
           {hasCoords ? (
-            <MapPreview lat={lat} lon={lon} className="h-full w-full" />
+            <MapPreview
+              lat={lat}
+              lon={lon}
+              polygon={parcel?.geometry ?? null}
+              className="h-full w-full"
+            />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-sm text-zinc-500">
               Invalid coordinates
