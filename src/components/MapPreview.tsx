@@ -50,7 +50,7 @@ export type MapTool = 'pan' | 'tree' | 'distance' | 'area';
 export type ViewMode = 'plan' | 'aerial' | 'hybrid';
 
 const STYLE_BY_VIEW: Record<ViewMode, string> = {
-  plan: 'mapbox://styles/mapbox/light-v11',
+  plan: 'mapbox://styles/mapbox/dark-v11',
   aerial: 'mapbox://styles/mapbox/satellite-v9',
   hybrid: 'mapbox://styles/mapbox/satellite-v9',
 };
@@ -84,23 +84,23 @@ export type MapPreviewHandle = {
   getSnapshot(): Promise<string | null>;
 };
 
-// Paper / Survey palette — Landchecker-style "Cadastral Intelligence"
-// look. The base style is mapbox/light-v11 with paint overrides applied
-// once `style.load` resolves; the palette is warm off-white with cool
-// hairline accents so the cadastral overlay reads as the figure and the
+// SimplySite "Dark Commercial Monochrome" basemap palette. The base
+// style is mapbox/dark-v11 with paint overrides applied once
+// `style.load` resolves; land seamlessly blends into the #241F21 app
+// background so the cadastral overlay reads as the figure and the
 // basemap as the ground.
-const PAPER_LAND = '#F5F2ED';
-const PAPER_WATER = '#EAE6DF';
-const PAPER_GREEN = '#EDE9E0';
-const PAPER_BUILDING = '#E0DACE';
-const PAPER_BUILDING_OUTLINE = '#A8A192';
-const PAPER_ROAD_FILL = '#FFFFFF';
-const PAPER_ROAD_CASING = '#C9C2B7';
-const PAPER_ROAD_MAJOR = '#FFFFFF';
-const PAPER_ROAD_MAJOR_CASING = '#9A917F';
-const PAPER_LABEL = '#1F1B1A';
-const PAPER_LABEL_HALO = '#F5F2ED';
-const PARCEL_LINE = '#18181b';
+const PAPER_LAND = '#241F21';
+const PAPER_WATER = '#18181b';
+const PAPER_GREEN = '#2a2426';
+const PAPER_BUILDING = '#3f3f46';
+const PAPER_BUILDING_OUTLINE = '#52525b';
+const PAPER_ROAD_FILL = '#3f3f46';
+const PAPER_ROAD_CASING = '#3f3f46';
+const PAPER_ROAD_MAJOR = '#52525b';
+const PAPER_ROAD_MAJOR_CASING = '#52525b';
+const PAPER_LABEL = '#d4d4d8';
+const PAPER_LABEL_HALO = '#18181b';
+const PARCEL_LINE = '#52525b';
 const PARCEL_HIGHLIGHT_LIME = '#E9E778';
 
 const HATCH_IMAGE_ID = 'simplysite-easement-hatch';
@@ -490,28 +490,14 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
             'fill-opacity': 0.08,
           },
         });
-        // Bold black outline targeted exclusively at the actively-
-        // searched lot — sits below the lime accent so the lime reads
-        // as the "you are here" hairline on top of a heavy cadastral
-        // boundary.
-        m.addLayer({
-          id: 'property-boundary-outline-bold',
-          type: 'line',
-          source: 'property-boundary',
-          paint: {
-            'line-color': '#000000',
-            'line-width': 3,
-            'line-opacity': 1,
-          },
-        });
         m.addLayer({
           id: 'property-boundary-line',
           type: 'line',
           source: 'property-boundary',
           paint: {
             'line-color': PARCEL_HIGHLIGHT_LIME,
-            'line-width': 2,
-            'line-opacity': 0.9,
+            'line-width': 3,
+            'line-opacity': 1,
           },
         });
       }
@@ -527,8 +513,6 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
         try {
           if (map.getLayer('property-boundary-line'))
             map.removeLayer('property-boundary-line');
-          if (map.getLayer('property-boundary-outline-bold'))
-            map.removeLayer('property-boundary-outline-bold');
           if (map.getLayer('property-boundary-fill'))
             map.removeLayer('property-boundary-fill');
           if (map.getSource('property-boundary'))

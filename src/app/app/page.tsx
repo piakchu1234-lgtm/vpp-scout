@@ -6,6 +6,9 @@ import { ArrowLeft, Map as MapIcon } from 'lucide-react';
 import PropertyDetailsTab from '@/components/sidebar/PropertyDetailsTab';
 import DevelopmentPotentialTab from '@/components/sidebar/DevelopmentPotentialTab';
 import FeasibilityTab from '@/components/sidebar/FeasibilityTab';
+import { MapPreview } from '@/components/MapPreview';
+
+const MELBOURNE_FALLBACK = { lat: -37.8136, lon: 144.9631 };
 
 type TabId = 'property' | 'potential' | 'feasibility';
 
@@ -19,8 +22,11 @@ function AppCanvas() {
   const params = useSearchParams();
   const router = useRouter();
   const address = params.get('address');
-  const lat = params.get('lat');
-  const lon = params.get('lon');
+  const latParam = params.get('lat');
+  const lonParam = params.get('lon');
+  const lat = latParam ? Number(latParam) : MELBOURNE_FALLBACK.lat;
+  const lon = lonParam ? Number(lonParam) : MELBOURNE_FALLBACK.lon;
+  const hasCoords = Number.isFinite(lat) && Number.isFinite(lon);
   const [activeTab, setActiveTab] = useState<TabId>('property');
 
   return (
@@ -49,25 +55,14 @@ function AppCanvas() {
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_420px] min-h-[calc(100vh-65px)]">
-        <section className="relative border-r border-white/10 bg-[#1a1517] flex items-center justify-center overflow-hidden">
-          <div className="absolute inset-0 opacity-[0.04]" style={{
-            backgroundImage: 'linear-gradient(rgba(233,231,120,0.6) 1px, transparent 1px), linear-gradient(90deg, rgba(233,231,120,0.6) 1px, transparent 1px)',
-            backgroundSize: '48px 48px',
-          }} />
-          <div className="relative text-center px-8">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-[#E9E778]/10 border border-[#E9E778]/30 mb-4">
-              <MapIcon className="w-6 h-6 text-[#E9E778]" />
+        <section className="relative border-r border-white/10 bg-[#241F21] overflow-hidden">
+          {hasCoords ? (
+            <MapPreview lat={lat} lon={lon} className="h-full w-full" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-sm text-zinc-500">
+              Invalid coordinates
             </div>
-            <h2 className="text-2xl font-bold tracking-tight mb-2">Interactive Map</h2>
-            <p className="text-sm text-zinc-400 max-w-sm mx-auto">
-              The parcel, building envelope, easements and overlays will render here.
-            </p>
-            {lat && lon && (
-              <p className="mt-4 text-xs font-mono text-zinc-500">
-                {Number(lat).toFixed(5)}, {Number(lon).toFixed(5)}
-              </p>
-            )}
-          </div>
+          )}
         </section>
 
         <aside className="bg-[#241F21] flex flex-col overflow-hidden">
