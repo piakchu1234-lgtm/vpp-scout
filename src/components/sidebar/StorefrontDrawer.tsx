@@ -11,12 +11,14 @@ interface StorefrontDrawerProps {
 
 export default function StorefrontDrawer({ isOpen, onClose, address, spi }: StorefrontDrawerProps) {
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
   async function handleCheckout() {
     if (isRedirecting) return;
     setIsRedirecting(true);
+    setCheckoutError(null);
     try {
       const res = await fetch('/api/billing/checkout', {
         method: 'POST',
@@ -37,12 +39,12 @@ export default function StorefrontDrawer({ isOpen, onClose, address, spi }: Stor
     } catch (err) {
       console.warn('[StorefrontDrawer] checkout failed', err);
       setIsRedirecting(false);
-      alert('Checkout failed. Please try again or log in.');
+      setCheckoutError('Checkout failed. Please try again or log in.');
     }
   }
 
   return (
-    <div className="absolute inset-0 z-50 flex flex-col bg-[#241F21] animate-in slide-in-from-bottom-full duration-300">
+    <div className="fixed inset-0 z-[100] md:absolute flex flex-col bg-[#241F21] animate-in slide-in-from-bottom-full duration-300">
 
       {/* Header */}
       <div className="flex items-center justify-between p-5 border-b border-white/10 bg-black/20">
@@ -73,6 +75,11 @@ export default function StorefrontDrawer({ isOpen, onClose, address, spi }: Stor
                 <div className="flex-1">
                   <h4 className="text-sm font-bold text-white mb-1">Comprehensive Site Analysis</h4>
                   <p className="text-xs text-zinc-400 mb-3">Full PDF report including yield models, ResCode compliance, and commercial pro-forma.</p>
+                  {checkoutError && (
+                    <p className="text-red-400 text-xs text-center p-2 bg-red-500/10 rounded-md mb-3">
+                      {checkoutError}
+                    </p>
+                  )}
                   <div className="flex items-center justify-between">
                     <span className="text-lg font-black text-white">$49.00</span>
                     <button

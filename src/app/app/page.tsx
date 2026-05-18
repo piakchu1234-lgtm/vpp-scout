@@ -144,7 +144,7 @@ function AppCanvas() {
       </header>
 
       <div className="flex flex-col md:grid md:grid-cols-[1fr_420px] h-screen overflow-hidden">
-        <section className="h-[40vh] md:h-full w-full relative shrink-0 md:border-r border-b md:border-b-0 border-white/10 bg-[#241F21] overflow-hidden">
+        <section className="h-[40vh] md:h-full w-full shrink-0 relative bg-[#241F21] overflow-hidden">
           {hasCoords ? (
             <>
               <MapPreview
