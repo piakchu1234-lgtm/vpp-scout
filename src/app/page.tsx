@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Search, Map as MapIcon } from 'lucide-react';
 import { Show, SignInButton, UserButton } from '@clerk/nextjs';
+import { useRouter } from 'next/navigation';
 
 import {
   geocodeSuggestions,
@@ -25,6 +26,7 @@ const DEBOUNCE_MS = 350;
 const MIN_CHARS = 3;
 
 export default function LandingPage() {
+  const router = useRouter();
   const [hoveredNav, setHoveredNav] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState<GeocodeSuggestion[]>([]);
@@ -94,6 +96,25 @@ export default function LandingPage() {
     setSuggestions([]);
     setOpen(false);
     setHighlight(-1);
+  }
+
+  function navigateToApp(s: GeocodeSuggestion) {
+    const qs = new URLSearchParams({
+      address: s.displayName,
+      lat: String(s.lat),
+      lon: String(s.lon),
+    });
+    router.push(`/app?${qs.toString()}`);
+  }
+
+  function handleExplore() {
+    if (suggestions.length > 0) {
+      const pick = suggestions[highlight >= 0 ? highlight : 0];
+      selectSuggestion(pick);
+      navigateToApp(pick);
+      return;
+    }
+    if (selected) navigateToApp(selected);
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -227,11 +248,7 @@ export default function LandingPage() {
                 className="w-full bg-transparent border-none text-white text-lg placeholder:text-zinc-500 focus:outline-none focus:ring-0 px-4 py-4"
               />
               <button
-                onClick={() => {
-                  if (suggestions.length > 0) {
-                    selectSuggestion(suggestions[highlight >= 0 ? highlight : 0]);
-                  }
-                }}
+                onClick={handleExplore}
                 className="px-8 py-4 bg-[#E9E778] text-[#241F21] font-bold text-lg rounded-full hover:bg-[#d4d262] transition-colors flex-shrink-0"
               >
                 Explore
