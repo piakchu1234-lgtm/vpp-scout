@@ -1,10 +1,17 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Search, Map as MapIcon } from 'lucide-react';
+import { Show, SignInButton, UserButton } from '@clerk/nextjs';
 
-const NAV_ITEMS = ['Product', 'Pricing', 'API', 'Sign In'];
+import {
+  geocodeSuggestions,
+  type GeocodeSource,
+  type GeocodeSuggestion,
+} from '@/lib/geocoding';
+
+const NAV_ITEMS = ['Product', 'Pricing', 'API'];
 
 const FLOATING_ELEMENTS = [
   { id: 1, label: 'GRZ1', top: '20%', left: '15%', delay: 0 },
@@ -14,9 +21,102 @@ const FLOATING_ELEMENTS = [
   { id: 5, label: 'Clause 55', top: '15%', left: '60%', delay: 1 },
 ];
 
+const DEBOUNCE_MS = 350;
+const MIN_CHARS = 3;
+
 export default function LandingPage() {
   const [hoveredNav, setHoveredNav] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<GeocodeSuggestion[]>([]);
+  const [open, setOpen] = useState(false);
+  const [highlight, setHighlight] = useState(-1);
+  const [loading, setLoading] = useState(false);
+  const [source, setSource] = useState<GeocodeSource | null>(null);
+  const [selected, setSelected] = useState<GeocodeSuggestion | null>(null);
+
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const lastQueryRef = useRef('');
+
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < MIN_CHARS) {
+      setSuggestions([]);
+      setOpen(false);
+      setLoading(false);
+      setSource(null);
+      return;
+    }
+    if (q === lastQueryRef.current) return;
+
+    const handle = setTimeout(async () => {
+      abortRef.current?.abort();
+      const ctrl = new AbortController();
+      abortRef.current = ctrl;
+      setLoading(true);
+      try {
+        const { items, source: src } = await geocodeSuggestions(q, ctrl.signal);
+        if (ctrl.signal.aborted) return;
+        lastQueryRef.current = q;
+        setSuggestions(items);
+        setSource(src);
+        setOpen(items.length > 0);
+        setHighlight(-1);
+      } catch (e) {
+        if (!ctrl.signal.aborted) {
+          console.warn('[LandingPage] geocode threw', e);
+          setSuggestions([]);
+          setSource(null);
+          setOpen(false);
+        }
+      } finally {
+        if (!ctrl.signal.aborted) setLoading(false);
+      }
+    }, DEBOUNCE_MS);
+
+    return () => clearTimeout(handle);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    function handleMouseDown(e: MouseEvent) {
+      if (!wrapperRef.current) return;
+      if (!wrapperRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleMouseDown);
+    return () => document.removeEventListener('mousedown', handleMouseDown);
+  }, []);
+
+  function selectSuggestion(s: GeocodeSuggestion) {
+    abortRef.current?.abort();
+    lastQueryRef.current = s.displayName.trim();
+    setSearchQuery(s.displayName);
+    setSelected(s);
+    setSuggestions([]);
+    setOpen(false);
+    setHighlight(-1);
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter' && open && suggestions.length > 0) {
+      e.preventDefault();
+      const pick = suggestions[highlight >= 0 ? highlight : 0];
+      if (pick) selectSuggestion(pick);
+      return;
+    }
+    if (!open || suggestions.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlight((h) => (h + 1) % suggestions.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlight((h) => (h <= 0 ? suggestions.length - 1 : h - 1));
+    } else if (e.key === 'Escape') {
+      setOpen(false);
+    }
+  }
+
+  const showDropdown = open && suggestions.length > 0;
+  const showFallbackNote = source === 'nominatim' && suggestions.length > 0;
 
   return (
     <div className="relative min-h-screen w-full bg-[#241F21] text-white overflow-hidden font-sans selection:bg-[#E9E778] selection:text-[#241F21]">
@@ -53,9 +153,40 @@ export default function LandingPage() {
               </span>
             </div>
           ))}
-          <button className="ml-4 px-5 py-2 bg-[#E9E778] text-[#241F21] text-sm font-bold rounded-full hover:bg-[#d4d262] transition-colors">
-            Try for free
-          </button>
+
+          <Show when="signed-out">
+            <SignInButton mode="modal">
+              <div
+                onMouseEnter={() => setHoveredNav('Sign In')}
+                className="relative px-4 py-2 cursor-pointer transition-colors z-10"
+              >
+                {hoveredNav === 'Sign In' && (
+                  <motion.div
+                    layoutId="nav-pill"
+                    className="absolute inset-0 bg-white/10 rounded-full -z-10"
+                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                  />
+                )}
+                <span className={`relative z-20 text-sm font-medium ${hoveredNav === 'Sign In' ? 'text-[#E9E778]' : 'text-zinc-300'}`}>
+                  Sign In
+                </span>
+              </div>
+            </SignInButton>
+          </Show>
+
+          <Show when="signed-out">
+            <SignInButton mode="modal">
+              <button className="ml-4 px-5 py-2 bg-[#E9E778] text-[#241F21] text-sm font-bold rounded-full hover:bg-[#d4d262] transition-colors">
+                Try for free
+              </button>
+            </SignInButton>
+          </Show>
+
+          <Show when="signed-in">
+            <div className="ml-4">
+              <UserButton appearance={{ elements: { avatarBox: 'h-9 w-9 ring-2 ring-[#E9E778]/40' } }} />
+            </div>
+          </Show>
         </nav>
       </header>
 
@@ -70,16 +201,93 @@ export default function LandingPage() {
             Type any Victorian address to instantly generate spatial yields, statutory limits, and commercial feasibilities.
           </p>
 
-          <div className="relative max-w-2xl mx-auto group">
+          <div ref={wrapperRef} className="relative max-w-2xl mx-auto group">
             <div className="absolute inset-0 bg-[#E9E778]/20 blur-xl rounded-full opacity-0 group-focus-within:opacity-100 transition-opacity duration-500" />
             <div className="relative flex items-center bg-white/10 border border-white/20 backdrop-blur-md rounded-full p-2 pl-6 shadow-2xl transition-all group-focus-within:border-[#E9E778]/50 group-focus-within:bg-white/15">
               <Search className="w-6 h-6 text-zinc-400" />
-              <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search any address (e.g. 62 Chandler Road, Noble Park)" className="w-full bg-transparent border-none text-white text-lg placeholder:text-zinc-500 focus:outline-none focus:ring-0 px-4 py-4" />
-              <button className="px-8 py-4 bg-[#E9E778] text-[#241F21] font-bold text-lg rounded-full hover:bg-[#d4d262] transition-colors flex-shrink-0">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  if (selected) setSelected(null);
+                }}
+                onFocus={() => suggestions.length > 0 && setOpen(true)}
+                onKeyDown={handleKeyDown}
+                placeholder="Search any address (e.g. 62 Chandler Road, Noble Park)"
+                aria-label="Address search"
+                aria-autocomplete="list"
+                aria-expanded={showDropdown}
+                aria-controls="address-suggestions"
+                aria-haspopup="listbox"
+                role="combobox"
+                autoComplete="off"
+                spellCheck={false}
+                aria-busy={loading ? true : undefined}
+                className="w-full bg-transparent border-none text-white text-lg placeholder:text-zinc-500 focus:outline-none focus:ring-0 px-4 py-4"
+              />
+              <button
+                onClick={() => {
+                  if (suggestions.length > 0) {
+                    selectSuggestion(suggestions[highlight >= 0 ? highlight : 0]);
+                  }
+                }}
+                className="px-8 py-4 bg-[#E9E778] text-[#241F21] font-bold text-lg rounded-full hover:bg-[#d4d262] transition-colors flex-shrink-0"
+              >
                 Explore
               </button>
             </div>
+
+            {showDropdown && (
+              <ul
+                id="address-suggestions"
+                role="listbox"
+                className="absolute left-6 right-6 top-full z-50 mt-3 max-h-80 overflow-auto rounded-2xl border border-white/15 bg-[#1a1517]/95 backdrop-blur-md shadow-2xl text-left"
+              >
+                {showFallbackNote && (
+                  <li
+                    role="presentation"
+                    className="border-b border-white/10 bg-white/5 px-5 py-2 text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-400"
+                  >
+                    Using standard search (Vicmap is slow)
+                  </li>
+                )}
+                {suggestions.map((s, i) => {
+                  const active = highlight === i;
+                  return (
+                    <li
+                      key={s.placeId}
+                      id={`address-suggestion-${i}`}
+                      role="option"
+                      aria-selected={active}
+                    >
+                      <button
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          selectSuggestion(s);
+                        }}
+                        onMouseEnter={() => setHighlight(i)}
+                        className={`block w-full px-5 py-3 text-left text-sm leading-snug transition-colors ${
+                          active
+                            ? 'bg-[#E9E778]/10 text-[#E9E778]'
+                            : 'text-zinc-200 hover:bg-white/5'
+                        }`}
+                      >
+                        {s.displayName}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
+
+          {selected && (
+            <p className="mt-6 text-sm text-zinc-500">
+              Selected: <span className="text-[#E9E778]">{selected.displayName}</span>
+            </p>
+          )}
         </motion.div>
       </main>
     </div>
