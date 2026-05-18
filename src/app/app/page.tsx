@@ -1,13 +1,13 @@
 'use client';
 
-import React, { Suspense, useMemo, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Map as MapIcon } from 'lucide-react';
+import { ArrowLeft, Loader2, Map as MapIcon } from 'lucide-react';
 import PropertyDetailsTab from '@/components/sidebar/PropertyDetailsTab';
 import DevelopmentPotentialTab from '@/components/sidebar/DevelopmentPotentialTab';
 import FeasibilityTab from '@/components/sidebar/FeasibilityTab';
 import { MapPreview } from '@/components/MapPreview';
-import { getMockParcelPolygon } from '@/lib/vicmap';
+import { fetchVicParcelForPoint, type ParcelPolygon } from '@/lib/vicPlanApi';
 
 const MELBOURNE_FALLBACK = { lat: -37.8136, lon: 144.9631 };
 
@@ -28,11 +28,39 @@ function AppCanvas() {
   const lat = latParam ? Number(latParam) : MELBOURNE_FALLBACK.lat;
   const lon = lonParam ? Number(lonParam) : MELBOURNE_FALLBACK.lon;
   const hasCoords = Number.isFinite(lat) && Number.isFinite(lon);
-  const parcel = useMemo(
-    () => (hasCoords ? getMockParcelPolygon(lat, lon) : null),
-    [hasCoords, lat, lon],
-  );
+
+  const [polygon, setPolygon] = useState<ParcelPolygon | null>(null);
+  const [parcelLoading, setParcelLoading] = useState(false);
+  const [parcelError, setParcelError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('property');
+
+  useEffect(() => {
+    if (!hasCoords) return;
+    let stale = false;
+    setParcelLoading(true);
+    setParcelError(null);
+    setPolygon(null);
+
+    fetchVicParcelForPoint(lon, lat)
+      .then((result) => {
+        if (stale) return;
+        setPolygon(result?.polygon ?? null);
+        if (!result) setParcelError('No parcel at this point');
+      })
+      .catch((err: unknown) => {
+        if (stale) return;
+        const message = err instanceof Error ? err.message : 'Parcel lookup failed';
+        console.warn('[AppCanvas] parcel fetch failed', err);
+        setParcelError(message);
+      })
+      .finally(() => {
+        if (!stale) setParcelLoading(false);
+      });
+
+    return () => {
+      stale = true;
+    };
+  }, [hasCoords, lat, lon]);
 
   return (
     <div className="relative min-h-screen w-full bg-[#241F21] text-white font-sans selection:bg-[#E9E778] selection:text-[#241F21]">
@@ -62,12 +90,27 @@ function AppCanvas() {
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_420px] min-h-[calc(100vh-65px)]">
         <section className="relative border-r border-white/10 bg-[#241F21] overflow-hidden">
           {hasCoords ? (
-            <MapPreview
-              lat={lat}
-              lon={lon}
-              polygon={parcel?.geometry ?? null}
-              className="h-full w-full"
-            />
+            <>
+              <MapPreview
+                lat={lat}
+                lon={lon}
+                polygon={polygon}
+                className="h-full w-full"
+              />
+              {(parcelLoading || parcelError) && (
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-3 py-1.5 rounded-full border bg-black/60 backdrop-blur-md text-xs font-medium tracking-wide pointer-events-none">
+                  {parcelLoading && (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 text-[#E9E778] animate-spin" />
+                      <span className="text-zinc-200">Resolving parcel…</span>
+                    </>
+                  )}
+                  {!parcelLoading && parcelError && (
+                    <span className="text-zinc-400">{parcelError}</span>
+                  )}
+                </div>
+              )}
+            </>
           ) : (
             <div className="flex h-full w-full items-center justify-center text-sm text-zinc-500">
               Invalid coordinates
