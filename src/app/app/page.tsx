@@ -5,13 +5,14 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Map as MapIcon } from 'lucide-react';
 import PropertyDetailsTab from '@/components/sidebar/PropertyDetailsTab';
 import DevelopmentPotentialTab from '@/components/sidebar/DevelopmentPotentialTab';
+import FeasibilityTab from '@/components/sidebar/FeasibilityTab';
 
 type TabId = 'property' | 'potential' | 'feasibility';
 
 const TABS: { id: TabId; label: string; disabled?: boolean }[] = [
   { id: 'property', label: 'Property' },
   { id: 'potential', label: 'Potential' },
-  { id: 'feasibility', label: 'Feasibility', disabled: true },
+  { id: 'feasibility', label: 'Feasibility' },
 ];
 
 function AppCanvas() {
@@ -91,9 +92,6 @@ function AppCanvas() {
                   {active && (
                     <span className="absolute left-3 right-3 -bottom-[13px] h-0.5 bg-[#E9E778] rounded-full" />
                   )}
-                  {tab.disabled && (
-                    <span className="ml-1.5 text-[9px] text-zinc-600 font-medium">SOON</span>
-                  )}
                 </button>
               );
             })}
@@ -101,6 +99,7 @@ function AppCanvas() {
           <div className="p-6 overflow-y-auto flex-1">
             {activeTab === 'property' && <PropertyDetailsTab />}
             {activeTab === 'potential' && <DevelopmentPotentialTab />}
+            {activeTab === 'feasibility' && <FeasibilityTab />}
           </div>
         </aside>
       </div>
