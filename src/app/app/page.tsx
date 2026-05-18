@@ -2,7 +2,7 @@
 
 import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2, Map as MapIcon } from 'lucide-react';
+import { ArrowLeft, Download, Loader2, Map as MapIcon } from 'lucide-react';
 import area from '@turf/area';
 import PropertyDetailsTab from '@/components/sidebar/PropertyDetailsTab';
 import PlanningConstraintsTab, {
@@ -11,6 +11,7 @@ import PlanningConstraintsTab, {
 } from '@/components/sidebar/PlanningConstraintsTab';
 import DevelopmentPotentialTab from '@/components/sidebar/DevelopmentPotentialTab';
 import FeasibilityTab from '@/components/sidebar/FeasibilityTab';
+import StorefrontDrawer from '@/components/sidebar/StorefrontDrawer';
 import { MapPreview } from '@/components/MapPreview';
 import {
   fetchVicParcelForPoint,
@@ -47,6 +48,7 @@ function AppCanvas() {
   const [parcelMessage, setParcelMessage] = useState<string | null>(null);
   const [planData, setPlanData] = useState<VicPlanData | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('property');
+  const [isStorefrontOpen, setIsStorefrontOpen] = useState(false);
 
   useEffect(() => {
     if (!hasCoords) return;
@@ -172,7 +174,7 @@ function AppCanvas() {
           )}
         </section>
 
-        <aside className="bg-[#241F21] flex flex-col overflow-hidden">
+        <aside className="relative bg-[#241F21] flex flex-col overflow-hidden">
           <nav className="flex items-center gap-1 px-6 pt-6 pb-3 border-b border-white/10 bg-[#241F21] sticky top-0 z-10">
             {TABS.map((tab) => {
               const active = activeTab === tab.id;
@@ -218,6 +220,21 @@ function AppCanvas() {
             {activeTab === 'potential' && <DevelopmentPotentialTab />}
             {activeTab === 'feasibility' && <FeasibilityTab />}
           </div>
+
+          <div className="border-t border-white/10 bg-[#241F21] p-4">
+            <button
+              onClick={() => setIsStorefrontOpen(true)}
+              className="flex w-full items-center justify-center gap-2 rounded-full bg-[#E9E778] py-3 text-sm font-bold uppercase tracking-wider text-[#241F21] transition-colors hover:bg-[#d4d262]"
+            >
+              <Download className="h-4 w-4" />
+              Download Reports & Title
+            </button>
+          </div>
+
+          <StorefrontDrawer
+            isOpen={isStorefrontOpen}
+            onClose={() => setIsStorefrontOpen(false)}
+          />
         </aside>
       </div>
     </div>
