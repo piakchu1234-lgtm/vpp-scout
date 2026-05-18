@@ -1,19 +1,19 @@
 'use client';
 import React from 'react';
 import { TrendingUp, Home, Building2, LayoutGrid, AlertTriangle, CheckCircle2, ChevronRight, Info } from 'lucide-react';
-import { calculateYield, emptyYield } from '@/lib/yieldEngine';
+import { emptyYield, type YieldData } from '@/lib/yieldEngine';
 
 type Props = {
-  landSize?: number | null;
-  zoneCode?: string | null;
+  yieldData?: YieldData | null;
 };
 
-export default function DevelopmentPotentialTab({ landSize, zoneCode }: Props = {}) {
-  const hasLandSize =
-    typeof landSize === 'number' && Number.isFinite(landSize) && landSize > 0;
-  const data = hasLandSize
-    ? calculateYield(landSize as number, zoneCode ?? '')
-    : emptyYield('Awaiting Vicmap parcel geometry — yield model will populate once the lot resolves.');
+export default function DevelopmentPotentialTab({ yieldData }: Props = {}) {
+  const data: YieldData =
+    yieldData ??
+    emptyYield(
+      'Awaiting Vicmap parcel geometry — yield model will populate once the lot resolves.',
+    );
+  const hasLandSize = data.resolved;
 
   return (
     <div className="flex flex-col gap-6 text-zinc-200 animate-in fade-in duration-300">

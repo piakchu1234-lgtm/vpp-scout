@@ -20,17 +20,31 @@ import {
   type ParcelPolygon,
   type VicPlanData,
 } from '@/lib/vicPlanApi';
+import { calculateYield, emptyYield, type YieldData } from '@/lib/yieldEngine';
 
 const MELBOURNE_FALLBACK = { lat: -37.8136, lon: 144.9631 };
 const VICMAP_TIMEOUT_MS = 5000;
 
+type Lang = 'en' | 'zh';
 type TabId = 'property' | 'planning' | 'potential' | 'feasibility';
 
-const TABS: { id: TabId; label: string; disabled?: boolean }[] = [
-  { id: 'property', label: 'Property' },
-  { id: 'planning', label: 'Planning' },
-  { id: 'potential', label: 'Potential' },
-  { id: 'feasibility', label: 'Feasibility' },
+const TAB_LABELS: Record<TabId, Record<Lang, string>> = {
+  property: { en: 'Property', zh: '详情' },
+  planning: { en: 'Planning', zh: '规划' },
+  potential: { en: 'Potential', zh: '潜力' },
+  feasibility: { en: 'Feasibility', zh: '可行性' },
+};
+
+const STOREFRONT_CTA: Record<Lang, string> = {
+  en: 'Download Reports & Title',
+  zh: '下载报告与产权文件',
+};
+
+const TABS: { id: TabId; disabled?: boolean }[] = [
+  { id: 'property' },
+  { id: 'planning' },
+  { id: 'potential' },
+  { id: 'feasibility' },
 ];
 
 function AppCanvas() {
@@ -50,6 +64,7 @@ function AppCanvas() {
   const [planData, setPlanData] = useState<VicPlanData | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('property');
   const [isStorefrontOpen, setIsStorefrontOpen] = useState(false);
+  const [language, setLanguage] = useState<Lang>('en');
 
   useEffect(() => {
     if (!hasCoords) return;
@@ -118,6 +133,15 @@ function AppCanvas() {
     }
     return out;
   }, [planData]);
+
+  const yieldData: YieldData = useMemo(() => {
+    if (typeof landSizeM2 !== 'number' || !Number.isFinite(landSizeM2) || landSizeM2 <= 0) {
+      return emptyYield(
+        'Awaiting Vicmap parcel geometry — yield model will populate once the lot resolves.',
+      );
+    }
+    return calculateYield(landSizeM2, planData?.zoneCode ?? '');
+  }, [landSizeM2, planData?.zoneCode]);
 
   return (
     <div className="relative min-h-screen w-full bg-[#241F21] text-white font-sans selection:bg-[#E9E778] selection:text-[#241F21]">
@@ -193,13 +217,45 @@ function AppCanvas() {
                         : 'text-zinc-400 hover:text-white'
                   }`}
                 >
-                  {tab.label}
+                  {TAB_LABELS[tab.id][language]}
                   {active && (
                     <span className="absolute left-3 right-3 -bottom-[13px] h-0.5 bg-[#E9E778] rounded-full" />
                   )}
                 </button>
               );
             })}
+
+            <div
+              role="group"
+              aria-label="Language toggle"
+              className="ml-auto flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest"
+            >
+              <button
+                type="button"
+                onClick={() => setLanguage('en')}
+                aria-pressed={language === 'en'}
+                className={
+                  language === 'en'
+                    ? 'text-[#E9E778]'
+                    : 'text-zinc-500 hover:text-zinc-200 transition-colors'
+                }
+              >
+                EN
+              </button>
+              <span className="text-zinc-700">|</span>
+              <button
+                type="button"
+                onClick={() => setLanguage('zh')}
+                aria-pressed={language === 'zh'}
+                className={
+                  language === 'zh'
+                    ? 'text-[#E9E778]'
+                    : 'text-zinc-500 hover:text-zinc-200 transition-colors'
+                }
+              >
+                中文
+              </button>
+            </div>
           </nav>
           <div className="p-6 overflow-y-auto flex-1">
             <AnimatePresence mode="wait">
@@ -227,12 +283,11 @@ function AppCanvas() {
                   />
                 )}
                 {activeTab === 'potential' && (
-                  <DevelopmentPotentialTab
-                    landSize={landSizeM2}
-                    zoneCode={planData?.zoneCode ?? null}
-                  />
+                  <DevelopmentPotentialTab yieldData={yieldData} />
                 )}
-                {activeTab === 'feasibility' && <FeasibilityTab />}
+                {activeTab === 'feasibility' && (
+                  <FeasibilityTab yieldData={yieldData} />
+                )}
               </motion.div>
             </AnimatePresence>
           </div>
@@ -243,7 +298,7 @@ function AppCanvas() {
               className="flex w-full items-center justify-center gap-2 rounded-full bg-[#E9E778] py-3 text-sm font-bold uppercase tracking-wider text-[#241F21] transition-colors hover:bg-[#d4d262]"
             >
               <Download className="h-4 w-4" />
-              Download Reports & Title
+              {STOREFRONT_CTA[language]}
             </button>
           </div>
 

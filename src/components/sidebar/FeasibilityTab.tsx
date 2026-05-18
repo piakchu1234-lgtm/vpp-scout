@@ -1,13 +1,30 @@
 'use client';
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Calculator, DollarSign, Hammer, Percent, TrendingUp, AlertTriangle, AlertCircle, CheckCircle2 } from 'lucide-react';
+import type { YieldData } from '@/lib/yieldEngine';
 
-export default function FeasibilityTab() {
+type Props = {
+  yieldData?: YieldData | null;
+};
+
+export default function FeasibilityTab({ yieldData }: Props = {}) {
   // --- 1. State: Editable Acquisition & Development Inputs ---
   const [purchasePrice, setPurchasePrice] = useState<number>(710000);
-  const [dwellings, setDwellings] = useState<number>(3);
+  const [dwellings, setDwellings] = useState<number>(1);
   const [buildCost, setBuildCost] = useState<number>(350000);
   const [salePrice, setSalePrice] = useState<number>(850000);
+
+  // Sync the slider to the AI's highest feasible yield whenever a new
+  // parcel resolves. Deps are intentionally just `yieldData` — never
+  // `dwellings` — to prevent a feedback loop when the user nudges the
+  // slider manually.
+  useEffect(() => {
+    if (!yieldData || !yieldData.resolved) return;
+    const maxFeasible = yieldData.landUse
+      .filter((r) => r.feasible)
+      .reduce((acc, r) => Math.max(acc, r.estimate), 0);
+    setDwellings(maxFeasible > 0 ? maxFeasible : 1);
+  }, [yieldData]);
 
   // --- 2. Engine: Automated Pro-Forma Calculations ---
   const metrics = useMemo(() => {

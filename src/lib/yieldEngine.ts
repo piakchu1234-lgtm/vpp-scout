@@ -25,6 +25,7 @@ export type YieldPermit = {
 };
 
 export type YieldData = {
+  resolved: boolean;
   isFeasible: boolean;
   summary: string;
   scorecard: YieldScorecard;
@@ -41,6 +42,7 @@ function formatM2(value: number): string {
 
 export function emptyYield(reason = 'Awaiting parcel geometry…'): YieldData {
   return {
+    resolved: false,
     isFeasible: false,
     summary: reason,
     scorecard: {
@@ -146,6 +148,7 @@ export function calculateYield(landSizeM2: number, zoneCode: string): YieldData 
   const summary = `Based on your${zoneFragment} lot size of ${Math.round(landSizeM2)}m², we predict ${yieldFragment}.`;
 
   return {
+    resolved: true,
     isFeasible: feasibleCount >= 2,
     summary,
     scorecard: {
