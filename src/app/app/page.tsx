@@ -14,6 +14,7 @@ import DevelopmentPotentialTab from '@/components/sidebar/DevelopmentPotentialTa
 import FeasibilityTab from '@/components/sidebar/FeasibilityTab';
 import StorefrontDrawer from '@/components/sidebar/StorefrontDrawer';
 import SuccessModal from '@/components/sidebar/SuccessModal';
+import FeasibilityReportTemplate from '@/components/pdf/FeasibilityReportTemplate';
 import { MapPreview } from '@/components/MapPreview';
 import {
   fetchVicParcelForPoint,
@@ -336,6 +337,17 @@ function AppCanvas() {
         isOpen={isSuccessModalOpen}
         type={successType}
         onClose={() => setIsSuccessModalOpen(false)}
+        address={address}
+      />
+
+      <FeasibilityReportTemplate
+        id="pdf-report-template"
+        address={address}
+        lat={lat}
+        lon={lon}
+        yieldData={yieldData}
+        planData={planData}
+        landSizeM2={landSizeM2}
       />
     </div>
   );
