@@ -64,6 +64,49 @@ export default function FeasibilityReportTemplate({
         className="w-[210mm] min-h-[297mm] bg-white text-zinc-900 font-sans"
         style={{ padding: 0, boxSizing: 'border-box' }}
       >
+        <style>{`
+          #pdf-report-template, #pdf-report-template * {
+            color-scheme: light !important;
+            color: #241F21 !important;
+          }
+
+          /* Text colors */
+          #pdf-report-template .text-white { color: #ffffff !important; }
+          #pdf-report-template .text-zinc-900 { color: #18181b !important; }
+          #pdf-report-template .text-zinc-700 { color: #3f3f46 !important; }
+          #pdf-report-template .text-zinc-600 { color: #52525b !important; }
+          #pdf-report-template .text-zinc-500 { color: #71717a !important; }
+          #pdf-report-template .text-zinc-400 { color: #a1a1aa !important; }
+          #pdf-report-template .text-zinc-300 { color: #d4d4d8 !important; }
+          #pdf-report-template .text-amber-900 { color: #78350f !important; }
+          #pdf-report-template .text-amber-700 { color: #b45309 !important; }
+          #pdf-report-template .text-red-700 { color: #b91c1c !important; }
+          #pdf-report-template .text-red-600 { color: #dc2626 !important; }
+          #pdf-report-template .text-\\[\\#241F21\\] { color: #241F21 !important; }
+          #pdf-report-template .text-\\[\\#E9E778\\] { color: #E9E778 !important; }
+
+          /* Background colors */
+          #pdf-report-template .bg-white { background-color: #ffffff !important; }
+          #pdf-report-template .bg-zinc-50 { background-color: #fafafa !important; }
+          #pdf-report-template .bg-zinc-100 { background-color: #f4f4f5 !important; }
+          #pdf-report-template .bg-amber-50 { background-color: #fffbeb !important; }
+          #pdf-report-template .bg-amber-100 { background-color: #fef3c7 !important; }
+          #pdf-report-template .bg-red-50 { background-color: #fef2f2 !important; }
+          #pdf-report-template .bg-\\[\\#241F21\\] { background-color: #241F21 !important; }
+          #pdf-report-template .bg-\\[\\#E9E778\\] { background-color: #E9E778 !important; }
+          #pdf-report-template .bg-white\\/5 { background-color: rgba(255, 255, 255, 0.05) !important; }
+
+          /* Border colors */
+          #pdf-report-template .border-zinc-200 { border-color: #e4e4e7 !important; }
+          #pdf-report-template .border-zinc-300 { border-color: #d4d4d8 !important; }
+          #pdf-report-template .border-amber-200 { border-color: #fde68a !important; }
+          #pdf-report-template .border-red-200 { border-color: #fecaca !important; }
+          #pdf-report-template .border-\\[\\#241F21\\] { border-color: #241F21 !important; }
+          #pdf-report-template .border-white\\/10 { border-color: rgba(255, 255, 255, 0.1) !important; }
+
+          /* Divide colors (Tailwind injects border-color on direct children) */
+          #pdf-report-template .divide-zinc-200 > * + * { border-color: #e4e4e7 !important; }
+        `}</style>
         {/* Dark Header */}
         <div className="bg-[#241F21] text-white px-12 py-8">
           <div className="flex items-center justify-between mb-6">
