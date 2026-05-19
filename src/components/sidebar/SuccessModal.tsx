@@ -1,7 +1,6 @@
 'use client';
-import React, { useState } from 'react';
-import { CheckCircle, Download, Loader2, Mail, X } from 'lucide-react';
-import { generateFeasibilityPdf } from '@/lib/generatePdf';
+import React from 'react';
+import { CheckCircle, Download, Mail, X } from 'lucide-react';
 
 type ProductType = 'ai-report' | 'title-search';
 
@@ -12,24 +11,11 @@ interface SuccessModalProps {
   address?: string | null;
 }
 
-export default function SuccessModal({ isOpen, type, onClose, address }: SuccessModalProps) {
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
+export default function SuccessModal({ isOpen, type, onClose }: SuccessModalProps) {
   if (!isOpen) return null;
 
-  async function handleDownload() {
-    if (isGenerating) return;
-    setIsGenerating(true);
-    setError(null);
-    try {
-      await generateFeasibilityPdf('pdf-report-template', address ?? 'Property');
-    } catch (err) {
-      console.warn('[SuccessModal] PDF generation failed', err);
-      setError('PDF generation failed. Please try again.');
-    } finally {
-      setIsGenerating(false);
-    }
+  function handleDownload() {
+    window.print();
   }
 
   const isTitleSearch = type === 'title-search';
@@ -75,12 +61,6 @@ export default function SuccessModal({ isOpen, type, onClose, address }: Success
             </p>
           </div>
 
-          {!isTitleSearch && error && (
-            <p className="text-red-400 text-xs text-center p-2 bg-red-500/10 rounded-md w-full">
-              {error}
-            </p>
-          )}
-
           {isTitleSearch ? (
             <button
               onClick={onClose}
@@ -91,21 +71,10 @@ export default function SuccessModal({ isOpen, type, onClose, address }: Success
           ) : (
             <button
               onClick={handleDownload}
-              disabled={isGenerating}
-              aria-busy={isGenerating}
-              className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-[#E9E778] py-3 text-sm font-bold uppercase tracking-wider text-[#241F21] transition-colors hover:bg-[#d4d262] disabled:opacity-70 disabled:cursor-not-allowed"
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-[#E9E778] py-3 text-sm font-bold uppercase tracking-wider text-[#241F21] transition-colors hover:bg-[#d4d262]"
             >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Generating PDF…
-                </>
-              ) : (
-                <>
-                  <Download className="w-4 h-4" />
-                  Download PDF
-                </>
-              )}
+              <Download className="w-4 h-4" />
+              Download PDF
             </button>
           )}
         </div>
@@ -113,4 +82,3 @@ export default function SuccessModal({ isOpen, type, onClose, address }: Success
     </div>
   );
 }
-
