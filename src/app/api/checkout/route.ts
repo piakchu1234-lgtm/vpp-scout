@@ -1,33 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 
-import { BETA_FREE } from '@/lib/betaConfig';
-
 export const runtime = 'edge';
 
-const PREMIUM_REPORT_PRICE_AUD = 49;
+type ProductType = 'ai-report' | 'title-search';
 
 type CheckoutBody = {
-  address?: string | null;
-  spi?: string | null;
-  lang?: 'en' | 'zh';
+  type?: ProductType;
 };
 
-function isLang(v: unknown): v is 'en' | 'zh' {
-  return v === 'en' || v === 'zh';
+const PRODUCTS: Record<ProductType, { name: string; amount: number; currency: string }> = {
+  'ai-report': {
+    name: 'Comprehensive Site Analysis',
+    amount: 4900,
+    currency: 'aud',
+  },
+  'title-search': {
+    name: 'Copy of Title (Register Search)',
+    amount: 1550,
+    currency: 'aud',
+  },
+};
+
+function isProductType(v: unknown): v is ProductType {
+  return v === 'ai-report' || v === 'title-search';
 }
 
 export async function POST(request: NextRequest) {
-  if (BETA_FREE) {
-    return NextResponse.json(
-      {
-        error:
-          'Beta launch active — premium reports are free. Use the Reports tab to generate the brief.',
-      },
-      { status: 410 },
-    );
-  }
-
   const secret = process.env.STRIPE_SECRET_KEY;
   if (!secret) {
     return NextResponse.json(
@@ -43,9 +42,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const lang = isLang(body.lang) ? body.lang : 'en';
-  const address = (body.address ?? '').trim().slice(0, 240);
-  const spi = (body.spi ?? '').trim().slice(0, 64);
+  if (!isProductType(body.type)) {
+    return NextResponse.json(
+      { error: 'Body must include `type: "ai-report" | "title-search"`.' },
+      { status: 400 },
+    );
+  }
+
+  const product = PRODUCTS[body.type];
+  const origin = request.nextUrl.origin;
 
   const stripe = new Stripe(secret, {
     httpClient: Stripe.createFetchHttpClient(),
@@ -59,28 +64,18 @@ export async function POST(request: NextRequest) {
         {
           quantity: 1,
           price_data: {
-            currency: 'aud',
-            unit_amount: PREMIUM_REPORT_PRICE_AUD * 100,
-            product_data: {
-              name: 'SimplySite — Premium Property Report',
-              description:
-                '2026 SSD feasibility A4 report · language-isolated PDF · live satellite frontage · SPI-anchored',
-            },
+            currency: product.currency,
+            unit_amount: product.amount,
+            product_data: { name: product.name },
           },
         },
       ],
-      locale: lang === 'zh' ? 'zh' : 'en',
-      success_url: `${request.nextUrl.origin}/?payment=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${request.nextUrl.origin}/?payment=cancelled`,
-      metadata: {
-        product: 'premium_property_report',
-        address,
-        spi,
-        lang,
-      },
+      success_url: `${origin}/app?payment=success&type=${body.type}&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/app?payment=cancelled&type=${body.type}`,
+      metadata: { product: body.type },
     });
 
-    return NextResponse.json({ id: session.id, url: session.url });
+    return NextResponse.json({ url: session.url });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown Stripe error';
     console.error('[checkout] Stripe session creation failed', err);

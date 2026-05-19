@@ -1,6 +1,6 @@
 'use client';
 import React, { useState } from 'react';
-import { X, FileText, Download, Lock, Loader2, ChevronRight, FileBadge2, CreditCard } from 'lucide-react';
+import { X, FileText, Lock, Loader2, ChevronRight, FileBadge2, CreditCard } from 'lucide-react';
 
 interface StorefrontDrawerProps {
   isOpen: boolean;
@@ -9,37 +9,33 @@ interface StorefrontDrawerProps {
   spi?: string | null;
 }
 
+type ProductType = 'ai-report' | 'title-search';
+
 export default function StorefrontDrawer({ isOpen, onClose, address, spi }: StorefrontDrawerProps) {
-  const [isRedirecting, setIsRedirecting] = useState(false);
+  const [isProcessing, setIsProcessing] = useState<ProductType | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  async function handleCheckout() {
-    if (isRedirecting) return;
-    setIsRedirecting(true);
+  async function handleCheckout(type: ProductType) {
+    if (isProcessing) return;
+    setIsProcessing(type);
     setCheckoutError(null);
     try {
-      const res = await fetch('/api/billing/checkout', {
+      const res = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          plan: 'credits',
-          quantity: 1,
-          address: address ?? null,
-          spi: spi ?? null,
-          lang: 'en',
-        }),
+        body: JSON.stringify({ type }),
       });
-      const data = (await res.json()) as { ok?: boolean; url?: string; error?: string };
-      if (!res.ok || !data.ok || !data.url) {
+      const data = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok || !data.url) {
         throw new Error(data.error || `Checkout responded ${res.status}`);
       }
       window.location.href = data.url;
     } catch (err) {
       console.warn('[StorefrontDrawer] checkout failed', err);
-      setIsRedirecting(false);
-      setCheckoutError('Checkout failed. Please try again or log in.');
+      setIsProcessing(null);
+      setCheckoutError('Checkout failed. Please try again.');
     }
   }
 
@@ -83,15 +79,15 @@ export default function StorefrontDrawer({ isOpen, onClose, address, spi }: Stor
                   <div className="flex items-center justify-between">
                     <span className="text-lg font-black text-white">$49.00</span>
                     <button
-                      onClick={handleCheckout}
-                      disabled={isRedirecting}
-                      aria-busy={isRedirecting}
+                      onClick={() => handleCheckout('ai-report')}
+                      disabled={isProcessing !== null}
+                      aria-busy={isProcessing === 'ai-report'}
                       className="flex items-center gap-1.5 text-xs font-bold text-[#241F21] bg-[#E9E778] px-3 py-1.5 rounded-full transition-colors hover:bg-[#d4d262] disabled:opacity-70 disabled:cursor-not-allowed"
                     >
-                      {isRedirecting ? (
+                      {isProcessing === 'ai-report' ? (
                         <>
                           <Loader2 className="w-3 h-3 animate-spin" />
-                          Redirecting…
+                          Loading...
                         </>
                       ) : (
                         <>
@@ -111,7 +107,7 @@ export default function StorefrontDrawer({ isOpen, onClose, address, spi }: Stor
           <h3 className="text-xs font-bold tracking-widest text-zinc-500 uppercase mb-3">LANDATA® Official Documents</h3>
           <div className="flex flex-col gap-2">
 
-            <div className="flex items-center justify-between bg-black/20 border border-white/5 p-3 rounded-lg hover:border-white/20 cursor-pointer transition-colors">
+            <div className="flex items-center justify-between bg-black/20 border border-white/5 p-3 rounded-lg hover:border-white/20 transition-colors">
               <div className="flex items-center gap-3">
                 <FileBadge2 className="w-5 h-5 text-zinc-400" />
                 <div>
@@ -119,10 +115,24 @@ export default function StorefrontDrawer({ isOpen, onClose, address, spi }: Stor
                   <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Official State Record</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-bold text-zinc-300">$15.50</span>
-                <ChevronRight className="w-4 h-4 text-zinc-600" />
-              </div>
+              <button
+                onClick={() => handleCheckout('title-search')}
+                disabled={isProcessing !== null}
+                aria-busy={isProcessing === 'title-search'}
+                className="flex items-center gap-2 text-sm font-bold text-zinc-200 hover:text-[#E9E778] disabled:opacity-70 disabled:cursor-not-allowed transition-colors"
+              >
+                {isProcessing === 'title-search' ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span className="text-xs">Loading...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>$15.50</span>
+                    <ChevronRight className="w-4 h-4 text-zinc-600" />
+                  </>
+                )}
+              </button>
             </div>
 
             <div className="flex items-center justify-between bg-black/20 border border-white/5 p-3 rounded-lg hover:border-white/20 cursor-pointer transition-colors">
