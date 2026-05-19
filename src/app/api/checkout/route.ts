@@ -70,8 +70,8 @@ export async function POST(request: NextRequest) {
           },
         },
       ],
-      success_url: `${origin}/app?payment=success&type=${body.type}&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/app?payment=cancelled&type=${body.type}`,
+      success_url: `${origin}/app?success=true&session_id={CHECKOUT_SESSION_ID}&type=${body.type}`,
+      cancel_url: `${origin}/app?canceled=true`,
       metadata: { product: body.type },
     });
 
