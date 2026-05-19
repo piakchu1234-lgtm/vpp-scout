@@ -1,6 +1,6 @@
 'use client';
 import React, { useState } from 'react';
-import { CheckCircle, Download, Loader2, X } from 'lucide-react';
+import { CheckCircle, Download, Loader2, Mail, X } from 'lucide-react';
 import { generateFeasibilityPdf } from '@/lib/generatePdf';
 
 type ProductType = 'ai-report' | 'title-search';
@@ -12,18 +12,11 @@ interface SuccessModalProps {
   address?: string | null;
 }
 
-const PRODUCT_LABEL: Record<ProductType, string> = {
-  'ai-report': 'Report',
-  'title-search': 'Title',
-};
-
 export default function SuccessModal({ isOpen, type, onClose, address }: SuccessModalProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
-
-  const label = type ? PRODUCT_LABEL[type] : 'Document';
 
   async function handleDownload() {
     if (isGenerating) return;
@@ -38,6 +31,12 @@ export default function SuccessModal({ isOpen, type, onClose, address }: Success
       setIsGenerating(false);
     }
   }
+
+  const isTitleSearch = type === 'title-search';
+  const heading = isTitleSearch ? 'Title Search Queued.' : 'Payment Successful.';
+  const subtext = isTitleSearch
+    ? 'Your official LANDATA® Register Search has been requested. A certified PDF will be securely emailed to your account within 1-2 business days.'
+    : 'Your Report is ready.';
 
   return (
     <div
@@ -60,44 +59,58 @@ export default function SuccessModal({ isOpen, type, onClose, address }: Success
 
         <div className="flex flex-col items-center text-center gap-4">
           <div className="rounded-full bg-[#E9E778]/10 p-4 border border-[#E9E778]/30">
-            <CheckCircle className="w-12 h-12 text-[#E9E778]" strokeWidth={1.5} />
+            {isTitleSearch ? (
+              <Mail className="w-12 h-12 text-[#E9E778]" strokeWidth={1.5} />
+            ) : (
+              <CheckCircle className="w-12 h-12 text-[#E9E778]" strokeWidth={1.5} />
+            )}
           </div>
 
           <div className="flex flex-col gap-1.5">
             <h2 className="text-xl font-bold tracking-tight text-white">
-              Payment Successful.
+              {heading}
             </h2>
-            <p className="text-sm text-zinc-400">
-              Your {label} is ready.
+            <p className="text-sm text-zinc-400 leading-relaxed">
+              {subtext}
             </p>
           </div>
 
-          {error && (
+          {!isTitleSearch && error && (
             <p className="text-red-400 text-xs text-center p-2 bg-red-500/10 rounded-md w-full">
               {error}
             </p>
           )}
 
-          <button
-            onClick={handleDownload}
-            disabled={isGenerating}
-            aria-busy={isGenerating}
-            className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-[#E9E778] py-3 text-sm font-bold uppercase tracking-wider text-[#241F21] transition-colors hover:bg-[#d4d262] disabled:opacity-70 disabled:cursor-not-allowed"
-          >
-            {isGenerating ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Generating PDF…
-              </>
-            ) : (
-              <>
-                <Download className="w-4 h-4" />
-                Download PDF
-              </>
-            )}
-          </button>
+          {isTitleSearch ? (
+            <button
+              onClick={onClose}
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-[#E9E778] py-3 text-sm font-bold uppercase tracking-wider text-[#241F21] transition-colors hover:bg-[#d4d262]"
+            >
+              Done
+            </button>
+          ) : (
+            <button
+              onClick={handleDownload}
+              disabled={isGenerating}
+              aria-busy={isGenerating}
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-[#E9E778] py-3 text-sm font-bold uppercase tracking-wider text-[#241F21] transition-colors hover:bg-[#d4d262] disabled:opacity-70 disabled:cursor-not-allowed"
+            >
+              {isGenerating ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Generating PDF…
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  Download PDF
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
     </div>
   );
 }
+
