@@ -57,7 +57,7 @@ export default function FeasibilityReportTemplate({
   return (
     <div
       aria-hidden="true"
-      style={{ position: 'absolute', left: '-10000px', top: 0 }}
+      className="fixed top-0 left-0 -z-50 opacity-0 pointer-events-none w-[210mm]"
     >
       <div
         id={id}
