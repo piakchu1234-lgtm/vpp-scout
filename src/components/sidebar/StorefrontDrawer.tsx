@@ -7,11 +7,13 @@ interface StorefrontDrawerProps {
   onClose: () => void;
   address?: string | null;
   spi?: string | null;
+  lat?: number;
+  lon?: number;
 }
 
 type ProductType = 'ai-report' | 'title-search';
 
-export default function StorefrontDrawer({ isOpen, onClose, address, spi }: StorefrontDrawerProps) {
+export default function StorefrontDrawer({ isOpen, onClose, address, spi, lat, lon }: StorefrontDrawerProps) {
   const [isProcessing, setIsProcessing] = useState<ProductType | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
@@ -25,7 +27,7 @@ export default function StorefrontDrawer({ isOpen, onClose, address, spi }: Stor
       const res = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type }),
+        body: JSON.stringify({ type, lat, lon }),
       });
       const data = (await res.json()) as { url?: string; error?: string };
       if (!res.ok || !data.url) {

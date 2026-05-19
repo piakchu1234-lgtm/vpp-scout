@@ -13,6 +13,7 @@ import PlanningConstraintsTab, {
 import DevelopmentPotentialTab from '@/components/sidebar/DevelopmentPotentialTab';
 import FeasibilityTab from '@/components/sidebar/FeasibilityTab';
 import StorefrontDrawer from '@/components/sidebar/StorefrontDrawer';
+import SuccessModal from '@/components/sidebar/SuccessModal';
 import { MapPreview } from '@/components/MapPreview';
 import {
   fetchVicParcelForPoint,
@@ -65,6 +66,24 @@ function AppCanvas() {
   const [activeTab, setActiveTab] = useState<TabId>('property');
   const [isStorefrontOpen, setIsStorefrontOpen] = useState(false);
   const [language, setLanguage] = useState<Lang>('en');
+
+  const paymentParam = params.get('payment');
+  const typeParam = params.get('type');
+  const successType: 'ai-report' | 'title-search' | null =
+    typeParam === 'ai-report' || typeParam === 'title-search' ? typeParam : null;
+  const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(
+    paymentParam === 'success',
+  );
+
+  useEffect(() => {
+    if (paymentParam !== 'success') return;
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete('payment');
+    url.searchParams.delete('session_id');
+    url.searchParams.delete('type');
+    window.history.replaceState({}, '', url.toString());
+  }, [paymentParam]);
 
   useEffect(() => {
     if (!hasCoords) return;
@@ -307,9 +326,17 @@ function AppCanvas() {
             onClose={() => setIsStorefrontOpen(false)}
             address={address}
             spi={spi}
+            lat={lat}
+            lon={lon}
           />
         </aside>
       </div>
+
+      <SuccessModal
+        isOpen={isSuccessModalOpen}
+        type={successType}
+        onClose={() => setIsSuccessModalOpen(false)}
+      />
     </div>
   );
 }

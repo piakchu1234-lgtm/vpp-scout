@@ -7,6 +7,8 @@ type ProductType = 'ai-report' | 'title-search';
 
 type CheckoutBody = {
   type?: ProductType;
+  lat?: number;
+  lon?: number;
 };
 
 const PRODUCTS: Record<ProductType, { name: string; amount: number; currency: string }> = {
@@ -51,6 +53,10 @@ export async function POST(request: NextRequest) {
 
   const product = PRODUCTS[body.type];
   const origin = request.nextUrl.origin;
+  const lat = Number.isFinite(body.lat) ? body.lat : undefined;
+  const lon = Number.isFinite(body.lon) ? body.lon : undefined;
+  const coordSuffix =
+    lat !== undefined && lon !== undefined ? `&lat=${lat}&lon=${lon}` : '';
 
   const stripe = new Stripe(secret, {
     httpClient: Stripe.createFetchHttpClient(),
@@ -70,8 +76,8 @@ export async function POST(request: NextRequest) {
           },
         },
       ],
-      success_url: `${origin}/app?success=true&session_id={CHECKOUT_SESSION_ID}&type=${body.type}`,
-      cancel_url: `${origin}/app?canceled=true`,
+      success_url: `${origin}/app?payment=success&session_id={CHECKOUT_SESSION_ID}&type=${body.type}${coordSuffix}`,
+      cancel_url: `${origin}/app?canceled=true${coordSuffix}`,
       metadata: { product: body.type },
     });
 
