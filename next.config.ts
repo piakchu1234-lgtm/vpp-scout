@@ -1,7 +1,17 @@
 import type { NextConfig } from "next";
 
+const isCloudBuild = !!(process.env.CI || process.env.VERCEL);
+
 const nextConfig: NextConfig = {
-  /* config options here */
+  experimental: isCloudBuild
+    ? {
+        cpus: 1,
+        workerThreads: false,
+        memoryBasedWorkersCount: true,
+      }
+    : {
+        memoryBasedWorkersCount: true,
+      },
 };
 
 export default nextConfig;
