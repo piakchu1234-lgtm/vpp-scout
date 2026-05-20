@@ -22,6 +22,7 @@ import {
   type ParcelPolygon,
   type VicPlanData,
 } from '@/lib/vicPlanApi';
+import { reverseGeocodeNearest } from '@/lib/geocoding';
 import { calculateYield, emptyYield, type YieldData } from '@/lib/yieldEngine';
 
 const MELBOURNE_FALLBACK = { lat: -37.8136, lon: 144.9631 };
@@ -67,6 +68,7 @@ function AppCanvas() {
   const [activeTab, setActiveTab] = useState<TabId>('property');
   const [isStorefrontOpen, setIsStorefrontOpen] = useState(false);
   const [language, setLanguage] = useState<Lang>('en');
+  const [isNavigating, setIsNavigating] = useState(false);
 
   const paymentParam = params.get('payment');
   const typeParam = params.get('type');
@@ -163,6 +165,31 @@ function AppCanvas() {
     return calculateYield(landSizeM2, planData?.zoneCode ?? '');
   }, [landSizeM2, planData?.zoneCode]);
 
+  // Click-to-Fetch — when the user clicks a neighbouring cadastral parcel
+  // in pan mode, reverse-geocode the point and push it into the URL.
+  // The lat/lon-driven useEffect above then re-runs the parcel + planning
+  // fetches automatically, so no extra state plumbing is needed.
+  async function handleMapParcelClick(lonLat: [number, number]) {
+    const [clickedLon, clickedLat] = lonLat;
+    if (!Number.isFinite(clickedLon) || !Number.isFinite(clickedLat)) return;
+    setIsNavigating(true);
+    try {
+      const hit = await reverseGeocodeNearest(clickedLon, clickedLat);
+      const nextAddress = hit?.result.displayName
+        ?? `${clickedLat.toFixed(6)}, ${clickedLon.toFixed(6)}`;
+      const nextLat = hit?.result.lat ?? clickedLat;
+      const nextLon = hit?.result.lon ?? clickedLon;
+      const qs = new URLSearchParams({
+        address: nextAddress,
+        lat: String(nextLat),
+        lon: String(nextLon),
+      });
+      router.push(`/app?${qs.toString()}`);
+    } finally {
+      setIsNavigating(false);
+    }
+  }
+
   return (
     <div className="relative min-h-screen w-full bg-[#241F21] text-white font-sans selection:bg-[#E9E778] selection:text-[#241F21]">
       <header className="sticky top-0 z-30 flex items-center justify-between px-6 py-4 border-b border-white/10 bg-[#241F21]/90 backdrop-blur-md">
@@ -196,17 +223,24 @@ function AppCanvas() {
                 lat={lat}
                 lon={lon}
                 polygon={polygon}
+                onParcelClick={handleMapParcelClick}
                 className="h-full w-full"
               />
-              {(parcelLoading || parcelMessage) && (
+              {(parcelLoading || parcelMessage || isNavigating) && (
                 <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/10 bg-black/60 backdrop-blur-md text-xs font-medium tracking-wide pointer-events-none">
-                  {parcelLoading && (
+                  {isNavigating && (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 text-[#E9E778] animate-spin" />
+                      <span className="text-zinc-200">Resolving address…</span>
+                    </>
+                  )}
+                  {!isNavigating && parcelLoading && (
                     <>
                       <Loader2 className="w-3.5 h-3.5 text-[#E9E778] animate-spin" />
                       <span className="text-zinc-200">Resolving parcel…</span>
                     </>
                   )}
-                  {!parcelLoading && parcelMessage && (
+                  {!isNavigating && !parcelLoading && parcelMessage && (
                     <span className="text-zinc-400">{parcelMessage}</span>
                   )}
                 </div>
