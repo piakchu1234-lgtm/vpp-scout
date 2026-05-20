@@ -12,7 +12,9 @@ import {
   type GeocodeSuggestion,
 } from '@/lib/geocoding';
 
-const NAV_ITEMS = ['Product', 'Pricing', 'API'];
+
+
+
 
 const FLOATING_ELEMENTS = [
   { id: 1, label: 'GRZ1', top: '20%', left: '15%', delay: 0 },
@@ -172,17 +174,6 @@ export default function LandingPage() {
         </div>
 
         <nav className="flex items-center gap-2" onMouseLeave={() => setHoveredNav(null)}>
-          {NAV_ITEMS.map((item) => (
-            <div key={item} onMouseEnter={() => setHoveredNav(item)} className="relative px-4 py-2 cursor-pointer transition-colors z-10">
-              {hoveredNav === item && (
-                <motion.div layoutId="nav-pill" className="absolute inset-0 bg-white/10 rounded-full -z-10" transition={{ type: "spring", bounce: 0.2, duration: 0.6 }} />
-              )}
-              <span className={`relative z-20 text-sm font-medium ${hoveredNav === item ? 'text-[#E9E778]' : 'text-zinc-300'}`}>
-                {item}
-              </span>
-            </div>
-          ))}
-
           <Show when="signed-out">
             <SignInButton mode="modal">
               <div
