@@ -8,11 +8,63 @@ const SSD_MIN_LOT_SIZE_M2 = 300;
 const SITE_COVERAGE_FRACTION = 0.6;
 const PERMEABILITY_FRACTION = 0.2;
 
+type Lang = 'en' | 'zh';
+
 type Props = {
   landSizeM2?: number | null;
+  lang?: Lang;
 };
 
-export default function SSDFeasibilityWidget({ landSizeM2 }: Props) {
+const COPY: Record<Lang, {
+  title: string;
+  basisTag: string;
+  awaiting: string;
+  eligible: string;
+  ineligible: string;
+  thresholdLine: (lot: number) => string;
+  metricCoverage: string;
+  metricPermeability: string;
+  basisCoverage: string;
+  basisPermeability: string;
+  footer: string;
+  unit: string;
+}> = {
+  en: {
+    title: 'SSD Feasibility',
+    basisTag: 'ResCode · NCC 2026',
+    awaiting: 'Awaiting spatial data to run feasibility…',
+    eligible: 'SSD Eligible',
+    ineligible: `SSD Ineligible (Lot ≤ ${SSD_MIN_LOT_SIZE_M2}m²)`,
+    thresholdLine: (lot) =>
+      `Lot ${Math.round(lot).toLocaleString()} m² · Threshold > ${SSD_MIN_LOT_SIZE_M2} m²`,
+    metricCoverage: 'Max Site Coverage',
+    metricPermeability: 'Min Permeability',
+    basisCoverage: 'GRZ / NRZ · Standard B8',
+    basisPermeability: 'ResCode · Standard B9',
+    footer:
+      'Indicative envelope only. Final eligibility also depends on zone, overlays, frontage, slope, and ResCode Minimum Garden Area — confirm against the full Feasibility tab before lodgement.',
+    unit: 'm²',
+  },
+  zh: {
+    title: 'SSD 可行性',
+    basisTag: 'ResCode · NCC 2026',
+    awaiting: '正在等待空间数据以运行可行性分析…',
+    eligible: '符合 SSD 资格',
+    ineligible: `不符合 SSD 资格 (地块 ≤ ${SSD_MIN_LOT_SIZE_M2} m²)`,
+    thresholdLine: (lot) =>
+      `地块 ${Math.round(lot).toLocaleString()} m² · 阈值 > ${SSD_MIN_LOT_SIZE_M2} m²`,
+    metricCoverage: '最大场地覆盖率',
+    metricPermeability: '最小透水率',
+    basisCoverage: 'GRZ / NRZ · Standard B8',
+    basisPermeability: 'ResCode · Standard B9',
+    footer:
+      '本估算仅作初步参考。最终资格仍取决于分区、规划覆盖区、临街宽度、坡度及 ResCode 最小花园面积 — 在递交前请以完整可行性页为准。',
+    unit: 'm²',
+  },
+};
+
+export default function SSDFeasibilityWidget({ landSizeM2, lang = 'en' }: Props) {
+  const t = COPY[lang];
   const hasArea =
     typeof landSizeM2 === 'number' && Number.isFinite(landSizeM2) && landSizeM2 > 0;
 
@@ -25,24 +77,24 @@ export default function SSDFeasibilityWidget({ landSizeM2 }: Props) {
         className="rounded-xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur-sm"
         aria-busy="true"
       >
-        <header className="mb-3 flex items-center justify-between">
+        <header className="mb-3 flex items-center justify-between gap-3">
           <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">
-            SSD Feasibility
+            {t.title}
           </h3>
           <span className="font-mono text-[10px] uppercase tracking-wider text-zinc-600">
-            ResCode · NCC 2026
+            {t.basisTag}
           </span>
         </header>
         <div className="flex items-center gap-3 text-zinc-400">
-          <Loader2 className="h-4 w-4 animate-spin text-[#E9E778]" />
-          <p className="text-sm">Awaiting spatial data to run feasibility…</p>
+          <Loader2 className="h-4 w-4 flex-none animate-spin text-[#E9E778]" />
+          <p className="text-sm">{t.awaiting}</p>
         </div>
       </motion.section>
     );
   }
 
   const lot = landSizeM2 as number;
-  const eligible = lot >= SSD_MIN_LOT_SIZE_M2;
+  const eligible = lot > SSD_MIN_LOT_SIZE_M2;
   const siteCoverageM2 = Math.round(lot * SITE_COVERAGE_FRACTION);
   const permeabilityM2 = Math.round(lot * PERMEABILITY_FRACTION);
 
@@ -53,12 +105,12 @@ export default function SSDFeasibilityWidget({ landSizeM2 }: Props) {
       transition={{ duration: 0.25 }}
       className="rounded-xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur-sm"
     >
-      <header className="mb-4 flex items-center justify-between">
+      <header className="mb-4 flex items-center justify-between gap-3">
         <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">
-          SSD Feasibility
+          {t.title}
         </h3>
         <span className="font-mono text-[10px] uppercase tracking-wider text-zinc-600">
-          ResCode · NCC 2026
+          {t.basisTag}
         </span>
       </header>
 
@@ -83,10 +135,10 @@ export default function SSDFeasibilityWidget({ landSizeM2 }: Props) {
               eligible ? 'text-emerald-300' : 'text-rose-300',
             ].join(' ')}
           >
-            {eligible ? 'SSD Eligible' : `SSD Ineligible (Under ${SSD_MIN_LOT_SIZE_M2}m²)`}
+            {eligible ? t.eligible : t.ineligible}
           </p>
           <p className="font-mono text-[11px] uppercase tracking-wider text-zinc-500">
-            Lot {Math.round(lot)} m² · Threshold {SSD_MIN_LOT_SIZE_M2} m²
+            {t.thresholdLine(lot)}
           </p>
         </div>
       </div>
@@ -94,29 +146,27 @@ export default function SSDFeasibilityWidget({ landSizeM2 }: Props) {
       <div className="grid grid-cols-2 gap-3">
         <FeasibilityMetric
           icon={<Layers className="h-4 w-4 text-[#E9E778]" />}
-          label="Max Site Coverage"
+          label={t.metricCoverage}
           valueM2={siteCoverageM2}
           fraction={SITE_COVERAGE_FRACTION}
-          basis="GRZ / NRZ Standard B8"
+          basis={t.basisCoverage}
+          unit={t.unit}
           dimmed={!eligible}
         />
         <FeasibilityMetric
           icon={<Droplets className="h-4 w-4 text-[#E9E778]" />}
-          label="Min Permeability"
+          label={t.metricPermeability}
           valueM2={permeabilityM2}
           fraction={PERMEABILITY_FRACTION}
-          basis="ResCode Standard B9"
+          basis={t.basisPermeability}
+          unit={t.unit}
           dimmed={!eligible}
         />
       </div>
 
       <footer className="mt-4 flex items-start gap-2 border-t border-white/5 pt-3">
         <Ruler className="mt-0.5 h-3 w-3 flex-none text-zinc-600" aria-hidden />
-        <p className="text-[11px] leading-relaxed text-zinc-500">
-          Indicative envelope only. Final eligibility depends on zone, overlays,
-          frontage, slope, and ResCode Minimum Garden Area — confirm against the
-          full feasibility tab before lodgement.
-        </p>
+        <p className="text-[11px] leading-relaxed text-zinc-500">{t.footer}</p>
       </footer>
     </motion.section>
   );
@@ -128,10 +178,11 @@ type MetricProps = {
   valueM2: number;
   fraction: number;
   basis: string;
+  unit: string;
   dimmed?: boolean;
 };
 
-function FeasibilityMetric({ icon, label, valueM2, fraction, basis, dimmed }: MetricProps) {
+function FeasibilityMetric({ icon, label, valueM2, fraction, basis, unit, dimmed }: MetricProps) {
   return (
     <div
       className={[
@@ -147,7 +198,7 @@ function FeasibilityMetric({ icon, label, valueM2, fraction, basis, dimmed }: Me
       </div>
       <p className="font-mono text-xl font-semibold tabular-nums text-white">
         {valueM2.toLocaleString()}
-        <span className="ml-1 text-sm font-normal text-zinc-500">m²</span>
+        <span className="ml-1 text-sm font-normal text-zinc-500">{unit}</span>
       </p>
       <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-zinc-600">
         {Math.round(fraction * 100)}% · {basis}

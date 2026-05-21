@@ -327,6 +327,7 @@ function AppCanvas() {
                     lon={lon}
                     landSizeM2={landSizeM2}
                     lotPlan={spi}
+                    lang={language}
                   />
                 )}
                 {activeTab === 'planning' && (

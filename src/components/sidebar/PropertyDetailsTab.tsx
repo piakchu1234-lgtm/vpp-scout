@@ -34,6 +34,7 @@ type Props = {
   lon?: number | null;
   landSizeM2?: number | null;
   lotPlan?: string | null;
+  lang?: 'en' | 'zh';
 };
 
 export default function PropertyDetailsTab({
@@ -42,6 +43,7 @@ export default function PropertyDetailsTab({
   lon: lonProp,
   landSizeM2,
   lotPlan,
+  lang = 'en',
 }: Props = {}) {
   const data = MOCK_DOMAIN_DATA;
   const googleMapsKey = (process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || '').trim().replace(/[\"']/g, '');
@@ -59,7 +61,7 @@ export default function PropertyDetailsTab({
 
       {/* 0. SSD Feasibility — first thing users see; reads landSizeM2 from
           the Vicmap pipeline and renders eligibility + envelope metrics. */}
-      <SSDFeasibilityWidget landSizeM2={landSizeM2 ?? null} />
+      <SSDFeasibilityWidget landSizeM2={landSizeM2 ?? null} lang={lang} />
 
       {/* 1. Header & Dwelling Composition */}
       <div className="flex flex-col gap-4 bg-white/5 border border-white/10 p-5 rounded-xl backdrop-blur-sm">
