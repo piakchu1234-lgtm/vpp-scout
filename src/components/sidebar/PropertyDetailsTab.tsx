@@ -49,7 +49,7 @@ export default function PropertyDetailsTab({
   const displayLandSize =
     typeof landSizeM2 === 'number' && Number.isFinite(landSizeM2) && landSizeM2 > 0
       ? `${Math.round(landSizeM2)}m²`
-      : data.dimensions.landSize;
+      : 'TBC';
   const lat = typeof latProp === 'number' && Number.isFinite(latProp) ? latProp : -37.9622;
   const lon = typeof lonProp === 'number' && Number.isFinite(lonProp) ? lonProp : 145.1764;
 

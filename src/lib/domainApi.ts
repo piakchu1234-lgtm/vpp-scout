@@ -148,7 +148,12 @@ function buildDemoData(
   lon: number,
 ): DomainPropertyData {
   const rand = seeded(hash(address));
-  const lotSize = 420 + Math.floor(rand() * 360);
+  // Lot size is deliberately null on the demo path. The cadastral lot
+  // size must come from Vicmap (Vicmap_Parcel polygon → @turf/area) or
+  // an agent-verified record — never a seeded guess. propertyData.ts
+  // enforces this in the area waterfall; nulling the seed here closes
+  // the same leak at the source.
+  const lotSize: number | null = null;
   const rentalEstimateWeekly = 480 + Math.floor(rand() * 420);
   const lastSoldPrice = 850_000 + Math.floor(rand() * 750_000);
   const yearsAgo = 1 + Math.floor(rand() * 5);

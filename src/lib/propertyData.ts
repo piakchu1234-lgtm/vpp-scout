@@ -35,7 +35,7 @@ import { findLgaContact, type LgaContact } from './lgaContacts';
 import { calculateLotArea } from './propertyGeometry';
 
 export type PriceSource = 'verified' | 'domain' | 'vg' | 'tbc';
-export type AreaSource = 'verified' | 'vicmap' | 'domain' | 'tbc';
+export type AreaSource = 'verified' | 'vicmap' | 'tbc';
 export type CouncilSource = 'vicmap-admin' | 'tbc';
 
 export type PriceField = {
@@ -201,17 +201,17 @@ export async function fetchPropertyData(
     price = { valueAud: null, date: null, source: 'tbc' };
   }
 
-  // Area waterfall: verified → cadastral polygon → Domain → TBC. The
-  // verified rung sits above Vicmap because the agent-confirmed lot
-  // accounts for any post-survey amendments not yet reflected in the
-  // Vicmap cadastral release.
+  // Area waterfall: verified → cadastral polygon → TBC. Domain's lotSize
+  // is intentionally excluded — the demo path is a deterministic seed
+  // (not real survey data) and the live path is unverified enrichment,
+  // so allowing it would leak a fake number under the "Source: Domain"
+  // badge. If Vicmap can't intersect a parcel (road reserve, unsubdivided
+  // land, service outage), the UI shows TBC instead.
   let area: AreaField;
   if (verified?.lotSize) {
     area = { valueM2: verified.lotSize, source: 'verified' };
   } else if (parcel) {
     area = { valueM2: calculateLotArea(parcel.polygon), source: 'vicmap' };
-  } else if (effectiveDomain?.lotSize) {
-    area = { valueM2: Math.round(effectiveDomain.lotSize), source: 'domain' };
   } else {
     area = { valueM2: null, source: 'tbc' };
   }
