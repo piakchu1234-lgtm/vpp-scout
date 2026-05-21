@@ -1,6 +1,7 @@
 'use client';
 import React from 'react';
 import { BedDouble, Bath, Car, Maximize, Ruler, Mountain, Compass, Building2, MapPin, School } from 'lucide-react';
+import SSDFeasibilityWidget from './SSDFeasibilityWidget';
 
 const MOCK_DOMAIN_DATA = {
   address: "62 Chandler Road, Noble Park, VIC 3174",
@@ -55,6 +56,10 @@ export default function PropertyDetailsTab({
 
   return (
     <div className="flex flex-col gap-6 text-zinc-200 animate-in fade-in duration-300">
+
+      {/* 0. SSD Feasibility — first thing users see; reads landSizeM2 from
+          the Vicmap pipeline and renders eligibility + envelope metrics. */}
+      <SSDFeasibilityWidget landSizeM2={landSizeM2 ?? null} />
 
       {/* 1. Header & Dwelling Composition */}
       <div className="flex flex-col gap-4 bg-white/5 border border-white/10 p-5 rounded-xl backdrop-blur-sm">
