@@ -1,8 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle2, XCircle, Loader2, Layers, Droplets, Ruler } from 'lucide-react';
+import { CheckCircle2, XCircle, Loader2, Layers, Droplets, Ruler, Sparkles } from 'lucide-react';
 
 const SSD_MIN_LOT_SIZE_M2 = 300;
 const SITE_COVERAGE_FRACTION = 0.6;
@@ -12,6 +12,7 @@ type Lang = 'en' | 'zh';
 
 type Props = {
   landSizeM2?: number | null;
+  address?: string | null;
   lang?: Lang;
 };
 
@@ -28,6 +29,9 @@ const COPY: Record<Lang, {
   basisPermeability: string;
   footer: string;
   unit: string;
+  aiInsightTitle: string;
+  aiInsightLoading: string;
+  aiInsightError: string;
 }> = {
   en: {
     title: 'SSD Feasibility',
@@ -44,6 +48,9 @@ const COPY: Record<Lang, {
     footer:
       'Indicative envelope only. Final eligibility also depends on zone, overlays, frontage, slope, and ResCode Minimum Garden Area — confirm against the full Feasibility tab before lodgement.',
     unit: 'm²',
+    aiInsightTitle: 'AI Preliminary Insight',
+    aiInsightLoading: 'Generating preliminary site assessment…',
+    aiInsightError: 'Unable to generate insight. Please try again later.',
   },
   zh: {
     title: 'SSD 可行性',
@@ -60,15 +67,86 @@ const COPY: Record<Lang, {
     footer:
       '本估算仅作初步参考。最终资格仍取决于分区、规划覆盖区、临街宽度、坡度及 ResCode 最小花园面积 — 在递交前请以完整可行性页为准。',
     unit: 'm²',
+    aiInsightTitle: 'AI 初步洞察',
+    aiInsightLoading: '正在生成初步场地评估…',
+    aiInsightError: '无法生成洞察。请稍后重试。',
   },
 };
 
-export default function SSDFeasibilityWidget({ landSizeM2, lang = 'en' }: Props) {
+export default function SSDFeasibilityWidget({ landSizeM2, address, lang = 'en' }: Props) {
   const t = COPY[lang];
+  const [aiInsight, setAiInsight] = useState<string | null>(null);
+  const [isLoadingInsight, setIsLoadingInsight] = useState(false);
+  const [insightError, setInsightError] = useState(false);
+
   const hasArea =
     typeof landSizeM2 === 'number' && Number.isFinite(landSizeM2) && landSizeM2 > 0;
 
+  useEffect(() => {
+    if (!hasArea && address && !aiInsight && !isLoadingInsight && !insightError) {
+      setIsLoadingInsight(true);
+      fetch('/api/insight', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.insight) {
+            setAiInsight(data.insight);
+          } else {
+            setInsightError(true);
+          }
+        })
+        .catch(() => {
+          setInsightError(true);
+        })
+        .finally(() => {
+          setIsLoadingInsight(false);
+        });
+    }
+  }, [hasArea, address, aiInsight, isLoadingInsight, insightError]);
+
   if (!hasArea) {
+    if (isLoadingInsight || aiInsight || insightError) {
+      return (
+        <motion.section
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25 }}
+          className="rounded-xl border border-[#E9E778]/20 bg-gradient-to-br from-[#E9E778]/[0.08] to-[#E9E778]/[0.02] p-5 backdrop-blur-sm"
+        >
+          <header className="mb-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-[#E9E778]" />
+              <h3 className="text-xs font-bold uppercase tracking-widest text-[#E9E778]">
+                {t.aiInsightTitle}
+              </h3>
+            </div>
+            <span className="font-mono text-[10px] uppercase tracking-wider text-zinc-600">
+              Gemini 1.5 Pro
+            </span>
+          </header>
+          {isLoadingInsight && (
+            <div className="flex items-center gap-3 text-zinc-400">
+              <Loader2 className="h-4 w-4 flex-none animate-spin text-[#E9E778]" />
+              <p className="text-sm">{t.aiInsightLoading}</p>
+            </div>
+          )}
+          {insightError && (
+            <p className="text-sm text-rose-400">{t.aiInsightError}</p>
+          )}
+          {aiInsight && (
+            <div className="prose prose-invert prose-sm max-w-none">
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">
+                {aiInsight}
+              </p>
+            </div>
+          )}
+        </motion.section>
+      );
+    }
+
     return (
       <motion.section
         initial={{ opacity: 0, y: 8 }}

@@ -155,7 +155,7 @@ export default function PropertyDetailsTab({
     <div className="flex flex-col gap-6 text-zinc-200 animate-in fade-in duration-300">
 
       {/* 0. SSD Feasibility */}
-      <SSDFeasibilityWidget landSizeM2={landSizeM2 ?? null} lang={lang} />
+      <SSDFeasibilityWidget landSizeM2={landSizeM2 ?? null} address={displayAddress} lang={lang} />
 
       {/* 1. Header & Dwelling Composition */}
       <div className="flex flex-col gap-4 bg-white/5 border border-white/10 p-5 rounded-xl backdrop-blur-sm">
