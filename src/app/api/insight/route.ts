@@ -11,7 +11,7 @@ export async function POST(req: Request) {
     }
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.5-flash' });
 
     const prompt = `Act as a Victorian Town Planner. For the address ${address}, provide a 3-paragraph preliminary site assessment covering:
     1. Neighborhood context and typical zoning.
