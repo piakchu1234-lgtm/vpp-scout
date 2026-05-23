@@ -26,6 +26,8 @@ You MUST use Google Search to look up:
 - Frontage measurement
 - Recent sale price OR current market estimate range (from realestate.com.au, domain.com.au, pricefinder, etc.)
 - The local council authority
+- The Planning Zone code and full title (e.g., "GRZ1 — General Residential Zone Schedule 1") from VicPlan, planning.vic.gov.au, or the council's online planning maps
+- All Planning Overlays applying to the parcel (e.g., "HO123", "BMO", "LSIO", "DDO5") from the same sources
 
 After searching, return ONLY a valid JSON object matching this exact schema (no markdown fences, no prose):
 {
@@ -34,10 +36,12 @@ After searching, return ONLY a valid JSON object matching this exact schema (no 
   "estimatedFrontage": "15.5m",
   "marketEstimate": "$700,000 - $780,000",
   "localCouncil": "City of Greater Dandenong",
-  "lotPlanNumber": "Lot 2 PS143510"
+  "lotPlanNumber": "Lot 2 PS143510",
+  "zoning": "GRZ1 — General Residential Zone Schedule 1",
+  "overlays": ["HO123", "DDO5"]
 }
 
-If a value cannot be confirmed via search, provide a best-effort estimate based on neighbourhood context and clearly note uncertainty in the insightSummary.`;
+If a value cannot be confirmed via search, provide a best-effort estimate based on neighbourhood context and clearly note uncertainty in the insightSummary. If no overlays apply, return an empty array.`;
 
     const result = await model.generateContent(prompt);
     const text = result.response.text();

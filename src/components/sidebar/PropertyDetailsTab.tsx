@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useEffect } from 'react';
-import { BedDouble, Bath, Car, Maximize, Ruler, Mountain, Compass, Building2, MapPin, School, AlertCircle } from 'lucide-react';
+import { BedDouble, Bath, Car, Maximize, Ruler, Mountain, Compass, Building2, MapPin, School, AlertCircle, Map, Layers } from 'lucide-react';
 import SSDFeasibilityWidget from './SSDFeasibilityWidget';
 
 type Lang = 'en' | 'zh';
@@ -13,6 +13,8 @@ type AIInsightData = {
   marketEstimate: string;
   localCouncil: string;
   lotPlanNumber: string;
+  zoning: string;
+  overlays: string[];
 };
 
 const MOCK_DOMAIN_DATA: {
@@ -88,7 +90,11 @@ const COPY: Record<Lang, {
   streetView: string;
   streetViewPending: string;
   tbc: string;
-  estimatedData: string;
+  estimatedTooltip: string;
+  planningContext: string;
+  zoning: string;
+  overlays: string;
+  noOverlays: string;
 }> = {
   en: {
     lotPlanLabel: 'Lot / Plan',
@@ -108,7 +114,11 @@ const COPY: Record<Lang, {
     streetView: 'Street View',
     streetViewPending: '[Street View pending API key]',
     tbc: 'TBC',
-    estimatedData: 'Estimated',
+    estimatedTooltip: 'Estimated placeholder data. Confirm legal boundaries and zoning before lodgement.',
+    planningContext: 'Planning Context',
+    zoning: 'Zoning',
+    overlays: 'Overlays',
+    noOverlays: 'No overlays apply',
   },
   zh: {
     lotPlanLabel: '地块 / 规划号',
@@ -128,7 +138,11 @@ const COPY: Record<Lang, {
     streetView: '街景视图',
     streetViewPending: '[街景视图待 API 密钥配置]',
     tbc: 'TBC',
-    estimatedData: '估算值',
+    estimatedTooltip: '估算占位数据。递交前请确认所有法律边界和分区信息。',
+    planningContext: '规划信息',
+    zoning: '分区',
+    overlays: '规划覆盖区',
+    noOverlays: '无适用覆盖区',
   },
 };
 
@@ -209,6 +223,12 @@ export default function PropertyDetailsTab({
     : aiInsight?.lotPlanNumber || t.tbc;
   const isLotPlanAI = !hasPrimaryLotPlan && !!aiInsight?.lotPlanNumber;
 
+  const displayZoning = aiInsight?.zoning || t.tbc;
+  const isZoningAI = !!aiInsight?.zoning;
+
+  const displayOverlays = aiInsight?.overlays ?? [];
+  const isOverlaysAI = !!aiInsight?.overlays;
+
   const lat = typeof latProp === 'number' && Number.isFinite(latProp) ? latProp : -37.9622;
   const lon = typeof lonProp === 'number' && Number.isFinite(lonProp) ? lonProp : 145.1764;
 
@@ -234,9 +254,8 @@ export default function PropertyDetailsTab({
               {t.lotPlanLabel}: {displayLotPlan}
             </p>
             {isLotPlanAI && (
-              <span className="flex items-center gap-1 text-[10px] text-zinc-400 font-medium">
-                <AlertCircle className="w-3 h-3" />
-                {t.estimatedData}
+              <span title={t.estimatedTooltip} className="inline-flex cursor-help">
+                <AlertCircle className="w-3 h-3 text-zinc-500" aria-label={t.estimatedTooltip} />
               </span>
             )}
           </div>
@@ -269,9 +288,8 @@ export default function PropertyDetailsTab({
               <Maximize className="w-4 h-4 text-[#E9E778] flex-none" />
               <span className="text-xs uppercase tracking-wide truncate">{t.landSize}</span>
               {isLandSizeAI && (
-                <span className="flex items-center gap-1 text-[10px] text-zinc-400 font-medium">
-                  <AlertCircle className="w-3 h-3" />
-                  {t.estimatedData}
+                <span title={t.estimatedTooltip} className="inline-flex cursor-help">
+                  <AlertCircle className="w-3 h-3 text-zinc-500" aria-label={t.estimatedTooltip} />
                 </span>
               )}
             </div>
@@ -289,9 +307,8 @@ export default function PropertyDetailsTab({
               <Ruler className="w-4 h-4 text-[#E9E778] flex-none" />
               <span className="text-xs uppercase tracking-wide truncate">{t.frontage}</span>
               {isFrontageAI && (
-                <span className="flex items-center gap-1 text-[10px] text-zinc-400 font-medium">
-                  <AlertCircle className="w-3 h-3" />
-                  {t.estimatedData}
+                <span title={t.estimatedTooltip} className="inline-flex cursor-help">
+                  <AlertCircle className="w-3 h-3 text-zinc-500" aria-label={t.estimatedTooltip} />
                 </span>
               )}
             </div>
@@ -316,7 +333,59 @@ export default function PropertyDetailsTab({
         </div>
       </div>
 
-      {/* 3. Market Data */}
+      {/* 3. Planning Context (Zoning & Overlays) */}
+      <div className="bg-white/5 border border-white/10 p-5 rounded-xl backdrop-blur-sm">
+        <h3 className="text-xs font-bold tracking-widest text-zinc-500 uppercase mb-4">
+          {t.planningContext}
+        </h3>
+        <div className="flex flex-col gap-4">
+          <div className="flex items-start gap-3">
+            <Map className="w-5 h-5 text-[#E9E778] shrink-0 mt-0.5" />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-sm font-medium text-white">{t.zoning}</p>
+                {isZoningAI && (
+                  <span title={t.estimatedTooltip} className="inline-flex cursor-help">
+                    <AlertCircle className="w-3 h-3 text-zinc-500" aria-label={t.estimatedTooltip} />
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-zinc-400 break-words font-mono">{displayZoning}</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <Layers className="w-5 h-5 text-[#E9E778] shrink-0 mt-0.5" />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 mb-2">
+                <p className="text-sm font-medium text-white">{t.overlays}</p>
+                {isOverlaysAI && (
+                  <span title={t.estimatedTooltip} className="inline-flex cursor-help">
+                    <AlertCircle className="w-3 h-3 text-zinc-500" aria-label={t.estimatedTooltip} />
+                  </span>
+                )}
+              </div>
+              {displayOverlays.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {displayOverlays.map((code) => (
+                    <span
+                      key={code}
+                      className="font-mono text-[11px] px-2 py-0.5 rounded-md bg-[#E9E778]/10 border border-[#E9E778]/30 text-[#E9E778]"
+                    >
+                      {code}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-zinc-500 italic">
+                  {isOverlaysAI ? t.noOverlays : t.tbc}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 4. Market Data */}
       <div className="bg-white/5 border border-white/10 p-5 rounded-xl backdrop-blur-sm">
         <h3 className="text-xs font-bold tracking-widest text-zinc-500 uppercase mb-4">
           {t.marketInsight}
@@ -325,9 +394,8 @@ export default function PropertyDetailsTab({
           <div className="flex items-center gap-2 mb-1">
             <p className="text-xs text-zinc-400 uppercase tracking-wide">{t.estimatedValue}</p>
             {isMarketEstimateAI && (
-              <span className="flex items-center gap-1 text-[10px] text-zinc-400 font-medium">
-                <AlertCircle className="w-3 h-3" />
-                {t.estimatedData}
+              <span title={t.estimatedTooltip} className="inline-flex cursor-help">
+                <AlertCircle className="w-3 h-3 text-zinc-500" aria-label={t.estimatedTooltip} />
               </span>
             )}
           </div>
@@ -351,7 +419,7 @@ export default function PropertyDetailsTab({
         </div>
       </div>
 
-      {/* 4. Local Context */}
+      {/* 5. Local Context */}
       <div className="bg-white/5 border border-white/10 p-5 rounded-xl backdrop-blur-sm">
         <h3 className="text-xs font-bold tracking-widest text-zinc-500 uppercase mb-4">
           {t.localContext}
@@ -363,9 +431,8 @@ export default function PropertyDetailsTab({
               <div className="flex items-center gap-2 mb-1">
                 <p className="text-sm font-medium text-white">{t.councilAuthority}</p>
                 {isCouncilAI && (
-                  <span className="flex items-center gap-1 text-[10px] text-zinc-400 font-medium">
-                    <AlertCircle className="w-3 h-3" />
-                    {t.estimatedData}
+                  <span title={t.estimatedTooltip} className="inline-flex cursor-help">
+                    <AlertCircle className="w-3 h-3 text-zinc-500" aria-label={t.estimatedTooltip} />
                   </span>
                 )}
               </div>
