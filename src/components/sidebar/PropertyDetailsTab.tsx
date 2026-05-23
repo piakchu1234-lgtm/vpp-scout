@@ -12,11 +12,11 @@ type AIInsightData = {
   estimatedFrontage: string;
   marketEstimate: string;
   localCouncil: string;
+  lotPlanNumber: string;
 };
 
 const MOCK_DOMAIN_DATA: {
   address: Bi;
-  lotPlan: string;
   beds: number;
   baths: number;
   cars: number;
@@ -42,7 +42,6 @@ const MOCK_DOMAIN_DATA: {
     en: '62 Chandler Road, Noble Park, VIC 3174',
     zh: '维多利亚州 Noble Park 3174 Chandler Road 62 号',
   },
-  lotPlan: 'Lot 2 PS143510',
   beds: 3,
   baths: 1,
   cars: 2,
@@ -154,7 +153,7 @@ export default function PropertyDetailsTab({
   const data = MOCK_DOMAIN_DATA;
   const googleMapsKey = (process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || '').trim().replace(/[\"']/g, '');
   const displayAddress = address?.trim() || data.address[lang];
-  const displayLotPlan = lotPlan?.trim() || data.lotPlan;
+  const hasPrimaryLotPlan = !!lotPlan?.trim();
 
   // AI Insight State
   const [aiInsight, setAiInsight] = useState<AIInsightData | null>(null);
@@ -205,6 +204,11 @@ export default function PropertyDetailsTab({
   const displayCouncil = aiInsight?.localCouncil || data.context.council[lang];
   const isCouncilAI = !hasPrimaryLandSize && aiInsight?.localCouncil;
 
+  const displayLotPlan = hasPrimaryLotPlan
+    ? lotPlan!.trim()
+    : aiInsight?.lotPlanNumber || t.tbc;
+  const isLotPlanAI = !hasPrimaryLotPlan && !!aiInsight?.lotPlanNumber;
+
   const lat = typeof latProp === 'number' && Number.isFinite(latProp) ? latProp : -37.9622;
   const lon = typeof lonProp === 'number' && Number.isFinite(lonProp) ? lonProp : 145.1764;
 
@@ -225,9 +229,17 @@ export default function PropertyDetailsTab({
           <h2 className="text-xl font-bold text-white mb-1 leading-snug break-words">
             {displayAddress}
           </h2>
-          <p className="text-sm text-zinc-400 font-mono break-all">
-            {t.lotPlanLabel}: {displayLotPlan}
-          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm text-zinc-400 font-mono break-all">
+              {t.lotPlanLabel}: {displayLotPlan}
+            </p>
+            {isLotPlanAI && (
+              <span className="flex items-center gap-1 text-[10px] text-zinc-400 font-medium">
+                <AlertCircle className="w-3 h-3" />
+                {t.estimatedData}
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-6 pt-3 border-t border-white/10">
