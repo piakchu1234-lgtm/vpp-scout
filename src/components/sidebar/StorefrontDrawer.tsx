@@ -1,6 +1,7 @@
 'use client';
 import React, { useState } from 'react';
-import { X, FileText, Lock, Loader2, ChevronRight, FileBadge2, CreditCard } from 'lucide-react';
+import { X, FileText, Lock, Loader2, ChevronRight, FileBadge2, CreditCard, Download } from 'lucide-react';
+import { useUser } from '@clerk/nextjs';
 
 interface StorefrontDrawerProps {
   isOpen: boolean;
@@ -16,6 +17,11 @@ type ProductType = 'ai-report' | 'title-search';
 export default function StorefrontDrawer({ isOpen, onClose, address, spi, lat, lon }: StorefrontDrawerProps) {
   const [isProcessing, setIsProcessing] = useState<ProductType | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const { user } = useUser();
+
+  // Check if current user is admin (UI hint only - real auth is server-side)
+  const userEmail = user?.emailAddresses[0]?.emailAddress;
+  const isAdmin = userEmail === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
   if (!isOpen) return null;
 
@@ -79,7 +85,9 @@ export default function StorefrontDrawer({ isOpen, onClose, address, spi, lat, l
                     </p>
                   )}
                   <div className="flex items-center justify-between">
-                    <span className="text-lg font-black text-white">$49.00</span>
+                    <span className="text-lg font-black text-white">
+                      {isAdmin ? <span className="text-[#E9E778]">FREE (Admin)</span> : '$49.00'}
+                    </span>
                     <button
                       onClick={() => handleCheckout('ai-report')}
                       disabled={isProcessing !== null}
@@ -90,6 +98,10 @@ export default function StorefrontDrawer({ isOpen, onClose, address, spi, lat, l
                         <>
                           <Loader2 className="w-3 h-3 animate-spin" />
                           Loading...
+                        </>
+                      ) : isAdmin ? (
+                        <>
+                          <Download className="w-3 h-3" /> Download (Admin Free)
                         </>
                       ) : (
                         <>

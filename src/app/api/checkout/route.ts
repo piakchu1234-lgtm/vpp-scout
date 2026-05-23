@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { currentUser } from '@clerk/nextjs/server';
 import Stripe from 'stripe';
 
 export const runtime = 'edge';
@@ -29,6 +30,11 @@ function isProductType(v: unknown): v is ProductType {
 }
 
 export async function POST(request: NextRequest) {
+  // Admin bypass check
+  const user = await currentUser();
+  const email = user?.emailAddresses[0]?.emailAddress;
+  const isAdmin = email === process.env.ADMIN_EMAIL;
+
   const secret = process.env.STRIPE_SECRET_KEY;
   if (!secret) {
     return NextResponse.json(
@@ -49,6 +55,19 @@ export async function POST(request: NextRequest) {
       { error: 'Body must include `type: "ai-report" | "title-search"`.' },
       { status: 400 },
     );
+  }
+
+  // If admin, bypass Stripe and return success immediately
+  if (isAdmin) {
+    const origin = request.nextUrl.origin;
+    const lat = Number.isFinite(body.lat) ? body.lat : undefined;
+    const lon = Number.isFinite(body.lon) ? body.lon : undefined;
+    const coordSuffix =
+      lat !== undefined && lon !== undefined ? `&lat=${lat}&lon=${lon}` : '';
+
+    // Return a mock success URL that mimics Stripe's success flow
+    const adminSuccessUrl = `${origin}/app?payment=success&session_id=admin_bypass&type=${body.type}${coordSuffix}`;
+    return NextResponse.json({ url: adminSuccessUrl });
   }
 
   const product = PRODUCTS[body.type];

@@ -1,10 +1,18 @@
 'use client';
-import React from 'react';
-import { BedDouble, Bath, Car, Maximize, Ruler, Mountain, Compass, Building2, MapPin, School } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { BedDouble, Bath, Car, Maximize, Ruler, Mountain, Compass, Building2, MapPin, School, AlertCircle } from 'lucide-react';
 import SSDFeasibilityWidget from './SSDFeasibilityWidget';
 
 type Lang = 'en' | 'zh';
 type Bi = { en: string; zh: string };
+
+type AIInsightData = {
+  insightSummary: string;
+  estimatedLandSizeM2: number;
+  estimatedFrontage: string;
+  marketEstimate: string;
+  localCouncil: string;
+};
 
 const MOCK_DOMAIN_DATA: {
   address: Bi;
@@ -81,6 +89,7 @@ const COPY: Record<Lang, {
   streetView: string;
   streetViewPending: string;
   tbc: string;
+  estimatedData: string;
 }> = {
   en: {
     lotPlanLabel: 'Lot / Plan',
@@ -100,6 +109,7 @@ const COPY: Record<Lang, {
     streetView: 'Street View',
     streetViewPending: '[Street View pending API key]',
     tbc: 'TBC',
+    estimatedData: 'Estimated',
   },
   zh: {
     lotPlanLabel: '地块 / 规划号',
@@ -119,6 +129,7 @@ const COPY: Record<Lang, {
     streetView: '街景视图',
     streetViewPending: '[街景视图待 API 密钥配置]',
     tbc: 'TBC',
+    estimatedData: '估算值',
   },
 };
 
@@ -144,10 +155,56 @@ export default function PropertyDetailsTab({
   const googleMapsKey = (process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || '').trim().replace(/[\"']/g, '');
   const displayAddress = address?.trim() || data.address[lang];
   const displayLotPlan = lotPlan?.trim() || data.lotPlan;
-  const displayLandSize =
-    typeof landSizeM2 === 'number' && Number.isFinite(landSizeM2) && landSizeM2 > 0
-      ? `${Math.round(landSizeM2)}m²`
-      : t.tbc;
+
+  // AI Insight State
+  const [aiInsight, setAiInsight] = useState<AIInsightData | null>(null);
+  const [isLoadingAI, setIsLoadingAI] = useState(false);
+
+  // Determine if primary data is missing
+  const hasPrimaryLandSize = typeof landSizeM2 === 'number' && Number.isFinite(landSizeM2) && landSizeM2 > 0;
+
+  // Fetch AI estimates when primary data is missing
+  useEffect(() => {
+    if (!hasPrimaryLandSize && address && !aiInsight && !isLoadingAI) {
+      setIsLoadingAI(true);
+      fetch('/api/insight', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address }),
+      })
+        .then((res) => res.json())
+        .then((response) => {
+          if (response.data) {
+            setAiInsight(response.data);
+          }
+        })
+        .catch((err) => {
+          console.error('AI insight fetch failed:', err);
+        })
+        .finally(() => {
+          setIsLoadingAI(false);
+        });
+    }
+  }, [hasPrimaryLandSize, address, aiInsight, isLoadingAI]);
+
+  // Determine display values (primary data or AI fallback)
+  const effectiveLandSizeM2 = hasPrimaryLandSize ? landSizeM2 : aiInsight?.estimatedLandSizeM2 ?? null;
+  const displayLandSize = hasPrimaryLandSize
+    ? `${Math.round(landSizeM2!)}m²`
+    : aiInsight?.estimatedLandSizeM2
+    ? `${Math.round(aiInsight.estimatedLandSizeM2)}m²`
+    : t.tbc;
+  const isLandSizeAI = !hasPrimaryLandSize && aiInsight?.estimatedLandSizeM2;
+
+  const displayFrontage = aiInsight?.estimatedFrontage || data.dimensions.frontage;
+  const isFrontageAI = !hasPrimaryLandSize && aiInsight?.estimatedFrontage;
+
+  const displayMarketEstimate = aiInsight?.marketEstimate || data.market.estimateRange;
+  const isMarketEstimateAI = !hasPrimaryLandSize && aiInsight?.marketEstimate;
+
+  const displayCouncil = aiInsight?.localCouncil || data.context.council[lang];
+  const isCouncilAI = !hasPrimaryLandSize && aiInsight?.localCouncil;
+
   const lat = typeof latProp === 'number' && Number.isFinite(latProp) ? latProp : -37.9622;
   const lon = typeof lonProp === 'number' && Number.isFinite(lonProp) ? lonProp : 145.1764;
 
@@ -155,7 +212,12 @@ export default function PropertyDetailsTab({
     <div className="flex flex-col gap-6 text-zinc-200 animate-in fade-in duration-300">
 
       {/* 0. SSD Feasibility */}
-      <SSDFeasibilityWidget landSizeM2={landSizeM2 ?? null} address={displayAddress} lang={lang} />
+      <SSDFeasibilityWidget
+        landSizeM2={effectiveLandSizeM2}
+        address={displayAddress}
+        lang={lang}
+        aiInsightSummary={aiInsight?.insightSummary}
+      />
 
       {/* 1. Header & Dwelling Composition */}
       <div className="flex flex-col gap-4 bg-white/5 border border-white/10 p-5 rounded-xl backdrop-blur-sm">
@@ -194,6 +256,12 @@ export default function PropertyDetailsTab({
             <div className="flex items-center gap-2 text-zinc-400 mb-1">
               <Maximize className="w-4 h-4 text-[#E9E778] flex-none" />
               <span className="text-xs uppercase tracking-wide truncate">{t.landSize}</span>
+              {isLandSizeAI && (
+                <span className="flex items-center gap-1 text-[10px] text-zinc-400 font-medium">
+                  <AlertCircle className="w-3 h-3" />
+                  {t.estimatedData}
+                </span>
+              )}
             </div>
             <p className="font-semibold text-lg">{displayLandSize}</p>
           </div>
@@ -208,8 +276,14 @@ export default function PropertyDetailsTab({
             <div className="flex items-center gap-2 text-zinc-400 mb-1">
               <Ruler className="w-4 h-4 text-[#E9E778] flex-none" />
               <span className="text-xs uppercase tracking-wide truncate">{t.frontage}</span>
+              {isFrontageAI && (
+                <span className="flex items-center gap-1 text-[10px] text-zinc-400 font-medium">
+                  <AlertCircle className="w-3 h-3" />
+                  {t.estimatedData}
+                </span>
+              )}
             </div>
-            <p className="font-semibold text-lg">{data.dimensions.frontage}</p>
+            <p className="font-semibold text-lg">{displayFrontage}</p>
           </div>
           <div>
             <div className="flex items-center gap-2 text-zinc-400 mb-1">
@@ -236,9 +310,17 @@ export default function PropertyDetailsTab({
           {t.marketInsight}
         </h3>
         <div className="mb-6">
-          <p className="text-xs text-zinc-400 uppercase tracking-wide mb-1">{t.estimatedValue}</p>
+          <div className="flex items-center gap-2 mb-1">
+            <p className="text-xs text-zinc-400 uppercase tracking-wide">{t.estimatedValue}</p>
+            {isMarketEstimateAI && (
+              <span className="flex items-center gap-1 text-[10px] text-zinc-400 font-medium">
+                <AlertCircle className="w-3 h-3" />
+                {t.estimatedData}
+              </span>
+            )}
+          </div>
           <div className="flex items-end justify-between mb-2">
-            <p className="text-xl font-bold text-white tabular-nums">{data.market.estimateRange}</p>
+            <p className="text-xl font-bold text-white tabular-nums">{displayMarketEstimate}</p>
           </div>
           <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden mb-2">
             <div className="h-full bg-[#E9E778] w-[85%] rounded-full"></div>
@@ -265,9 +347,17 @@ export default function PropertyDetailsTab({
         <div className="flex flex-col gap-4 mb-5">
           <div className="flex items-start gap-3">
             <MapPin className="w-5 h-5 text-[#E9E778] shrink-0 mt-0.5" />
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-white">{t.councilAuthority}</p>
-              <p className="text-xs text-zinc-400 break-words">{data.context.council[lang]}</p>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-sm font-medium text-white">{t.councilAuthority}</p>
+                {isCouncilAI && (
+                  <span className="flex items-center gap-1 text-[10px] text-zinc-400 font-medium">
+                    <AlertCircle className="w-3 h-3" />
+                    {t.estimatedData}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-zinc-400 break-words">{displayCouncil}</p>
             </div>
           </div>
           <div className="flex items-start gap-3">

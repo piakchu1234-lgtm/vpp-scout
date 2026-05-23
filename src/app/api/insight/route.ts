@@ -11,20 +11,30 @@ export async function POST(req: Request) {
     }
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-    const model = genAI.getGenerativeModel({ model: 'gemini-3.5-flash' });
+    
+    // Force Gemini into JSON Mode
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-3.5-flash',
+      generationConfig: { responseMimeType: "application/json" } 
+    });
 
-    const prompt = `Act as a Victorian Town Planner. For the address ${address}, provide a 3-paragraph preliminary site assessment covering:
-    1. Neighborhood context and typical zoning.
-    2. High-level development potential (e.g., density trends).
-    3. Proximity to amenities.
-    Include a clear disclaimer that this is an AI-generated preliminary report, not a statutory document. If uncertain about the specific parcel, speak only to the suburb/locality in general terms.`;
+    const prompt = `Act as a Victorian real estate data API. For the address ${address}, generate realistic estimates for the site parameters to be used as UI placeholders.
+    Return ONLY a valid JSON object matching this exact schema:
+    {
+      "insightSummary": "3 short bullet points covering neighborhood context and development potential.",
+      "estimatedLandSizeM2": 650,
+      "estimatedFrontage": "15.5m",
+      "marketEstimate": "$700,000 - $780,000",
+      "localCouncil": "City of Greater Dandenong"
+    }`;
 
     const result = await model.generateContent(prompt);
     const text = result.response.text();
+    const data = JSON.parse(text);
 
-    return NextResponse.json({ insight: text });
-  } catch (error) {
+    return NextResponse.json({ data });
+  } catch (error: any) {
     console.error('Gemini API Error:', error);
-    return NextResponse.json({ error: 'Failed to generate insight' }, { status: 500 });
+    return NextResponse.json({ error: error?.message || 'Failed to generate insight' }, { status: 500 });
   }
 }

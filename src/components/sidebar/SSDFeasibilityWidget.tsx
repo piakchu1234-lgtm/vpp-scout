@@ -1,8 +1,15 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle2, XCircle, Loader2, Layers, Droplets, Ruler, Sparkles } from 'lucide-react';
+import { CheckCircle2, XCircle, Loader2, Layers, Droplets, Ruler, FileText } from 'lucide-react';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+// Enterprise utility for safe Tailwind class merging
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
 
 const SSD_MIN_LOT_SIZE_M2 = 300;
 const SITE_COVERAGE_FRACTION = 0.6;
@@ -14,6 +21,7 @@ type Props = {
   landSizeM2?: number | null;
   address?: string | null;
   lang?: Lang;
+  aiInsightSummary?: string;
 };
 
 const COPY: Record<Lang, {
@@ -29,9 +37,7 @@ const COPY: Record<Lang, {
   basisPermeability: string;
   footer: string;
   unit: string;
-  aiInsightTitle: string;
-  aiInsightLoading: string;
-  aiInsightError: string;
+  preliminaryTitle: string;
 }> = {
   en: {
     title: 'SSD Feasibility',
@@ -46,11 +52,9 @@ const COPY: Record<Lang, {
     basisCoverage: 'GRZ / NRZ · Standard B8',
     basisPermeability: 'ResCode · Standard B9',
     footer:
-      'Indicative envelope only. Final eligibility also depends on zone, overlays, frontage, slope, and ResCode Minimum Garden Area — confirm against the full Feasibility tab before lodgement.',
+      'Certain values are estimated placeholders for feasibility modeling. Confirm all legal boundaries and details before lodgement.',
     unit: 'm²',
-    aiInsightTitle: 'AI Preliminary Insight',
-    aiInsightLoading: 'Generating preliminary site assessment…',
-    aiInsightError: 'Unable to generate insight. Please try again later.',
+    preliminaryTitle: 'Preliminary Site Assessment',
   },
   zh: {
     title: 'SSD 可行性',
@@ -65,50 +69,21 @@ const COPY: Record<Lang, {
     basisCoverage: 'GRZ / NRZ · Standard B8',
     basisPermeability: 'ResCode · Standard B9',
     footer:
-      '本估算仅作初步参考。最终资格仍取决于分区、规划覆盖区、临街宽度、坡度及 ResCode 最小花园面积 — 在递交前请以完整可行性页为准。',
+      '部分数值为可行性建模的估算占位符。递交前请确认所有法律边界和详细信息。',
     unit: 'm²',
-    aiInsightTitle: 'AI 初步洞察',
-    aiInsightLoading: '正在生成初步场地评估…',
-    aiInsightError: '无法生成洞察。请稍后重试。',
+    preliminaryTitle: '初步场地评估',
   },
 };
 
-export default function SSDFeasibilityWidget({ landSizeM2, address, lang = 'en' }: Props) {
+export default function SSDFeasibilityWidget({ landSizeM2, address, lang = 'en', aiInsightSummary }: Props) {
   const t = COPY[lang];
-  const [aiInsight, setAiInsight] = useState<string | null>(null);
-  const [isLoadingInsight, setIsLoadingInsight] = useState(false);
-  const [insightError, setInsightError] = useState(false);
 
   const hasArea =
     typeof landSizeM2 === 'number' && Number.isFinite(landSizeM2) && landSizeM2 > 0;
 
-  useEffect(() => {
-    if (!hasArea && address && !aiInsight && !isLoadingInsight && !insightError) {
-      setIsLoadingInsight(true);
-      fetch('/api/insight', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address }),
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.insight) {
-            setAiInsight(data.insight);
-          } else {
-            setInsightError(true);
-          }
-        })
-        .catch(() => {
-          setInsightError(true);
-        })
-        .finally(() => {
-          setIsLoadingInsight(false);
-        });
-    }
-  }, [hasArea, address, aiInsight, isLoadingInsight, insightError]);
-
+  // AI INSIGHT FALLBACK WIDGET
   if (!hasArea) {
-    if (isLoadingInsight || aiInsight || insightError) {
+    if (aiInsightSummary) {
       return (
         <motion.section
           initial={{ opacity: 0, y: 8 }}
@@ -116,37 +91,25 @@ export default function SSDFeasibilityWidget({ landSizeM2, address, lang = 'en' 
           transition={{ duration: 0.25 }}
           className="rounded-xl border border-[#E9E778]/20 bg-gradient-to-br from-[#E9E778]/[0.08] to-[#E9E778]/[0.02] p-5 backdrop-blur-sm"
         >
-          <header className="mb-3 flex items-center justify-between gap-3">
+          <header className="mb-4 flex items-center justify-between gap-3 border-b border-[#E9E778]/10 pb-3">
             <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-[#E9E778]" />
+              <FileText className="h-4 w-4 text-[#E9E778]" />
               <h3 className="text-xs font-bold uppercase tracking-widest text-[#E9E778]">
-                {t.aiInsightTitle}
+                {t.preliminaryTitle}
               </h3>
             </div>
-            <span className="font-mono text-[10px] uppercase tracking-wider text-zinc-600">
-              Gemini 1.5 Pro
-            </span>
           </header>
-          {isLoadingInsight && (
-            <div className="flex items-center gap-3 text-zinc-400">
-              <Loader2 className="h-4 w-4 flex-none animate-spin text-[#E9E778]" />
-              <p className="text-sm">{t.aiInsightLoading}</p>
-            </div>
-          )}
-          {insightError && (
-            <p className="text-sm text-rose-400">{t.aiInsightError}</p>
-          )}
-          {aiInsight && (
-            <div className="prose prose-invert prose-sm max-w-none">
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">
-                {aiInsight}
-              </p>
-            </div>
-          )}
+
+          <div className="mt-2">
+            <p className="whitespace-pre-line text-sm leading-loose text-zinc-300">
+              {aiInsightSummary}
+            </p>
+          </div>
         </motion.section>
       );
     }
 
+    // STANDARD LOADING STATE
     return (
       <motion.section
         initial={{ opacity: 0, y: 8 }}
@@ -171,6 +134,7 @@ export default function SSDFeasibilityWidget({ landSizeM2, address, lang = 'en' 
     );
   }
 
+  // STANDARD SSD FEASIBILITY WIDGET
   const lot = landSizeM2 as number;
   const eligible = lot > SSD_MIN_LOT_SIZE_M2;
   const siteCoverageM2 = Math.round(lot * SITE_COVERAGE_FRACTION);
@@ -193,12 +157,12 @@ export default function SSDFeasibilityWidget({ landSizeM2, address, lang = 'en' 
       </header>
 
       <div
-        className={[
+        className={cn(
           'mb-5 flex items-center gap-3 rounded-lg border px-4 py-3',
           eligible
             ? 'border-emerald-400/30 bg-emerald-400/[0.06]'
-            : 'border-rose-400/30 bg-rose-400/[0.06]',
-        ].join(' ')}
+            : 'border-rose-400/30 bg-rose-400/[0.06]'
+        )}
         role="status"
       >
         {eligible ? (
@@ -208,10 +172,10 @@ export default function SSDFeasibilityWidget({ landSizeM2, address, lang = 'en' 
         )}
         <div className="min-w-0 flex-1">
           <p
-            className={[
+            className={cn(
               'text-sm font-semibold',
-              eligible ? 'text-emerald-300' : 'text-rose-300',
-            ].join(' ')}
+              eligible ? 'text-emerald-300' : 'text-rose-300'
+            )}
           >
             {eligible ? t.eligible : t.ineligible}
           </p>
@@ -263,10 +227,10 @@ type MetricProps = {
 function FeasibilityMetric({ icon, label, valueM2, fraction, basis, unit, dimmed }: MetricProps) {
   return (
     <div
-      className={[
+      className={cn(
         'rounded-lg border border-white/10 bg-white/[0.02] p-3 transition-opacity',
-        dimmed ? 'opacity-50' : '',
-      ].join(' ')}
+        dimmed && 'opacity-50'
+      )}
     >
       <div className="mb-2 flex items-center gap-2">
         {icon}
