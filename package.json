@@ -18,6 +18,7 @@
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "@stripe/stripe-js": "^9.4.0",
+    "@swc/helpers": "0.5.21",
     "@turf/area": "^7.3.5",
     "@turf/buffer": "^7.3.5",
     "@turf/circle": "^7.3.5",
