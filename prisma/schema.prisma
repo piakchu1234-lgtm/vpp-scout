@@ -1,0 +1,29 @@
+// Prisma schema for the SimplySite property cache.
+//
+// Prisma 7 note: datasource URLs are no longer declared here — they live
+// in prisma.config.ts at the project root. The DATABASE_URL (Supabase
+// pooled, port 6543) is read by src/lib/prisma.ts at runtime via the pg
+// driver adapter. The DIRECT_URL (port 5432) is used by the Prisma CLI
+// for `db push` / migrations.
+//
+// Driver adapters are GA in Prisma 7 so no `previewFeatures` flag is
+// required; the runtime path is steered entirely by passing `adapter`
+// to the PrismaClient constructor in src/lib/prisma.ts.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model PropertyCache {
+  // Normalized address (trim + lowercase) — matches lookup key in route.ts.
+  address   String   @id
+  // Full AIInsightData payload from the Gemini Auditor.
+  aiData    Json
+  // Auto-managed by Prisma; the 7-day cache window reads this.
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}

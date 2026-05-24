@@ -1,14 +1,57 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 
-export const runtime = 'edge'; // Optimized for Cloudflare
+// Node runtime: required because `pg` (used by the Prisma driver adapter)
+// reaches into node:net / node:tls / node:util/types. Next.js's edge runtime
+// sandbox refuses those at build-time page-data collection, even though
+// Cloudflare Workers allow them via the `nodejs_compat` flag set in
+// wrangler.jsonc. With @opennextjs/cloudflare both runtimes deploy to the
+// same Worker, so there is no $0-tier cost difference.
+export const runtime = 'nodejs';
+
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
+// Normalised key for the cache lookup. Trim handles trailing whitespace
+// from the geocoder; lowercase collapses casing differences between
+// "62 Chandler Road" and "62 chandler road" so they share one cache row.
+function normaliseAddress(raw: string): string {
+  return raw.trim().toLowerCase();
+}
 
 export async function POST(req: Request) {
   try {
     const { address } = await req.json();
-    if (!address) {
+    if (!address || typeof address !== 'string') {
       return NextResponse.json({ error: 'No address provided' }, { status: 400 });
     }
+
+    const cacheKey = normaliseAddress(address);
+    if (!cacheKey) {
+      return NextResponse.json({ error: 'Address is empty after normalisation' }, { status: 400 });
+    }
+
+    // Cache check — best-effort. A DB outage must not break the user-facing
+    // request, so we swallow lookup errors and fall through to Gemini.
+    const cache = await prisma.propertyCache
+      .findUnique({ where: { address: cacheKey } })
+      .catch((err) => {
+        console.error('[insight] cache lookup failed', err);
+        return null;
+      });
+
+    if (cache) {
+      const ageMs = Date.now() - cache.updatedAt.getTime();
+      if (ageMs < SEVEN_DAYS_MS) {
+        console.log(`[insight] CACHE HIT ⚡ "${cacheKey}" (age ${Math.round(ageMs / 3600000)}h)`);
+        return NextResponse.json({ data: cache.aiData, cached: true });
+      }
+      console.log(
+        `[insight] cache stale (age ${Math.round(ageMs / 86400000)}d) — refreshing "${cacheKey}"`,
+      );
+    }
+
+    console.log(`[insight] CACHE MISS 🤖 (Calling Gemini) "${cacheKey}"`);
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
@@ -64,7 +107,20 @@ Rules:
     const cleaned = text.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
     const data = JSON.parse(cleaned);
 
-    return NextResponse.json({ data });
+    // Persist to cache. Best-effort: failure to write must not fail the
+    // user-facing request — they already paid the latency cost of a cold
+    // Gemini call, so we still return the data even if the upsert errors.
+    await prisma.propertyCache
+      .upsert({
+        where: { address: cacheKey },
+        create: { address: cacheKey, aiData: data },
+        update: { aiData: data },
+      })
+      .catch((err) => {
+        console.error('[insight] cache write failed', err);
+      });
+
+    return NextResponse.json({ data, cached: false });
   } catch (error: any) {
     console.error('Gemini API Error:', error);
     return NextResponse.json({ error: error?.message || 'Failed to generate insight' }, { status: 500 });
