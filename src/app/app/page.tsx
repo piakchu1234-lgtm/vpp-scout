@@ -28,6 +28,17 @@ import { calculateYield, emptyYield, type YieldData } from '@/lib/yieldEngine';
 const MELBOURNE_FALLBACK = { lat: -37.8136, lon: 144.9631 };
 const VICMAP_TIMEOUT_MS = 5000;
 
+export type AIInsightData = {
+  insightSummary: string;
+  estimatedLandSizeM2: number;
+  estimatedFrontage: string;
+  marketEstimate: string;
+  localCouncil: string;
+  lotPlanNumber: string;
+  zoning: string;
+  overlays: string[];
+};
+
 type Lang = 'en' | 'zh';
 type TabId = 'property' | 'planning' | 'potential' | 'feasibility';
 
@@ -69,6 +80,8 @@ function AppCanvas() {
   const [isStorefrontOpen, setIsStorefrontOpen] = useState(false);
   const [language, setLanguage] = useState<Lang>('en');
   const [isNavigating, setIsNavigating] = useState(false);
+  const [aiInsight, setAiInsight] = useState<AIInsightData | null>(null);
+  const [isLoadingAI, setIsLoadingAI] = useState(false);
 
   const paymentParam = params.get('payment');
   const typeParam = params.get('type');
@@ -143,6 +156,45 @@ function AppCanvas() {
     }
   }, [polygon]);
 
+  const hasPrimaryLandSize =
+    typeof landSizeM2 === 'number' && Number.isFinite(landSizeM2) && landSizeM2 > 0;
+
+  // Clear stale AI insight on address change so live data is not contaminated
+  // by the previous lot's agentic estimates.
+  useEffect(() => {
+    setAiInsight(null);
+  }, [address]);
+
+  // Single source of truth: fetch agentic insight at the page level when
+  // primary Vicmap parcel data is missing, then fan out to the tabs as props.
+  useEffect(() => {
+    if (!address || hasPrimaryLandSize) return;
+    let cancelled = false;
+    setIsLoadingAI(true);
+    fetch('/api/insight', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address }),
+    })
+      .then((res) => res.json())
+      .then((response) => {
+        if (!cancelled && response?.data) setAiInsight(response.data);
+      })
+      .catch((err) => {
+        if (!cancelled) console.error('[AppCanvas] AI insight fetch failed', err);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingAI(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [hasPrimaryLandSize, address]);
+
+  const effectiveLandSizeM2 = hasPrimaryLandSize
+    ? landSizeM2
+    : aiInsight?.estimatedLandSizeM2 ?? null;
+
   const overlays: PlanningOverlay[] | null = useMemo(() => {
     if (!planData) return null;
     const seen = new Set<string>();
@@ -215,7 +267,7 @@ function AppCanvas() {
         </div>
       </header>
 
-      <div className="flex flex-col md:grid md:grid-cols-[1fr_420px] h-[100dvh] overflow-hidden">
+      <div className="flex flex-col md:grid md:grid-cols-[1fr_500px] h-[100dvh] overflow-hidden">
         <section className="h-[40vh] md:h-full relative bg-[#241F21] overflow-hidden">
           {hasCoords ? (
             <>
@@ -328,6 +380,7 @@ function AppCanvas() {
                     landSizeM2={landSizeM2}
                     lotPlan={spi}
                     lang={language}
+                    aiInsight={aiInsight}
                   />
                 )}
                 {activeTab === 'planning' && (
@@ -335,6 +388,10 @@ function AppCanvas() {
                     zoneCode={planData?.zoneCode ?? null}
                     zoneDescription={planData?.zoneDescription ?? null}
                     overlays={overlays}
+                    aiInsight={aiInsight}
+                    effectiveLandSizeM2={effectiveLandSizeM2}
+                    address={address}
+                    lang={language}
                   />
                 )}
                 {activeTab === 'potential' && (

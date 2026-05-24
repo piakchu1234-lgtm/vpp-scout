@@ -1,21 +1,10 @@
 'use client';
-import React, { useState, useEffect } from 'react';
-import { BedDouble, Bath, Car, Maximize, Ruler, Mountain, Compass, Building2, MapPin, School, AlertCircle, Map, Layers } from 'lucide-react';
-import SSDFeasibilityWidget from './SSDFeasibilityWidget';
+import React from 'react';
+import { BedDouble, Bath, Car, Maximize, Ruler, Mountain, Compass, Building2, MapPin, School, AlertCircle } from 'lucide-react';
+import type { AIInsightData } from '@/app/app/page';
 
 type Lang = 'en' | 'zh';
 type Bi = { en: string; zh: string };
-
-type AIInsightData = {
-  insightSummary: string;
-  estimatedLandSizeM2: number;
-  estimatedFrontage: string;
-  marketEstimate: string;
-  localCouncil: string;
-  lotPlanNumber: string;
-  zoning: string;
-  overlays: string[];
-};
 
 const MOCK_DOMAIN_DATA: {
   address: Bi;
@@ -91,10 +80,6 @@ const COPY: Record<Lang, {
   streetViewPending: string;
   tbc: string;
   estimatedTooltip: string;
-  planningContext: string;
-  zoning: string;
-  overlays: string;
-  noOverlays: string;
 }> = {
   en: {
     lotPlanLabel: 'Lot / Plan',
@@ -115,10 +100,6 @@ const COPY: Record<Lang, {
     streetViewPending: '[Street View pending API key]',
     tbc: 'TBC',
     estimatedTooltip: 'Estimated placeholder data. Confirm legal boundaries and zoning before lodgement.',
-    planningContext: 'Planning Context',
-    zoning: 'Zoning',
-    overlays: 'Overlays',
-    noOverlays: 'No overlays apply',
   },
   zh: {
     lotPlanLabel: '地块 / 规划号',
@@ -139,10 +120,6 @@ const COPY: Record<Lang, {
     streetViewPending: '[街景视图待 API 密钥配置]',
     tbc: 'TBC',
     estimatedTooltip: '估算占位数据。递交前请确认所有法律边界和分区信息。',
-    planningContext: '规划信息',
-    zoning: '分区',
-    overlays: '规划覆盖区',
-    noOverlays: '无适用覆盖区',
   },
 };
 
@@ -153,6 +130,7 @@ type Props = {
   landSizeM2?: number | null;
   lotPlan?: string | null;
   lang?: Lang;
+  aiInsight?: AIInsightData | null;
 };
 
 export default function PropertyDetailsTab({
@@ -162,6 +140,7 @@ export default function PropertyDetailsTab({
   landSizeM2,
   lotPlan,
   lang = 'en',
+  aiInsight,
 }: Props = {}) {
   const t = COPY[lang];
   const data = MOCK_DOMAIN_DATA;
@@ -169,79 +148,34 @@ export default function PropertyDetailsTab({
   const displayAddress = address?.trim() || data.address[lang];
   const hasPrimaryLotPlan = !!lotPlan?.trim();
 
-  // AI Insight State
-  const [aiInsight, setAiInsight] = useState<AIInsightData | null>(null);
-  const [isLoadingAI, setIsLoadingAI] = useState(false);
-
-  // Determine if primary data is missing
   const hasPrimaryLandSize = typeof landSizeM2 === 'number' && Number.isFinite(landSizeM2) && landSizeM2 > 0;
 
-  // Fetch AI estimates when primary data is missing
-  useEffect(() => {
-    if (!hasPrimaryLandSize && address && !aiInsight && !isLoadingAI) {
-      setIsLoadingAI(true);
-      fetch('/api/insight', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address }),
-      })
-        .then((res) => res.json())
-        .then((response) => {
-          if (response.data) {
-            setAiInsight(response.data);
-          }
-        })
-        .catch((err) => {
-          console.error('AI insight fetch failed:', err);
-        })
-        .finally(() => {
-          setIsLoadingAI(false);
-        });
-    }
-  }, [hasPrimaryLandSize, address, aiInsight, isLoadingAI]);
-
-  // Determine display values (primary data or AI fallback)
-  const effectiveLandSizeM2 = hasPrimaryLandSize ? landSizeM2 : aiInsight?.estimatedLandSizeM2 ?? null;
   const displayLandSize = hasPrimaryLandSize
     ? `${Math.round(landSizeM2!)}m²`
     : aiInsight?.estimatedLandSizeM2
     ? `${Math.round(aiInsight.estimatedLandSizeM2)}m²`
     : t.tbc;
-  const isLandSizeAI = !hasPrimaryLandSize && aiInsight?.estimatedLandSizeM2;
+  const isLandSizeAI = !hasPrimaryLandSize && !!aiInsight?.estimatedLandSizeM2;
 
   const displayFrontage = aiInsight?.estimatedFrontage || data.dimensions.frontage;
-  const isFrontageAI = !hasPrimaryLandSize && aiInsight?.estimatedFrontage;
+  const isFrontageAI = !hasPrimaryLandSize && !!aiInsight?.estimatedFrontage;
 
   const displayMarketEstimate = aiInsight?.marketEstimate || data.market.estimateRange;
-  const isMarketEstimateAI = !hasPrimaryLandSize && aiInsight?.marketEstimate;
+  const isMarketEstimateAI = !hasPrimaryLandSize && !!aiInsight?.marketEstimate;
 
   const displayCouncil = aiInsight?.localCouncil || data.context.council[lang];
-  const isCouncilAI = !hasPrimaryLandSize && aiInsight?.localCouncil;
+  const isCouncilAI = !hasPrimaryLandSize && !!aiInsight?.localCouncil;
 
   const displayLotPlan = hasPrimaryLotPlan
     ? lotPlan!.trim()
     : aiInsight?.lotPlanNumber || t.tbc;
   const isLotPlanAI = !hasPrimaryLotPlan && !!aiInsight?.lotPlanNumber;
 
-  const displayZoning = aiInsight?.zoning || t.tbc;
-  const isZoningAI = !!aiInsight?.zoning;
-
-  const displayOverlays = aiInsight?.overlays ?? [];
-  const isOverlaysAI = !!aiInsight?.overlays;
-
   const lat = typeof latProp === 'number' && Number.isFinite(latProp) ? latProp : -37.9622;
   const lon = typeof lonProp === 'number' && Number.isFinite(lonProp) ? lonProp : 145.1764;
 
   return (
     <div className="flex flex-col gap-6 text-zinc-200 animate-in fade-in duration-300">
-
-      {/* 0. SSD Feasibility */}
-      <SSDFeasibilityWidget
-        landSizeM2={effectiveLandSizeM2}
-        address={displayAddress}
-        lang={lang}
-        aiInsightSummary={aiInsight?.insightSummary}
-      />
 
       {/* 1. Header & Dwelling Composition */}
       <div className="flex flex-col gap-4 bg-white/5 border border-white/10 p-5 rounded-xl backdrop-blur-sm">
@@ -333,59 +267,7 @@ export default function PropertyDetailsTab({
         </div>
       </div>
 
-      {/* 3. Planning Context (Zoning & Overlays) */}
-      <div className="bg-white/5 border border-white/10 p-5 rounded-xl backdrop-blur-sm">
-        <h3 className="text-xs font-bold tracking-widest text-zinc-500 uppercase mb-4">
-          {t.planningContext}
-        </h3>
-        <div className="flex flex-col gap-4">
-          <div className="flex items-start gap-3">
-            <Map className="w-5 h-5 text-[#E9E778] shrink-0 mt-0.5" />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <p className="text-sm font-medium text-white">{t.zoning}</p>
-                {isZoningAI && (
-                  <span title={t.estimatedTooltip} className="inline-flex cursor-help">
-                    <AlertCircle className="w-3 h-3 text-zinc-500" aria-label={t.estimatedTooltip} />
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-zinc-400 break-words font-mono">{displayZoning}</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <Layers className="w-5 h-5 text-[#E9E778] shrink-0 mt-0.5" />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 mb-2">
-                <p className="text-sm font-medium text-white">{t.overlays}</p>
-                {isOverlaysAI && (
-                  <span title={t.estimatedTooltip} className="inline-flex cursor-help">
-                    <AlertCircle className="w-3 h-3 text-zinc-500" aria-label={t.estimatedTooltip} />
-                  </span>
-                )}
-              </div>
-              {displayOverlays.length > 0 ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {displayOverlays.map((code) => (
-                    <span
-                      key={code}
-                      className="font-mono text-[11px] px-2 py-0.5 rounded-md bg-[#E9E778]/10 border border-[#E9E778]/30 text-[#E9E778]"
-                    >
-                      {code}
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-zinc-500 italic">
-                  {isOverlaysAI ? t.noOverlays : t.tbc}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 4. Market Data */}
+      {/* 3. Market Data */}
       <div className="bg-white/5 border border-white/10 p-5 rounded-xl backdrop-blur-sm">
         <h3 className="text-xs font-bold tracking-widest text-zinc-500 uppercase mb-4">
           {t.marketInsight}
