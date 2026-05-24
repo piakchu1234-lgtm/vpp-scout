@@ -1,15 +1,10 @@
 'use client';
 import React from 'react';
-import { ShieldAlert, BookOpen, AlertCircle, FileText } from 'lucide-react';
+import { ShieldAlert, BookOpen, AlertCircle, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
 import SSDFeasibilityWidget from './SSDFeasibilityWidget';
 import type { AIInsightData } from '@/app/app/page';
 
 type Lang = 'en' | 'zh';
-
-const MOCK_PERMITS = [
-  { id: 'PLN-23-0142', status: 'Approved', description: 'Construction of 3 double-storey townhouses.', date: '12 Oct 2023' },
-  { id: 'PLN-19-0881', status: 'Lapsed', description: 'Subdivision of land into two lots.', date: '04 May 2019' },
-];
 
 const OVERLAY_CATEGORY_NAMES: Record<string, string> = {
   HO: 'Heritage Overlay',
@@ -37,8 +32,10 @@ export type PlanningOverlay = { code: string; name: string };
 const COPY: Record<Lang, {
   principalZoning: string;
   planningOverlays: string;
-  permitHistory: string;
+  hazardsTitle: string;
   noOverlays: string;
+  noHazards: string;
+  hazardsPending: string;
   tbc: string;
   estimatedTooltip: string;
   zoneDescriptionUnavailable: string;
@@ -47,8 +44,10 @@ const COPY: Record<Lang, {
   en: {
     principalZoning: 'Principal Zoning',
     planningOverlays: 'Planning Overlays',
-    permitHistory: 'Recent Permit History',
+    hazardsTitle: 'Hazards & Risks',
     noOverlays: 'No overlays affecting this site.',
+    noHazards: 'No natural hazards mapped for this parcel.',
+    hazardsPending: 'Awaiting Auditor — hazard mapping resolves with the AI insight.',
     tbc: 'TBC',
     estimatedTooltip:
       'Estimated placeholder data. Confirm legal boundaries and zoning before lodgement.',
@@ -58,8 +57,10 @@ const COPY: Record<Lang, {
   zh: {
     principalZoning: '主要分区',
     planningOverlays: '规划覆盖区',
-    permitHistory: '近期许可历史',
+    hazardsTitle: '灾害与风险',
     noOverlays: '此地块无适用覆盖区。',
+    noHazards: '此地块未映射自然灾害。',
+    hazardsPending: '正在等待审计员 — 灾害映射将在 AI 洞察解析后填充。',
     tbc: 'TBC',
     estimatedTooltip: '估算占位数据。递交前请确认所有法律边界和分区信息。',
     zoneDescriptionLive: '数据来源:Vicmap 规划方案。',
@@ -90,8 +91,11 @@ export default function PlanningConstraintsTab({
 
   const liveZoneCode = zoneCode?.trim();
   const aiZoneCode = aiInsight?.zoning?.trim();
+  const aiZoneDescription = aiInsight?.zoningDescription?.trim();
 
   // Resolution order: live Vicmap → agentic AI → TBC placeholder.
+  // tooltip carries the specific zoningDescription when AI-sourced; the
+  // generic disclaimer is only used as last resort.
   const zone = liveZoneCode
     ? {
         code: liveZoneCode,
@@ -100,29 +104,43 @@ export default function PlanningConstraintsTab({
           ? t.zoneDescriptionLive
           : t.zoneDescriptionUnavailable,
         isAI: false,
+        tooltip: '',
       }
     : aiZoneCode
     ? {
         code: aiZoneCode,
         name: aiZoneCode,
-        description: '',
+        description: aiZoneDescription || '',
         isAI: true,
+        tooltip: aiZoneDescription || t.estimatedTooltip,
       }
     : {
         code: t.tbc,
         name: t.tbc,
         description: '',
         isAI: false,
+        tooltip: '',
       };
 
+  type ResolvedOverlay = { code: string; name: string; description?: string };
   const hasLiveOverlays = !!overlays && overlays.length > 0;
-  const resolvedOverlays: PlanningOverlay[] = hasLiveOverlays
-    ? overlays!
-    : (aiInsight?.overlays ?? []).map((code) => ({
-        code,
-        name: describeOverlayCode(code),
+  const resolvedOverlays: ResolvedOverlay[] = hasLiveOverlays
+    ? overlays!.map((o) => ({ code: o.code, name: o.name }))
+    : (aiInsight?.overlays ?? []).map((o) => ({
+        code: o.code,
+        name: describeOverlayCode(o.code),
+        description: o.description?.trim() || undefined,
       }));
   const overlaysAreAI = !hasLiveOverlays && resolvedOverlays.length > 0;
+
+  // Hazards have no Vicmap fallback yet — strictly AI-sourced. Distinguish
+  // "still loading" (aiInsight === null) from "AI confirmed nothing maps".
+  const hazards = aiInsight?.hazards ?? [];
+  const hazardsState: 'pending' | 'none' | 'present' = !aiInsight
+    ? 'pending'
+    : hazards.length > 0
+    ? 'present'
+    : 'none';
 
   return (
     <div className="flex flex-col gap-6 text-zinc-200 animate-in fade-in duration-300 pb-10">
@@ -140,8 +158,8 @@ export default function PlanningConstraintsTab({
         <h3 className="text-xs font-bold tracking-widest text-zinc-500 uppercase mb-4 flex items-center gap-2">
           <BookOpen className="w-4 h-4" /> {t.principalZoning}
           {zone.isAI && (
-            <span title={t.estimatedTooltip} className="inline-flex cursor-help">
-              <AlertCircle className="w-3 h-3 text-zinc-500" aria-label={t.estimatedTooltip} />
+            <span title={zone.tooltip} className="inline-flex cursor-help">
+              <AlertCircle className="w-3 h-3 text-zinc-500" aria-label={zone.tooltip} />
             </span>
           )}
         </h3>
@@ -171,11 +189,21 @@ export default function PlanningConstraintsTab({
         {resolvedOverlays.length > 0 ? (
           <div className="flex flex-col gap-3">
             {resolvedOverlays.map((overlay, idx) => (
-              <div key={`${overlay.code}-${idx}`} className="flex items-center gap-3 p-3 bg-black/20 border border-white/5 rounded-lg">
-                <span className="px-2 py-1 bg-zinc-800 text-white text-xs font-bold rounded">
-                  {overlay.code}
-                </span>
-                <span className="text-sm text-zinc-300">{overlay.name}</span>
+              <div key={`${overlay.code}-${idx}`} className="flex flex-col gap-2 p-3 bg-black/20 border border-white/5 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <span className="px-2 py-1 bg-zinc-800 text-white text-xs font-bold rounded shrink-0">
+                    {overlay.code}
+                  </span>
+                  <span className="text-sm text-zinc-300 min-w-0 flex-1">{overlay.name}</span>
+                  {overlay.description && (
+                    <span title={overlay.description} className="inline-flex cursor-help shrink-0">
+                      <AlertCircle className="w-3.5 h-3.5 text-zinc-500" aria-label={overlay.description} />
+                    </span>
+                  )}
+                </div>
+                {overlay.description && (
+                  <p className="text-xs text-zinc-400 leading-relaxed pl-1">{overlay.description}</p>
+                )}
               </div>
             ))}
           </div>
@@ -184,28 +212,36 @@ export default function PlanningConstraintsTab({
         )}
       </div>
 
-      {/* 3. Permit History */}
+      {/* 3. Hazards & Risks (live from AI Auditor only) */}
       <div className="bg-white/5 border border-white/10 p-5 rounded-xl backdrop-blur-sm">
         <h3 className="text-xs font-bold tracking-widest text-zinc-500 uppercase mb-4 flex items-center gap-2">
-          <FileText className="w-4 h-4" /> {t.permitHistory}
+          <AlertTriangle className="w-4 h-4" /> {t.hazardsTitle}
+          {hazardsState === 'present' && (
+            <span title={t.estimatedTooltip} className="inline-flex cursor-help">
+              <AlertCircle className="w-3 h-3 text-zinc-500" aria-label={t.estimatedTooltip} />
+            </span>
+          )}
         </h3>
-        <div className="flex flex-col gap-4">
-          {MOCK_PERMITS.map((permit, idx) => (
-            <div key={idx} className="relative pl-4 border-l-2 border-white/10">
-              <div className="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full bg-[#E9E778]" />
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-bold text-white">{permit.id}</span>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold ${
-                  permit.status === 'Approved' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-800 text-zinc-400'
-                }`}>
-                  {permit.status}
-                </span>
+        {hazardsState === 'pending' ? (
+          <div className="flex items-center gap-3 p-3 bg-white/[0.02] border border-white/10 rounded-lg">
+            <Loader2 className="w-4 h-4 text-[#E9E778] animate-spin flex-none" />
+            <p className="text-xs text-zinc-400 italic">{t.hazardsPending}</p>
+          </div>
+        ) : hazardsState === 'present' ? (
+          <div className="grid grid-cols-1 divide-y divide-white/10 border border-white/10 rounded-lg overflow-hidden bg-amber-500/[0.04]">
+            {hazards.map((hazard, idx) => (
+              <div key={`${hazard}-${idx}`} className="p-3 flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                <p className="text-sm font-medium text-amber-200 leading-relaxed">{hazard}</p>
               </div>
-              <p className="text-sm text-zinc-300 mb-1">{permit.description}</p>
-              <p className="text-xs text-zinc-500">{permit.date}</p>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 p-3 bg-emerald-500/[0.04] border border-emerald-500/15 rounded-lg">
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            <p className="text-sm text-emerald-300/80">{t.noHazards}</p>
+          </div>
+        )}
       </div>
 
     </div>

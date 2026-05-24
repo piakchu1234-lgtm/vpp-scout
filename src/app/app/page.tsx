@@ -28,6 +28,8 @@ import { calculateYield, emptyYield, type YieldData } from '@/lib/yieldEngine';
 const MELBOURNE_FALLBACK = { lat: -37.8136, lon: 144.9631 };
 const VICMAP_TIMEOUT_MS = 5000;
 
+export type AIOverlay = { code: string; description: string };
+
 export type AIInsightData = {
   insightSummary: string;
   estimatedLandSizeM2: number;
@@ -36,7 +38,14 @@ export type AIInsightData = {
   localCouncil: string;
   lotPlanNumber: string;
   zoning: string;
-  overlays: string[];
+  zoningDescription: string;
+  overlays: AIOverlay[];
+  hazards: string[];
+  bedrooms: number;
+  bathrooms: number;
+  carspaces: number;
+  propertyOverview: string;
+  designFeatures: string[];
 };
 
 type Lang = 'en' | 'zh';
@@ -165,10 +174,12 @@ function AppCanvas() {
     setAiInsight(null);
   }, [address]);
 
-  // Single source of truth: fetch agentic insight at the page level when
-  // primary Vicmap parcel data is missing, then fan out to the tabs as props.
+  // Single source of truth: fetch agentic insight at the page level for
+  // every address (Vicmap parcel data covers geometry only — beds/baths/
+  // overview/hazards/etc. always come from the AI Auditor). Phase-3 plan
+  // wires this through a PostgreSQL cache to bound API spend.
   useEffect(() => {
-    if (!address || hasPrimaryLandSize) return;
+    if (!address) return;
     let cancelled = false;
     setIsLoadingAI(true);
     fetch('/api/insight', {
@@ -189,7 +200,7 @@ function AppCanvas() {
     return () => {
       cancelled = true;
     };
-  }, [hasPrimaryLandSize, address]);
+  }, [address]);
 
   const effectiveLandSizeM2 = hasPrimaryLandSize
     ? landSizeM2

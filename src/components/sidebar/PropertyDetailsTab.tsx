@@ -1,6 +1,6 @@
 'use client';
 import React from 'react';
-import { BedDouble, Bath, Car, Maximize, Ruler, Mountain, Compass, Building2, MapPin, School, AlertCircle } from 'lucide-react';
+import { BedDouble, Bath, Car, Maximize, Ruler, Mountain, Compass, Building2, MapPin, School, AlertCircle, FileText, Sparkles } from 'lucide-react';
 import type { AIInsightData } from '@/app/app/page';
 
 type Lang = 'en' | 'zh';
@@ -80,6 +80,9 @@ const COPY: Record<Lang, {
   streetViewPending: string;
   tbc: string;
   estimatedTooltip: string;
+  propertyOverview: string;
+  designFeatures: string;
+  overviewPending: string;
 }> = {
   en: {
     lotPlanLabel: 'Lot / Plan',
@@ -100,6 +103,9 @@ const COPY: Record<Lang, {
     streetViewPending: '[Street View pending API key]',
     tbc: 'TBC',
     estimatedTooltip: 'Estimated placeholder data. Confirm legal boundaries and zoning before lodgement.',
+    propertyOverview: 'Property Overview',
+    designFeatures: 'Design Features',
+    overviewPending: 'Awaiting Auditor — overview will populate once live listings resolve.',
   },
   zh: {
     lotPlanLabel: '地块 / 规划号',
@@ -120,6 +126,9 @@ const COPY: Record<Lang, {
     streetViewPending: '[街景视图待 API 密钥配置]',
     tbc: 'TBC',
     estimatedTooltip: '估算占位数据。递交前请确认所有法律边界和分区信息。',
+    propertyOverview: '房产概况',
+    designFeatures: '设计特点',
+    overviewPending: '正在等待审计员 — 房产概况将在实时房源数据解析后填充。',
   },
 };
 
@@ -157,19 +166,39 @@ export default function PropertyDetailsTab({
     : t.tbc;
   const isLandSizeAI = !hasPrimaryLandSize && !!aiInsight?.estimatedLandSizeM2;
 
-  const displayFrontage = aiInsight?.estimatedFrontage || data.dimensions.frontage;
-  const isFrontageAI = !hasPrimaryLandSize && !!aiInsight?.estimatedFrontage;
+  const displayFrontage = aiInsight?.estimatedFrontage || t.tbc;
+  const isFrontageAI = !!aiInsight?.estimatedFrontage;
 
-  const displayMarketEstimate = aiInsight?.marketEstimate || data.market.estimateRange;
-  const isMarketEstimateAI = !hasPrimaryLandSize && !!aiInsight?.marketEstimate;
+  const displayMarketEstimate = aiInsight?.marketEstimate || t.tbc;
+  const isMarketEstimateAI = !!aiInsight?.marketEstimate;
 
-  const displayCouncil = aiInsight?.localCouncil || data.context.council[lang];
-  const isCouncilAI = !hasPrimaryLandSize && !!aiInsight?.localCouncil;
+  const displayCouncil = aiInsight?.localCouncil || t.tbc;
+  const isCouncilAI = !!aiInsight?.localCouncil;
 
   const displayLotPlan = hasPrimaryLotPlan
     ? lotPlan!.trim()
     : aiInsight?.lotPlanNumber || t.tbc;
   const isLotPlanAI = !hasPrimaryLotPlan && !!aiInsight?.lotPlanNumber;
+
+  // Dwelling composition — strictly live (AI Auditor extracts from listings).
+  // No mock fallback so we never display a fabricated bedroom count.
+  const bedsValue =
+    typeof aiInsight?.bedrooms === 'number' && aiInsight.bedrooms >= 0
+      ? aiInsight.bedrooms
+      : null;
+  const bathsValue =
+    typeof aiInsight?.bathrooms === 'number' && aiInsight.bathrooms >= 0
+      ? aiInsight.bathrooms
+      : null;
+  const carsValue =
+    typeof aiInsight?.carspaces === 'number' && aiInsight.carspaces >= 0
+      ? aiInsight.carspaces
+      : null;
+  const hasDwellingAI = bedsValue !== null || bathsValue !== null || carsValue !== null;
+
+  const propertyOverview = aiInsight?.propertyOverview?.trim() || '';
+  const designFeatures = (aiInsight?.designFeatures ?? []).filter((s) => s && s.trim().length > 0);
+  const hasOverview = propertyOverview.length > 0 || designFeatures.length > 0;
 
   const lat = typeof latProp === 'number' && Number.isFinite(latProp) ? latProp : -37.9622;
   const lon = typeof lonProp === 'number' && Number.isFinite(lonProp) ? lonProp : 145.1764;
@@ -198,16 +227,21 @@ export default function PropertyDetailsTab({
         <div className="flex items-center gap-6 pt-3 border-t border-white/10">
           <div className="flex items-center gap-2">
             <BedDouble className="w-5 h-5 text-zinc-400" />
-            <span className="font-semibold text-lg">{data.beds}</span>
+            <span className="font-semibold text-lg tabular-nums">{bedsValue ?? '—'}</span>
           </div>
           <div className="flex items-center gap-2">
             <Bath className="w-5 h-5 text-zinc-400" />
-            <span className="font-semibold text-lg">{data.baths}</span>
+            <span className="font-semibold text-lg tabular-nums">{bathsValue ?? '—'}</span>
           </div>
           <div className="flex items-center gap-2">
             <Car className="w-5 h-5 text-zinc-400" />
-            <span className="font-semibold text-lg">{data.cars}</span>
+            <span className="font-semibold text-lg tabular-nums">{carsValue ?? '—'}</span>
           </div>
+          {hasDwellingAI && (
+            <span title={t.estimatedTooltip} className="ml-auto inline-flex cursor-help">
+              <AlertCircle className="w-3.5 h-3.5 text-zinc-500" aria-label={t.estimatedTooltip} />
+            </span>
+          )}
         </div>
       </div>
 
@@ -267,7 +301,44 @@ export default function PropertyDetailsTab({
         </div>
       </div>
 
-      {/* 3. Market Data */}
+      {/* 3. Property Overview & Design Features (live from AI Auditor) */}
+      <div className="bg-white/5 border border-white/10 p-5 rounded-xl backdrop-blur-sm">
+        <h3 className="text-xs font-bold tracking-widest text-zinc-500 uppercase mb-4 flex items-center gap-2">
+          <FileText className="w-4 h-4" /> {t.propertyOverview}
+          {hasOverview && (
+            <span title={t.estimatedTooltip} className="inline-flex cursor-help">
+              <AlertCircle className="w-3 h-3 text-zinc-500" aria-label={t.estimatedTooltip} />
+            </span>
+          )}
+        </h3>
+        {propertyOverview ? (
+          <p className="text-sm leading-relaxed text-zinc-300 whitespace-pre-line">
+            {propertyOverview}
+          </p>
+        ) : (
+          <p className="text-xs italic text-zinc-500">{t.overviewPending}</p>
+        )}
+        {designFeatures.length > 0 && (
+          <div className="mt-5 pt-4 border-t border-white/5">
+            <div className="flex items-center gap-2 mb-3 text-zinc-400">
+              <Sparkles className="w-4 h-4 text-[#E9E778] flex-none" />
+              <span className="text-xs uppercase tracking-wide">{t.designFeatures}</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {designFeatures.map((feature, idx) => (
+                <span
+                  key={`${feature}-${idx}`}
+                  className="text-[11px] px-2.5 py-1 rounded-md bg-[#E9E778]/[0.08] border border-[#E9E778]/25 text-[#E9E778]"
+                >
+                  {feature}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 4. Market Data */}
       <div className="bg-white/5 border border-white/10 p-5 rounded-xl backdrop-blur-sm">
         <h3 className="text-xs font-bold tracking-widest text-zinc-500 uppercase mb-4">
           {t.marketInsight}
