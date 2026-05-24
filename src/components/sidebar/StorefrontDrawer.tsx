@@ -35,11 +35,41 @@ export default function StorefrontDrawer({ isOpen, onClose, address, spi, lat, l
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type, lat, lon }),
       });
-      const data = (await res.json()) as { url?: string; error?: string };
+
+      // Read the body as text first so we can surface the actual server
+      // response if it ever returns HTML (auth redirect, edge crash) or
+      // malformed JSON. Without this, every upstream failure collapses
+      // into the same opaque "Checkout failed" toast.
+      const rawBody = await res.text();
+      let data: { url?: string; error?: string } = {};
+      try {
+        data = rawBody ? JSON.parse(rawBody) : {};
+      } catch {
+        console.error('[StorefrontDrawer] /api/checkout returned non-JSON', {
+          status: res.status,
+          body: rawBody.slice(0, 500),
+        });
+        throw new Error(`Checkout responded ${res.status} (non-JSON body)`);
+      }
+
       if (!res.ok || !data.url) {
+        console.error('[StorefrontDrawer] /api/checkout error', {
+          status: res.status,
+          data,
+        });
         throw new Error(data.error || `Checkout responded ${res.status}`);
       }
-      window.location.href = data.url;
+
+      // Normalise the redirect target so the same code path handles
+      //   (a) absolute Stripe URLs (https://checkout.stripe.com/...)
+      //   (b) absolute same-origin URLs from the Admin bypass
+      //   (c) relative URLs (e.g. "/app?payment=success...") if the
+      //       backend ever switches to returning a bare path.
+      // The URL constructor accepts an absolute URL OR resolves a path
+      // against the second-arg base, so this covers all three shapes
+      // without per-case branching.
+      const target = new URL(data.url, window.location.origin).toString();
+      window.location.href = target;
     } catch (err) {
       console.warn('[StorefrontDrawer] checkout failed', err);
       setIsProcessing(null);
