@@ -19,15 +19,18 @@
     "@turf/buffer": "^7.3.5",
     "@turf/circle": "^7.3.5",
     "axios": "^1.16.0",
+    "clsx": "^2.1.1",
     "framer-motion": "^12.38.0",
     "lucide-react": "^1.16.0",
     "mapbox-gl": "^3.23.1",
     "next": "16.2.6",
+    "next-intl": "^4.12.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-map-gl": "^8.1.1",
     "react-to-print": "^3.3.0",
-    "stripe": "^22.1.1"
+    "stripe": "^22.1.1",
+    "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
     "@opennextjs/cloudflare": "^1.19.10",
@@ -40,5 +43,8 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "wrangler": "^4.92.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   }
 }

@@ -1,10 +1,11 @@
 'use client';
 
-import React, { Suspense, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowLeft, Download, Loader2, Map as MapIcon } from 'lucide-react';
 import area from '@turf/area';
+import { useReactToPrint } from 'react-to-print';
 import PropertyDetailsTab from '@/components/sidebar/PropertyDetailsTab';
 import PlanningConstraintsTab, {
   describeOverlayCode,
@@ -14,7 +15,7 @@ import DevelopmentPotentialTab from '@/components/sidebar/DevelopmentPotentialTa
 import FeasibilityTab from '@/components/sidebar/FeasibilityTab';
 import StorefrontDrawer from '@/components/sidebar/StorefrontDrawer';
 import SuccessModal from '@/components/sidebar/SuccessModal';
-import FeasibilityReportTemplate from '@/components/pdf/FeasibilityReportTemplate';
+import ComprehensiveReport from '@/components/report/ComprehensiveReport';
 import { MapPreview } from '@/components/MapPreview';
 import {
   fetchVicParcelForPoint,
@@ -205,6 +206,33 @@ function AppCanvas() {
   const effectiveLandSizeM2 = hasPrimaryLandSize
     ? landSizeM2
     : aiInsight?.estimatedLandSizeM2 ?? null;
+
+  // Premium PDF generation — react-to-print clones the report node into an
+  // isolated iframe, so the dashboard's dark theme can't bleed through.
+  const reportRef = useRef<HTMLDivElement>(null);
+  const handlePrint = useReactToPrint({
+    contentRef: reportRef,
+    documentTitle: address
+      ? `SimplySite – ${address}`
+      : 'SimplySite Comprehensive Feasibility Report',
+  });
+
+  // Capture the print intent at mount so the existing URL-cleanup effect
+  // (which strips ?payment=success via replaceState) can't race with us.
+  const [shouldAutoPrint, setShouldAutoPrint] = useState(paymentParam === 'success');
+
+  // Hold the print until the AI Auditor settles. isLoadingAI flips false on
+  // either success or failure, so a stuck loading state can't block forever
+  // — if the Auditor fails we still print with whatever Vicmap data we have.
+  useEffect(() => {
+    if (!shouldAutoPrint) return;
+    if (isLoadingAI) return;
+    const id = window.setTimeout(() => {
+      if (reportRef.current) handlePrint();
+      setShouldAutoPrint(false);
+    }, 400);
+    return () => window.clearTimeout(id);
+  }, [shouldAutoPrint, isLoadingAI, handlePrint]);
 
   const overlays: PlanningOverlay[] | null = useMemo(() => {
     if (!planData) return null;
@@ -443,15 +471,25 @@ function AppCanvas() {
         address={address}
       />
 
-      <FeasibilityReportTemplate
-        id="pdf-report-template"
-        address={address}
-        lat={lat}
-        lon={lon}
-        yieldData={yieldData}
-        planData={planData}
-        landSizeM2={landSizeM2}
-      />
+      {/* Off-screen, aria-hidden A4 report. react-to-print clones this node
+          into a fresh iframe on demand; positioning it at left:-10000px keeps
+          it out of the dashboard layout while still letting the browser
+          compute its styles for the clone. */}
+      <div
+        aria-hidden="true"
+        className="fixed left-[-10000px] top-0 -z-50 pointer-events-none opacity-0"
+      >
+        <ComprehensiveReport
+          ref={reportRef}
+          address={address}
+          lat={lat}
+          lon={lon}
+          landSizeM2={landSizeM2}
+          lotPlan={spi}
+          planData={planData}
+          aiInsight={aiInsight}
+        />
+      </div>
     </div>
   );
 }
