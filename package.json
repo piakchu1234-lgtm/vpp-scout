@@ -23,6 +23,7 @@
     "@turf/circle": "^7.3.5",
     "axios": "^1.16.0",
     "clsx": "^2.1.1",
+    "dotenv": "^17.4.2",
     "framer-motion": "^12.38.0",
     "lucide-react": "^1.16.0",
     "mapbox-gl": "^3.23.1",

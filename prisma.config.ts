@@ -7,9 +7,9 @@ loadDotenv({ path: '.env.local' });
 
 // Prisma 7 moved datasource URLs out of schema.prisma. The CLI uses the
 // `datasource.url` below for migrations / `db push` / introspection. At
-// runtime the app uses the pg driver adapter in src/lib/prisma.ts with
-// process.env.DATABASE_URL (the Supabase pooled URL), so DIRECT_URL here
-// stays the dedicated migration channel.
+// runtime the app uses the standard Prisma Client in src/lib/prisma.ts
+// with process.env.DATABASE_URL (the Supabase pooled URL), so DIRECT_URL
+// here stays the dedicated migration channel.
 export default defineConfig({
   schema: 'prisma/schema.prisma',
   datasource: {
