@@ -5,14 +5,9 @@ import { config as loadDotenv } from 'dotenv';
 // Prisma CLI runs in its own process and only reads .env by default.
 loadDotenv({ path: '.env.local' });
 
-// Prisma 7 moved datasource URLs out of schema.prisma. The CLI uses the
-// `datasource.url` below for migrations / `db push` / introspection. At
-// runtime the app uses the standard Prisma Client in src/lib/prisma.ts
-// with process.env.DATABASE_URL (the Supabase pooled URL), so DIRECT_URL
-// here stays the dedicated migration channel.
+// Datasource URLs (DATABASE_URL pooled, DIRECT_URL non-pooled for
+// migrations) are declared in prisma/schema.prisma via env(). This file
+// just points the CLI at the schema and ensures .env.local is loaded.
 export default defineConfig({
   schema: 'prisma/schema.prisma',
-  datasource: {
-    url: process.env.DIRECT_URL ?? process.env.DATABASE_URL,
-  },
 });
