@@ -1,17 +1,16 @@
 // Prisma schema for the SimplySite property cache.
 //
-// DATABASE_URL is the Supabase pooled URL (port 6543) used by the
-// runtime PrismaClient. DIRECT_URL is the non-pooled URL (port 5432)
-// used by the Prisma CLI for `db push` / migrations.
+// Prisma 7 note: datasource URLs are not declared here. The Prisma CLI
+// reads its migration URL from prisma.config.ts; the runtime client in
+// src/lib/prisma.ts passes a `pg` driver adapter to PrismaClient using
+// process.env.DATABASE_URL (Supabase pooled, port 6543).
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
 }
 
 model PropertyCache {
