@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import Stripe from 'stripe';
 
-export const runtime = 'edge';
-
 type ProductType = 'ai-report' | 'title-search';
 
 type CheckoutBody = {
@@ -30,19 +28,7 @@ function isProductType(v: unknown): v is ProductType {
 }
 
 export async function POST(request: NextRequest) {
-  // Admin bypass check
-  const user = await currentUser();
-  const email = user?.emailAddresses[0]?.emailAddress;
-  const isAdmin = email === process.env.ADMIN_EMAIL;
-
-  const secret = process.env.STRIPE_SECRET_KEY;
-  if (!secret) {
-    return NextResponse.json(
-      { error: 'STRIPE_SECRET_KEY is not configured on the server' },
-      { status: 500 },
-    );
-  }
-
+  // 1. Parse the request body first
   let body: CheckoutBody;
   try {
     body = (await request.json()) as CheckoutBody;
@@ -57,7 +43,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // If admin, bypass Stripe and return success immediately
+  // 2. VIP ADMIN DOOR: Do this BEFORE touching Stripe
+  const user = await currentUser();
+  const email = user?.emailAddresses[0]?.emailAddress;
+  const isAdmin = email === process.env.ADMIN_EMAIL;
+
   if (isAdmin) {
     const origin = request.nextUrl.origin;
     const lat = Number.isFinite(body.lat) ? body.lat : undefined;
@@ -70,6 +60,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ url: adminSuccessUrl });
   }
 
+  // 3. REGULAR CUSTOMER DOOR: Now we check for Stripe
+  const secret = process.env.STRIPE_SECRET_KEY;
+  if (!secret) {
+    return NextResponse.json(
+      { error: 'STRIPE_SECRET_KEY is not configured on the server' },
+      { status: 500 },
+    );
+  }
+
   const product = PRODUCTS[body.type];
   const origin = request.nextUrl.origin;
   const lat = Number.isFinite(body.lat) ? body.lat : undefined;
@@ -77,9 +76,7 @@ export async function POST(request: NextRequest) {
   const coordSuffix =
     lat !== undefined && lon !== undefined ? `&lat=${lat}&lon=${lon}` : '';
 
-  const stripe = new Stripe(secret, {
-    httpClient: Stripe.createFetchHttpClient(),
-  });
+  const stripe = new Stripe(secret);
 
   try {
     const session = await stripe.checkout.sessions.create({
