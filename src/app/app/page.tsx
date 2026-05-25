@@ -284,7 +284,7 @@ function AppCanvas() {
   return (
     <div className="relative min-h-screen w-full bg-[#241F21] text-white font-sans selection:bg-[#E9E778] selection:text-[#241F21]">
       <header className="sticky top-0 z-30 flex items-center justify-between px-6 py-4 border-b border-white/10 bg-[#241F21]/90 backdrop-blur-md">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={() => router.push('/')}
             className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm text-zinc-300 hover:text-[#E9E778] hover:bg-white/5 transition-colors"
@@ -300,9 +300,10 @@ function AppCanvas() {
             </div>
             <span className="text-base font-bold tracking-tight">SimplySite</span>
           </div>
-        </div>
-        <div className="text-xs text-zinc-500 font-mono truncate max-w-[40ch]">
-          {address ?? 'No address selected'}
+          <div className="h-5 w-px bg-white/10" />
+          <div className="text-xs text-zinc-400 font-mono truncate max-w-[60ch]">
+            {address ?? 'No address selected'}
+          </div>
         </div>
       </header>
 

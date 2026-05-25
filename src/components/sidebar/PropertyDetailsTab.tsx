@@ -19,14 +19,12 @@ const MOCK_DOMAIN_DATA: {
     orientation: Bi;
   };
   market: {
-    lastSoldPrice: string;
     lastSoldDate: Bi;
     estimateRange: string;
     confidence: Bi;
   };
   context: {
     council: Bi;
-    schools: Bi;
   };
 } = {
   address: {
@@ -44,7 +42,6 @@ const MOCK_DOMAIN_DATA: {
     orientation: { en: 'North-West', zh: '西北' },
   },
   market: {
-    lastSoldPrice: '$710,000',
     lastSoldDate: { en: '11 May 2024', zh: '2024 年 5 月 11 日' },
     estimateRange: '$700,000 – $780,000',
     confidence: { en: 'High Confidence', zh: '高置信度' },
@@ -53,10 +50,6 @@ const MOCK_DOMAIN_DATA: {
     council: {
       en: 'Greater Dandenong City Council',
       zh: 'Greater Dandenong 市议会',
-    },
-    schools: {
-      en: 'Noble Park Primary (0.8 km), Keysborough Secondary (1.2 km)',
-      zh: 'Noble Park Primary 小学(0.8 公里),Keysborough Secondary 中学(1.2 公里)',
     },
   },
 };
@@ -83,6 +76,7 @@ const COPY: Record<Lang, {
   propertyOverview: string;
   designFeatures: string;
   overviewPending: string;
+  dataUnavailable: string;
 }> = {
   en: {
     lotPlanLabel: 'Lot / Plan',
@@ -106,6 +100,7 @@ const COPY: Record<Lang, {
     propertyOverview: 'Property Overview',
     designFeatures: 'Design Features',
     overviewPending: 'Awaiting Auditor — overview will populate once live listings resolve.',
+    dataUnavailable: 'Data unavailable',
   },
   zh: {
     lotPlanLabel: '地块 / 规划号',
@@ -129,6 +124,7 @@ const COPY: Record<Lang, {
     propertyOverview: '房产概况',
     designFeatures: '设计特点',
     overviewPending: '正在等待审计员 — 房产概况将在实时房源数据解析后填充。',
+    dataUnavailable: '数据不可用',
   },
 };
 
@@ -363,11 +359,11 @@ export default function PropertyDetailsTab({
         <div className="pt-4 border-t border-white/10 flex justify-between items-start gap-4">
           <div className="min-w-0">
             <p className="text-xs text-zinc-400 uppercase tracking-wide mb-1">{t.lastSold}</p>
-            <p className="font-semibold text-lg tabular-nums">{data.market.lastSoldPrice}</p>
+            <p className="font-semibold text-lg tabular-nums text-zinc-500 italic">{t.dataUnavailable}</p>
           </div>
           <div className="text-right min-w-0">
             <p className="text-xs text-zinc-400 uppercase tracking-wide mb-1">{t.contractDate}</p>
-            <p className="text-sm font-medium">{data.market.lastSoldDate[lang]}</p>
+            <p className="text-sm font-medium text-zinc-500 italic">{t.dataUnavailable}</p>
           </div>
         </div>
       </div>
@@ -396,8 +392,8 @@ export default function PropertyDetailsTab({
             <School className="w-5 h-5 text-[#E9E778] shrink-0 mt-0.5" />
             <div className="min-w-0">
               <p className="text-sm font-medium text-white">{t.nearbySchools}</p>
-              <p className="text-xs text-zinc-400 leading-relaxed break-words">
-                {data.context.schools[lang]}
+              <p className="text-xs text-zinc-500 italic leading-relaxed break-words">
+                {t.dataUnavailable}
               </p>
             </div>
           </div>

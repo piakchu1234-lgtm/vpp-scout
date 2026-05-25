@@ -155,10 +155,13 @@ function buildDemoData(
   // the same leak at the source.
   const lotSize: number | null = null;
   const rentalEstimateWeekly = 480 + Math.floor(rand() * 420);
-  const lastSoldPrice = 850_000 + Math.floor(rand() * 750_000);
-  const yearsAgo = 1 + Math.floor(rand() * 5);
-  const lastSold = new Date();
-  lastSold.setFullYear(lastSold.getFullYear() - yearsAgo);  // Demo property-type distribution: weighted toward House so the SSD path
+  // Last-sold price/date are sale-record claims about a real transaction.
+  // They must come from Domain's enrichment endpoint or stay null —
+  // a fabricated sale price could mislead buyers and is not a placeholder
+  // we're willing to ship.
+  const lastSoldPrice: number | null = null;
+  const lastSoldDate: string | null = null;
+  // Demo property-type distribution: weighted toward House so the SSD path
   // shows up as eligible for most demo searches. The categorizer downstream
   // still gates by zone code and dwelling count, so a mismatch in the demo
   // doesn't silently mask the gatekeeping logic.
@@ -207,8 +210,8 @@ function buildDemoData(
     lotSize,
     rentalEstimateWeekly,
     confidence: 'low',
-    lastSoldPrice: Math.round(lastSoldPrice / 5000) * 5000,
-    lastSoldDate: lastSold.toISOString().slice(0, 10),
+    lastSoldPrice,
+    lastSoldDate,
     yearBuilt,
     wallMaterial,
     roofMaterial,

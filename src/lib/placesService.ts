@@ -94,39 +94,12 @@ function buildDemoData(
   lon: number,
   kind: PlaceKind,
 ): Place[] {
-  // Deterministic seeded fallback so the UI stays populated when no
-  // key is configured — same approach the prior schoolApi used.
-  const seed = Math.floor((lat * 10000) + (lon * 10000));
-  let s = seed || 1;
-  const rand = () => {
-    s = Math.imul(s ^ (s >>> 15), 1 | s);
-    s ^= s + Math.imul(s ^ (s >>> 7), 61 | s);
-    return ((s ^ (s >>> 14)) >>> 0) / 4294967296;
-  };
-  const pool =
-    kind === 'school'
-      ? [
-          { name: 'Noble Park Primary School', subtype: 'primary_school' },
-          { name: 'Lyndale Secondary College', subtype: 'secondary_school' },
-          { name: 'Keysborough Secondary College', subtype: 'secondary_school' },
-          { name: 'Wallarano Primary School', subtype: 'primary_school' },
-          { name: 'Springvale Rise Primary School', subtype: 'primary_school' },
-        ]
-      : [
-          { name: 'Goodstart Early Learning', subtype: 'child_care_agency' },
-          { name: 'Little Scholars Kindergarten', subtype: 'preschool' },
-          { name: 'Guardian Childcare', subtype: 'child_care_agency' },
-          { name: 'Only About Children', subtype: 'child_care_agency' },
-        ];
-  return pool.map((p, i) => ({
-    name: p.name,
-    type: kind,
-    subtype: p.subtype,
-    distanceM: Math.round(280 + i * 240 + rand() * 180),
-    lat,
-    lon,
-    isDemoData: true,
-  })).sort((a, b) => a.distanceM - b.distanceM);
+  // Hardcoded fallbacks (e.g. "Noble Park Primary") were leaking into
+  // production reports for parcels that aren't anywhere near them. The
+  // UI now shows an empty list / "Data unavailable" when the Places key
+  // is missing or the request fails — never seeded names.
+  void lat; void lon; void kind;
+  return [];
 }
 
 export async function fetchNearbyPlaces(

@@ -1,6 +1,6 @@
 'use client';
-import React from 'react';
-import { ShieldAlert, BookOpen, AlertCircle, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { ShieldAlert, BookOpen, AlertCircle, AlertTriangle, CheckCircle2, Loader2, ChevronDown } from 'lucide-react';
 import SSDFeasibilityWidget from './SSDFeasibilityWidget';
 import type { AIInsightData } from '@/app/app/page';
 
@@ -40,6 +40,9 @@ const COPY: Record<Lang, {
   estimatedTooltip: string;
   zoneDescriptionUnavailable: string;
   zoneDescriptionLive: string;
+  legalDefinition: string;
+  legalDefinitionPending: string;
+  expandHint: string;
 }> = {
   en: {
     principalZoning: 'Principal Zoning',
@@ -53,6 +56,10 @@ const COPY: Record<Lang, {
       'Estimated placeholder data. Confirm legal boundaries and zoning before lodgement.',
     zoneDescriptionLive: 'Live data sourced from Vicmap planning scheme.',
     zoneDescriptionUnavailable: 'Zone description unavailable from Vicmap for this parcel.',
+    legalDefinition: 'Legal definition',
+    legalDefinitionPending:
+      'Legal definition pending — VPP clause text will be injected here once the planning-scheme reference dataset is wired in.',
+    expandHint: 'Click for legal definition',
   },
   zh: {
     principalZoning: '主要分区',
@@ -65,6 +72,10 @@ const COPY: Record<Lang, {
     estimatedTooltip: '估算占位数据。递交前请确认所有法律边界和分区信息。',
     zoneDescriptionLive: '数据来源:Vicmap 规划方案。',
     zoneDescriptionUnavailable: '此地块的分区描述在 Vicmap 中不可用。',
+    legalDefinition: '法律定义',
+    legalDefinitionPending:
+      '法律定义待补充 — 接入规划方案参考数据后,此处将注入 VPP 条款原文。',
+    expandHint: '点击查看法律定义',
   },
 };
 
@@ -88,6 +99,11 @@ export default function PlanningConstraintsTab({
   lang = 'en',
 }: Props = {}) {
   const t = COPY[lang];
+
+  const [zoneExpanded, setZoneExpanded] = useState(false);
+  const [expandedOverlays, setExpandedOverlays] = useState<Record<number, boolean>>({});
+  const toggleOverlay = (idx: number) =>
+    setExpandedOverlays((prev) => ({ ...prev, [idx]: !prev[idx] }));
 
   const liveZoneCode = zoneCode?.trim();
   const aiZoneCode = aiInsight?.zoning?.trim();
@@ -154,26 +170,53 @@ export default function PlanningConstraintsTab({
       />
 
       {/* 1. Zoning Information */}
-      <div className="bg-white/5 border border-white/10 p-5 rounded-xl backdrop-blur-sm">
-        <h3 className="text-xs font-bold tracking-widest text-zinc-500 uppercase mb-4 flex items-center gap-2">
-          <BookOpen className="w-4 h-4" /> {t.principalZoning}
-          {zone.isAI && (
-            <span title={zone.tooltip} className="inline-flex cursor-help">
-              <AlertCircle className="w-3 h-3 text-zinc-500" aria-label={zone.tooltip} />
-            </span>
-          )}
-        </h3>
-        <div className="flex items-start gap-4">
-          <div className="px-3 py-1.5 bg-[#E9E778] text-[#241F21] rounded-md font-bold text-lg uppercase tracking-wider shrink-0">
-            {zone.code}
-          </div>
-          <div className="min-w-0">
-            <p className="font-semibold text-white mb-1 break-words">{zone.name}</p>
-            {zone.description && (
-              <p className="text-xs text-zinc-400 leading-relaxed">{zone.description}</p>
+      <div className="bg-white/5 border border-white/10 rounded-xl backdrop-blur-sm overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setZoneExpanded((v) => !v)}
+          aria-expanded={zoneExpanded}
+          className="w-full text-left p-5 hover:bg-white/[0.02] transition-colors"
+        >
+          <h3 className="text-xs font-bold tracking-widest text-zinc-500 uppercase mb-4 flex items-center gap-2">
+            <BookOpen className="w-4 h-4" /> {t.principalZoning}
+            {zone.isAI && (
+              <span title={zone.tooltip} className="inline-flex cursor-help">
+                <AlertCircle className="w-3 h-3 text-zinc-500" aria-label={zone.tooltip} />
+              </span>
             )}
+            <ChevronDown
+              className={`w-4 h-4 ml-auto text-zinc-500 transition-transform ${
+                zoneExpanded ? 'rotate-180' : ''
+              }`}
+            />
+          </h3>
+          <div className="flex items-start gap-4">
+            <div className="px-3 py-1.5 bg-[#E9E778] text-[#241F21] rounded-md font-bold text-lg uppercase tracking-wider shrink-0">
+              {zone.code}
+            </div>
+            <div className="min-w-0">
+              <p className="font-semibold text-white mb-1 break-words">{zone.name}</p>
+              {zone.description && (
+                <p className="text-xs text-zinc-400 leading-relaxed">{zone.description}</p>
+              )}
+              {!zoneExpanded && (
+                <p className="text-[10px] uppercase tracking-widest text-zinc-600 mt-2">
+                  {t.expandHint}
+                </p>
+              )}
+            </div>
           </div>
-        </div>
+        </button>
+        {zoneExpanded && (
+          <div className="px-5 pb-5 pt-1 border-t border-white/5">
+            <p className="text-[10px] font-bold tracking-widest text-[#E9E778] uppercase mb-2">
+              {t.legalDefinition}
+            </p>
+            <p className="text-xs text-zinc-400 leading-relaxed italic">
+              {t.legalDefinitionPending}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* 2. Overlays */}
@@ -188,24 +231,47 @@ export default function PlanningConstraintsTab({
         </h3>
         {resolvedOverlays.length > 0 ? (
           <div className="flex flex-col gap-3">
-            {resolvedOverlays.map((overlay, idx) => (
-              <div key={`${overlay.code}-${idx}`} className="flex flex-col gap-2 p-3 bg-black/20 border border-white/5 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <span className="px-2 py-1 bg-zinc-800 text-white text-xs font-bold rounded shrink-0">
-                    {overlay.code}
-                  </span>
-                  <span className="text-sm text-zinc-300 min-w-0 flex-1">{overlay.name}</span>
-                  {overlay.description && (
-                    <span title={overlay.description} className="inline-flex cursor-help shrink-0">
-                      <AlertCircle className="w-3.5 h-3.5 text-zinc-500" aria-label={overlay.description} />
+            {resolvedOverlays.map((overlay, idx) => {
+              const isOpen = !!expandedOverlays[idx];
+              return (
+                <div
+                  key={`${overlay.code}-${idx}`}
+                  className="flex flex-col bg-black/20 border border-white/5 rounded-lg overflow-hidden"
+                >
+                  <button
+                    type="button"
+                    onClick={() => toggleOverlay(idx)}
+                    aria-expanded={isOpen}
+                    className="flex items-center gap-3 p-3 text-left hover:bg-white/[0.03] transition-colors"
+                  >
+                    <span className="px-2 py-1 bg-zinc-800 text-white text-xs font-bold rounded shrink-0">
+                      {overlay.code}
                     </span>
+                    <span className="text-sm text-zinc-300 min-w-0 flex-1">{overlay.name}</span>
+                    <ChevronDown
+                      className={`w-4 h-4 text-zinc-500 transition-transform shrink-0 ${
+                        isOpen ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+                  {isOpen && (
+                    <div className="px-3 pb-3 pt-1 border-t border-white/5">
+                      {overlay.description && (
+                        <p className="text-xs text-zinc-400 leading-relaxed mb-2">
+                          {overlay.description}
+                        </p>
+                      )}
+                      <p className="text-[10px] font-bold tracking-widest text-[#E9E778] uppercase mb-1">
+                        {t.legalDefinition}
+                      </p>
+                      <p className="text-xs text-zinc-400 leading-relaxed italic">
+                        {t.legalDefinitionPending}
+                      </p>
+                    </div>
                   )}
                 </div>
-                {overlay.description && (
-                  <p className="text-xs text-zinc-400 leading-relaxed pl-1">{overlay.description}</p>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <p className="text-sm text-zinc-400 italic">{t.noOverlays}</p>
