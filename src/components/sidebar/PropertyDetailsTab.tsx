@@ -137,6 +137,7 @@ type Props = {
   lotPlan?: string | null;
   lang?: Lang;
   aiInsight?: AIInsightData | null;
+  domainData: DomainPropertyData | null;
 };
 
 export default function PropertyDetailsTab({
