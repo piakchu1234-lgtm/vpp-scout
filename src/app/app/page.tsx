@@ -48,6 +48,8 @@ export type AIInsightData = {
   carspaces: number;
   propertyOverview: string;
   designFeatures: string[];
+  estimatedLastSoldPrice?: string;
+  estimatedContractDate?: string;
 };
 
 type Lang = 'en' | 'zh';

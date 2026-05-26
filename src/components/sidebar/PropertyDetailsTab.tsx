@@ -78,6 +78,7 @@ const COPY: Record<Lang, {
   designFeatures: string;
   overviewPending: string;
   dataUnavailable: string;
+  aiDisclaimer: string;
 }> = {
   en: {
     lotPlanLabel: 'Lot / Plan',
@@ -102,6 +103,7 @@ const COPY: Record<Lang, {
     designFeatures: 'Design Features',
     overviewPending: 'Awaiting Auditor — overview will populate once live listings resolve.',
     dataUnavailable: 'Data unavailable',
+    aiDisclaimer: 'Data aggregated via AI analysis.',
   },
   zh: {
     lotPlanLabel: '地块 / 规划号',
@@ -126,6 +128,7 @@ const COPY: Record<Lang, {
     designFeatures: '设计特点',
     overviewPending: '正在等待审计员 — 房产概况将在实时房源数据解析后填充。',
     dataUnavailable: '数据不可用',
+    aiDisclaimer: '数据通过 AI 分析聚合。',
   },
 };
 
@@ -137,7 +140,7 @@ type Props = {
   lotPlan?: string | null;
   lang?: Lang;
   aiInsight?: AIInsightData | null;
-  domainData: DomainPropertyData | null;
+  domainData?: DomainPropertyData | null;
 };
 
 export default function PropertyDetailsTab({
@@ -361,13 +364,29 @@ export default function PropertyDetailsTab({
         <div className="pt-4 border-t border-white/10 flex justify-between items-start gap-4">
           <div className="min-w-0">
             <p className="text-xs text-zinc-400 uppercase tracking-wide mb-1">{t.lastSold}</p>
-            <p className="font-semibold text-lg tabular-nums text-zinc-500 italic">{t.dataUnavailable}</p>
+            <p
+              className={`font-semibold text-lg tabular-nums ${
+                aiInsight?.estimatedLastSoldPrice ? 'text-white' : 'text-zinc-500 italic'
+              }`}
+            >
+              {aiInsight?.estimatedLastSoldPrice || t.dataUnavailable}
+            </p>
           </div>
           <div className="text-right min-w-0">
             <p className="text-xs text-zinc-400 uppercase tracking-wide mb-1">{t.contractDate}</p>
-            <p className="text-sm font-medium text-zinc-500 italic">{t.dataUnavailable}</p>
+            <p
+              className={`text-sm font-medium ${
+                aiInsight?.estimatedContractDate ? 'text-white' : 'text-zinc-500 italic'
+              }`}
+            >
+              {aiInsight?.estimatedContractDate || t.dataUnavailable}
+            </p>
           </div>
         </div>
+        <p className="mt-4 pt-3 border-t border-white/5 text-[10px] text-zinc-500 italic flex items-center gap-1.5">
+          <Sparkles className="w-3 h-3 text-[#E9E778]/70 flex-none" />
+          {t.aiDisclaimer}
+        </p>
       </div>
 
       {/* 5. Local Context */}
