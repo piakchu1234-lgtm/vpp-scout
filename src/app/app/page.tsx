@@ -25,7 +25,6 @@ import {
 } from '@/lib/vicPlanApi';
 import { reverseGeocodeNearest } from '@/lib/geocoding';
 import { calculateYield, emptyYield, type YieldData } from '@/lib/yieldEngine';
-import { fetchDomainPropertyData, type DomainPropertyData } from '@/lib/domainApi';
 
 const MELBOURNE_FALLBACK = { lat: -37.8136, lon: 144.9631 };
 const VICMAP_TIMEOUT_MS = 5000;
@@ -95,7 +94,6 @@ function AppCanvas() {
   const [isNavigating, setIsNavigating] = useState(false);
   const [aiInsight, setAiInsight] = useState<AIInsightData | null>(null);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
-  const [domainData, setDomainData] = useState<DomainPropertyData | null>(null);
 
   const paymentParam = params.get('payment');
   const typeParam = params.get('type');
@@ -177,29 +175,7 @@ function AppCanvas() {
   // by the previous lot's agentic estimates.
   useEffect(() => {
     setAiInsight(null);
-    setDomainData(null);
   }, [address]);
-
-  // Live Domain enrichment fetch — sale record (lastSoldPrice / lastSoldDate),
-  // rental estimate, dwelling attributes. Falls back to demo seed (with null
-  // sale fields) when NEXT_PUBLIC_DOMAIN_API_KEY is missing.
-  useEffect(() => {
-    if (!address || !hasCoords) return;
-    let cancelled = false;
-    fetchDomainPropertyData(address, lat, lon)
-      .then((data) => {
-        if (!cancelled) setDomainData(data);
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          console.warn('[AppCanvas] Domain enrichment failed', err);
-          setDomainData(null);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [address, hasCoords, lat, lon]);
 
   // Single source of truth: fetch agentic insight at the page level for
   // every address (Vicmap parcel data covers geometry only — beds/baths/
@@ -447,7 +423,6 @@ function AppCanvas() {
                     lotPlan={spi}
                     lang={language}
                     aiInsight={aiInsight}
-                    domainData={domainData}
                   />
                 )}
                 {activeTab === 'planning' && (

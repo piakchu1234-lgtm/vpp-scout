@@ -67,6 +67,7 @@ You MUST use Google Search to look up, in priority order:
 - realestate.com.au, domain.com.au — current/historical listing for **exact** bedroom, bathroom, and car-space counts; property description; design features (e.g. "open-plan living", "north-facing rear", "solar")
 - Vicmap, LANDATA, council records — Lot/Plan Number (e.g. "Lot 2 PS143510"), land size (m²), frontage
 - realestate.com.au, domain.com.au, pricefinder — recent sale price OR current market estimate range
+- realestate.com.au "Sold" history, domain.com.au sold listings, pricefinder, CoreLogic — the **most recent sale price** ("last sold price", formatted as a string e.g. "$680,000") AND the **contract date** of that sale ("contract date", formatted as "DD MMM YYYY" e.g. "11 May 2024"). These two fields are MANDATORY — search aggressively across multiple sources before falling back.
 - planning.vic.gov.au / VicPlan / council online planning maps — Planning Zone code + full title and a 1-sentence plain-English description of what the zone permits
 - Same sources — Planning Overlays applying to the parcel; for each overlay write a 1-sentence description of what it controls (e.g. "Restricts development to protect heritage character")
 - VicPlan hazard layers, council bushfire/flood mapping — natural hazards affecting the parcel (e.g. "Bushfire Prone Area (BPA)", "Flood Risk — Melbourne Water referral required")
@@ -90,11 +91,14 @@ After searching, return ONLY a valid JSON object matching this exact schema (no 
   "bathrooms": 1,
   "carspaces": 2,
   "propertyOverview": "A single-storey weatherboard dwelling on a regular rectangular lot with rear lane access. Modest renovation in 2018 added a north-facing kitchen and open-plan living area. Established garden with mature trees along the eastern boundary.",
-  "designFeatures": ["Open-plan living", "North-facing rear", "Established mature trees", "Rear lane access", "Solar hot water"]
+  "designFeatures": ["Open-plan living", "North-facing rear", "Established mature trees", "Rear lane access", "Solar hot water"],
+  "estimatedLastSoldPrice": "$680,000",
+  "estimatedContractDate": "11 May 2024"
 }
 
 Rules:
 - bedrooms / bathrooms / carspaces must come from a verifiable live or recent listing — extract the **exact** integer counts. If no listing is findable, return 0 for each and call this out in insightSummary.
+- estimatedLastSoldPrice: string formatted with leading "$" and thousands separators (e.g. "$680,000"). estimatedContractDate: string formatted "DD MMM YYYY" (e.g. "11 May 2024"). Both must be sourced from a verifiable sale record (realestate.com.au "Sold", domain.com.au sold listings, pricefinder, CoreLogic). If no sale record can be located after exhaustive search, return empty string "" for the missing field(s) and explicitly note the gap in insightSummary — DO NOT fabricate prices or dates.
 - propertyOverview: 2–3 sentences max, professional and concise; no marketing language.
 - zoningDescription / overlay.description: 1 sentence each, plain English, professional planner's voice.
 - hazards: only list hazards that are actually present per official mapping. Empty array if none.

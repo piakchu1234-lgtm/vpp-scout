@@ -2,7 +2,6 @@
 import React from 'react';
 import { BedDouble, Bath, Car, Maximize, Ruler, Mountain, Compass, Building2, MapPin, School, AlertCircle, FileText, Sparkles } from 'lucide-react';
 import type { AIInsightData } from '@/app/app/page';
-import type { DomainPropertyData } from '@/lib/domainApi';
 
 type Lang = 'en' | 'zh';
 type Bi = { en: string; zh: string };
@@ -140,7 +139,6 @@ type Props = {
   lotPlan?: string | null;
   lang?: Lang;
   aiInsight?: AIInsightData | null;
-  domainData?: DomainPropertyData | null;
 };
 
 export default function PropertyDetailsTab({
