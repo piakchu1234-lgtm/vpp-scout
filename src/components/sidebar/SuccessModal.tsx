@@ -9,12 +9,28 @@ interface SuccessModalProps {
   type: ProductType | null;
   onClose: () => void;
   address?: string | null;
+  /**
+   * Trigger the comprehensive PDF print. Wired by the parent to the
+   * `useReactToPrint` handler that clones the off-screen
+   * <ComprehensiveReport> ref into an isolated iframe — calling
+   * `window.print()` directly here would hit a stale @media print rule
+   * targeting an ID that no longer renders, producing a blank A4.
+   */
+  onDownload?: () => void;
 }
 
-export default function SuccessModal({ isOpen, type, onClose }: SuccessModalProps) {
+export default function SuccessModal({ isOpen, type, onClose, onDownload }: SuccessModalProps) {
   if (!isOpen) return null;
 
   function handleDownload() {
+    if (onDownload) {
+      onDownload();
+      return;
+    }
+    // Last-resort fallback: parent forgot to wire onDownload. Bare
+    // window.print() will likely yield a blank page given the current
+    // global print stylesheet, but at least surfaces *something* to the
+    // user instead of a silent no-op.
     window.print();
   }
 

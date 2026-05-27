@@ -475,6 +475,7 @@ function AppCanvas() {
         type={successType}
         onClose={() => setIsSuccessModalOpen(false)}
         address={address}
+        onDownload={handlePrint}
       />
 
       {/* Off-screen, aria-hidden A4 report. react-to-print clones this node
