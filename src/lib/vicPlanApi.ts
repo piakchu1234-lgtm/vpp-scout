@@ -181,6 +181,8 @@ export async function fetchVicParcelForPoint(
     inSR: 4326,
     outSR: 4326,
     spatialRel: 'esriSpatialRelIntersects',
+    distance: 20,
+    units: 'esriSRUnit_Meter',
     returnGeometry: true,
     outFields: 'SPI',
     f: 'json',
