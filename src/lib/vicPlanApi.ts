@@ -148,7 +148,7 @@ type ArcgisPolygonResponse = {
  * the parcel point query for downstream report consumers.
  */
 type ArcgisAttributedParcelFeature = {
-  attributes?: { SPI?: string | null };
+  attributes?: { parcel_spi?: string | null };
   geometry?: { rings?: number[][][] };
 };
 
@@ -184,7 +184,7 @@ export async function fetchVicParcelForPoint(
     distance: 20,
     units: 'esriSRUnit_Meter',
     returnGeometry: true,
-    outFields: 'SPI',
+    outFields: 'parcel_spi',
     f: 'json',
   };
 
@@ -201,7 +201,7 @@ export async function fetchVicParcelForPoint(
   const rings = feature?.geometry?.rings;
   if (!rings || rings.length === 0) return null;
 
-  const rawSpi = feature?.attributes?.SPI;
+  const rawSpi = feature?.attributes?.parcel_spi;
   const spi =
     typeof rawSpi === 'string' && rawSpi.trim().length > 0 ? rawSpi.trim() : null;
 
@@ -383,9 +383,9 @@ export type ParcelFeature = {
 
 type ArcgisAttributedPolygonFeature = {
   attributes?: {
-    LOT_NUMBER?: string | number | null;
-    PLAN_NUMBER?: string | null;
-    PARCEL_PFI?: string | null;
+    parcel_lot_number?: string | number | null;
+    parcel_plan_number?: string | null;
+    parcel_pfi?: string | null;
   };
   geometry?: { rings?: number[][][] };
 };
@@ -418,7 +418,7 @@ export async function fetchVicParcelsForBbox(
         outSR: 4326,
         spatialRel: 'esriSpatialRelIntersects',
         returnGeometry: true,
-        outFields: 'LOT_NUMBER,PLAN_NUMBER,PARCEL_PFI',
+        outFields: 'parcel_lot_number,parcel_plan_number,parcel_pfi',
         resultRecordCount: 1500,
         f: 'json',
       },
@@ -432,7 +432,7 @@ export async function fetchVicParcelsForBbox(
       const rings = f.geometry?.rings;
       if (!rings || rings.length === 0) continue;
       const a = f.attributes ?? {};
-      const lotRaw = a.LOT_NUMBER;
+      const lotRaw = a.parcel_lot_number;
       const lot =
         lotRaw === null || lotRaw === undefined || lotRaw === ''
           ? null
@@ -441,8 +441,8 @@ export async function fetchVicParcelsForBbox(
         type: 'Feature',
         properties: {
           LOT_NUMBER: lot,
-          PLAN_NUMBER: a.PLAN_NUMBER ?? null,
-          PARCEL_PFI: a.PARCEL_PFI ?? null,
+          PLAN_NUMBER: a.parcel_plan_number ?? null,
+          PARCEL_PFI: a.parcel_pfi ?? null,
         },
         geometry: { type: 'Polygon', coordinates: rings },
       });
