@@ -31,6 +31,8 @@ const VICMAP_TIMEOUT_MS = 5000;
 
 export type AIOverlay = { code: string; description: string };
 
+export type AINearbySchool = { name: string; distance: string };
+
 export type AIInsightData = {
   insightSummary: string;
   estimatedLandSizeM2: number;
@@ -47,6 +49,7 @@ export type AIInsightData = {
   carspaces: number;
   propertyOverview: string;
   designFeatures: string[];
+  nearbySchools: AINearbySchool[];
   estimatedLastSoldPrice?: string;
   estimatedContractDate?: string;
 };

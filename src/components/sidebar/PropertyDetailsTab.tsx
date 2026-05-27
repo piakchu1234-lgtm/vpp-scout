@@ -199,6 +199,10 @@ export default function PropertyDetailsTab({
   const designFeatures = (aiInsight?.designFeatures ?? []).filter((s) => s && s.trim().length > 0);
   const hasOverview = propertyOverview.length > 0 || designFeatures.length > 0;
 
+  const nearbySchools = (aiInsight?.nearbySchools ?? []).filter(
+    (s) => s && typeof s.name === 'string' && s.name.trim().length > 0,
+  );
+
   const lat = typeof latProp === 'number' && Number.isFinite(latProp) ? latProp : -37.9622;
   const lon = typeof lonProp === 'number' && Number.isFinite(lonProp) ? lonProp : 145.1764;
 
@@ -409,11 +413,36 @@ export default function PropertyDetailsTab({
           </div>
           <div className="flex items-start gap-3">
             <School className="w-5 h-5 text-[#E9E778] shrink-0 mt-0.5" />
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-white">{t.nearbySchools}</p>
-              <p className="text-xs text-zinc-500 italic leading-relaxed break-words">
-                {t.dataUnavailable}
-              </p>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-sm font-medium text-white">{t.nearbySchools}</p>
+                {nearbySchools.length > 0 && (
+                  <span title={t.estimatedTooltip} className="inline-flex cursor-help">
+                    <AlertCircle className="w-3 h-3 text-zinc-500" aria-label={t.estimatedTooltip} />
+                  </span>
+                )}
+              </div>
+              {nearbySchools.length > 0 ? (
+                <ul className="flex flex-col gap-1">
+                  {nearbySchools.map((school, idx) => (
+                    <li
+                      key={`${school.name}-${idx}`}
+                      className="flex items-baseline justify-between gap-3 text-xs"
+                    >
+                      <span className="text-zinc-300 break-words">{school.name}</span>
+                      {school.distance && (
+                        <span className="text-zinc-500 tabular-nums shrink-0">
+                          {school.distance}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-zinc-500 italic leading-relaxed break-words">
+                  {t.dataUnavailable}
+                </p>
+              )}
             </div>
           </div>
         </div>
