@@ -209,6 +209,15 @@ type NominatimItem = {
   lat: string;
   lon: string;
   display_name: string;
+  address?: {
+    house_number?: string;
+    road?: string;
+    suburb?: string;
+    city?: string;
+    town?: string;
+    state?: string;
+    postcode?: string;
+  };
 };
 
 async function queryNominatim(
@@ -222,7 +231,7 @@ async function queryNominatim(
       format: 'json',
       countrycodes: 'au',
       limit,
-      addressdetails: 0,
+      addressdetails: 1, // Enable address component extraction
       // Fence to Victoria so the fallback does not surface NSW / SA noise
       // when the user meant a Victorian address that Vicmap failed to serve.
       viewbox: '140.96,-39.16,150.0,-33.98',
@@ -242,6 +251,28 @@ function nominatimItemToResult(i: NominatimItem): GeocodeResult | null {
   const lat = parseFloat(i.lat);
   const lon = parseFloat(i.lon);
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+
+  // Construct full address from components to ensure house number is included
+  if (i.address) {
+    const houseNumber = i.address.house_number || '';
+    const road = i.address.road || '';
+    const suburb = i.address.suburb || i.address.city || i.address.town || '';
+    const postcode = i.address.postcode || '';
+
+    // Build full address: "60 Chandler Road, Noble Park 3174"
+    const parts = [
+      houseNumber && road ? `${houseNumber} ${road}` : road || houseNumber,
+      suburb,
+      postcode,
+    ].filter((s) => s.length > 0);
+
+    if (parts.length > 0) {
+      const fullAddress = parts.join(', ');
+      return { lat, lon, displayName: fullAddress };
+    }
+  }
+
+  // Fallback to display_name if address components are missing
   return { lat, lon, displayName: i.display_name };
 }
 
@@ -443,8 +474,17 @@ export async function reverseGeocodeNearest(
       lat?: string;
       lon?: string;
       display_name?: string;
+      address?: {
+        house_number?: string;
+        road?: string;
+        suburb?: string;
+        city?: string;
+        town?: string;
+        state?: string;
+        postcode?: string;
+      };
     }>('https://nominatim.openstreetmap.org/reverse', {
-      params: { lat, lon, format: 'json' },
+      params: { lat, lon, format: 'json', addressdetails: 1 },
       headers: { Accept: 'application/json', 'Accept-Language': 'en' },
       timeout: NOMINATIM_TIMEOUT_MS,
     });
@@ -456,8 +496,28 @@ export async function reverseGeocodeNearest(
       const rLat = parseFloat(data.lat);
       const rLon = parseFloat(data.lon);
       if (Number.isFinite(rLat) && Number.isFinite(rLon)) {
+        // Construct full address from components to ensure house number is included
+        let displayName = data.display_name;
+        if (data.address) {
+          const houseNumber = data.address.house_number || '';
+          const road = data.address.road || '';
+          const suburb = data.address.suburb || data.address.city || data.address.town || '';
+          const postcode = data.address.postcode || '';
+
+          // Build full address: "60 Chandler Road, Noble Park 3174"
+          const parts = [
+            houseNumber && road ? `${houseNumber} ${road}` : road || houseNumber,
+            suburb,
+            postcode,
+          ].filter((s) => s.length > 0);
+
+          if (parts.length > 0) {
+            displayName = parts.join(', ');
+          }
+        }
+
         return {
-          result: { lat: rLat, lon: rLon, displayName: data.display_name },
+          result: { lat: rLat, lon: rLon, displayName },
           source: 'nominatim',
         };
       }
