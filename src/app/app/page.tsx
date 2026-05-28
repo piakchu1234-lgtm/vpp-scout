@@ -5,7 +5,6 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowLeft, Download, Loader2, Map as MapIcon } from 'lucide-react';
 import area from '@turf/area';
-import { useReactToPrint } from 'react-to-print';
 import PropertyDetailsTab from '@/components/sidebar/PropertyDetailsTab';
 import PlanningConstraintsTab, {
   describeOverlayCode,
@@ -106,6 +105,7 @@ function AppCanvas() {
   // alone is insufficient because it initialises false, opening a race
   // window on first render where the timer could fire with a null insight.
   const [hasAttemptedAI, setHasAttemptedAI] = useState(false);
+  const [isPrintingDocument, setIsPrintingDocument] = useState(false);
 
   const paymentParam = params.get('payment');
   const typeParam = params.get('type');
@@ -240,72 +240,17 @@ function AppCanvas() {
     ? landSizeM2
     : aiInsight?.estimatedLandSizeM2 ?? null;
 
-  // Premium PDF generation — react-to-print clones the report node into an
-  // isolated iframe, so the dashboard's dark theme can't bleed through.
+  // Native window overlay print handler — replaces fragile iframe cloning.
+  // Temporarily overlays the report on top of the dashboard, triggers the
+  // browser's native print dialog, then restores the dashboard view.
   const reportRef = useRef<HTMLDivElement>(null);
-
-  // Fallback print handler for environments where iframe instantiation is
-  // blocked by strict CSP or browser security policies. Opens a dedicated
-  // print window with the cloned report content.
-  const handlePrintFallback = () => {
-    if (!reportRef.current) {
-      console.error('[Print] Report ref not available');
-      return;
-    }
-
-    const printWindow = window.open('', '_blank', 'width=800,height=600');
-    if (!printWindow) {
-      console.error('[Print] Failed to open print window');
-      return;
-    }
-
-    const title = address
-      ? `SimplySite - ${address}`
-      : 'SimplySite Comprehensive Feasibility Report';
-
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <title>${title}</title>
-          <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { font-family: system-ui, -apple-system, sans-serif; }
-            @media print {
-              @page { margin: 0; size: A4 portrait; }
-              body { margin: 0; }
-            }
-          </style>
-        </head>
-        <body>
-          ${reportRef.current.innerHTML}
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-
-    // Wait for content to render before triggering print
+  const handlePrint = () => {
+    setIsPrintingDocument(true);
     setTimeout(() => {
-      printWindow.focus();
-      printWindow.print();
-      printWindow.close();
-    }, 250);
+      window.print();
+      setIsPrintingDocument(false);
+    }, 300); // 300ms layout stabilization delay
   };
-
-  const handlePrint = useReactToPrint({
-    contentRef: reportRef,
-    documentTitle: address
-      ? `SimplySite - ${address}`
-      : 'SimplySite Comprehensive Feasibility Report',
-    onBeforePrint: () => new Promise((resolve) => setTimeout(resolve, 150)),
-    onPrintError: (errorLocation, error) => {
-      console.error(`[react-to-print] ${errorLocation} failed:`, error);
-      console.warn('[Print] Falling back to window-based print strategy');
-      // Invoke fallback if iframe instantiation fails
-      handlePrintFallback();
-    },
-  });
 
   // Capture the print intent at mount so the existing URL-cleanup effect
   // (which strips ?payment=success via replaceState) can't race with us.
@@ -322,11 +267,11 @@ function AppCanvas() {
     if (!hasAttemptedAI) return;
     if (isLoadingAI) return;
     const id = window.setTimeout(() => {
-      if (reportRef.current) handlePrint();
+      handlePrint();
       setShouldAutoPrint(false);
     }, 400);
     return () => window.clearTimeout(id);
-  }, [shouldAutoPrint, hasAttemptedAI, isLoadingAI, handlePrint]);
+  }, [shouldAutoPrint, hasAttemptedAI, isLoadingAI]);
 
   const overlays: PlanningOverlay[] | null = useMemo(() => {
     if (!planData) return null;
@@ -568,22 +513,16 @@ function AppCanvas() {
         onDownload={handlePrint}
       />
 
-      {/* Off-screen, aria-hidden A4 report. react-to-print clones this node
-          into a fresh iframe on demand; positioning it at left:-10000px keeps
-          it out of the dashboard layout while still letting the browser
-          compute its styles for the clone. The container must remain firmly
-          anchored in the DOM throughout the print lifecycle — React 19's
-          concurrent rendering can't unmount this ref context mid-execution. */}
+      {/* Native window overlay print container. When isPrintingDocument is
+          active, this overlays the entire viewport with the report on a white
+          background. The global print stylesheet hides the dashboard and
+          ensures only this container is visible during print execution. */}
       <div
-        aria-hidden="true"
-        className="fixed left-[-10000px] top-0 -z-50 pointer-events-none opacity-0"
-        style={{
-          width: '210mm',
-          minHeight: '297mm',
-          overflow: 'visible',
-          isolation: 'isolate',
-          contain: 'layout style paint'
-        }}
+        className={
+          isPrintingDocument
+            ? 'fixed inset-0 z-[99999] bg-white overflow-y-auto block p-8'
+            : 'hidden'
+        }
       >
         <ComprehensiveReport
           ref={reportRef}

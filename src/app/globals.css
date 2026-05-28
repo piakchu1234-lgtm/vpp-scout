@@ -55,3 +55,22 @@ input[type="number"] {
   0%   { transform: translateX(-100%); }
   100% { transform: translateX(400%); }
 }
+
+/* Native window overlay print isolation — hide the dashboard during print
+   execution and ensure only the report container is visible. */
+@media print {
+  /* Hide the entire main dashboard app interface completely */
+  body > :not(.fixed.inset-0.z-\[99999\]) {
+    display: none !important;
+  }
+  /* Ensure the report container takes up pristine full-width layout */
+  .fixed.inset-0.z-\[99999\] {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+}
