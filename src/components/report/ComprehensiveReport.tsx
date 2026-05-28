@@ -37,6 +37,12 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
     { address, lat, lon, landSizeM2, lotPlan, planData, aiInsight, liveCouncil },
     ref,
   ) {
+    // Google Street View API — hero image for first-page visual hierarchy
+    const googleKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    const streetViewUrl = lat && lon && googleKey
+      ? `https://maps.googleapis.com/maps/api/streetview?size=1000x300&location=${lat},${lon}&fov=90&pitch=0&key=${googleKey}`
+      : null;
+
     // Mapbox Static Images API — print-safe high-resolution map
     const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
     const staticMapUrl = lat && lon && mapboxToken
@@ -157,6 +163,18 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
             Lot-level audit against the 2026 Small Second Dwelling reforms and NCC 2026.
           </p>
         </header>
+
+        {/* Street View Hero Image */}
+        {streetViewUrl && (
+          <div className="w-full h-[180px] mb-6 rounded-lg overflow-hidden border-2 border-black shadow-lg break-inside-avoid">
+            <img
+              src={streetViewUrl}
+              alt="Street View"
+              className="w-full h-full object-cover"
+              crossOrigin="anonymous"
+            />
+          </div>
+        )}
 
         {/* Subject Property */}
         <section className="mb-6 break-inside-avoid">
