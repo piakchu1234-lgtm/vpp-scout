@@ -79,11 +79,15 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
     const baths = typeof aiInsight?.bathrooms === 'number' ? aiInsight.bathrooms : null;
     const cars = typeof aiInsight?.carspaces === 'number' ? aiInsight.carspaces : null;
 
-    const frontage = aiInsight?.estimatedFrontage?.trim() || '—';
-    const marketEstimate = aiInsight?.marketEstimate?.trim() || '—';
+    const frontage = aiInsight?.estimatedFrontage?.trim() || null;
+    const marketEstimate = aiInsight?.marketEstimate?.trim() || null;
     const council =
       liveCouncil?.trim() || aiInsight?.localCouncil?.trim() || '—';
     const displayLotPlan = lotPlan?.trim() || aiInsight?.lotPlanNumber?.trim() || '—';
+
+    // Conditional rendering flags for dynamic grid
+    const hasBedBathCar = beds !== null || baths !== null || cars !== null;
+    const hasMarketEstimate = marketEstimate !== null && marketEstimate !== '—';
 
     const overview = aiInsight?.propertyOverview?.trim() || '';
     const features = (aiInsight?.designFeatures ?? []).filter((s) => s && s.trim().length > 0);
@@ -197,32 +201,36 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
           </div>
         </section>
 
+        {/* Hero Map — Elevated to top of report body */}
+        {staticMapUrl && (
+          <div className="w-full h-[250px] mb-6 rounded-lg overflow-hidden border border-zinc-200 bg-zinc-50 relative break-inside-avoid">
+            <img
+              src={staticMapUrl}
+              alt="Site Map"
+              className="w-full h-full object-cover grayscale-[20%]"
+              crossOrigin="anonymous"
+            />
+          </div>
+        )}
+
         {/* 1. Site Dimensions */}
         <section className="mb-6 break-inside-avoid">
           <h2 className="text-xs uppercase tracking-[0.25em] text-gray-600 font-bold mb-3 border-b border-gray-300 pb-1.5">
             1. Site Dimensions
           </h2>
-          <div className="grid grid-cols-4 gap-3 break-inside-avoid">
+          <div className={`grid gap-3 break-inside-avoid ${hasBedBathCar && hasMarketEstimate ? 'grid-cols-4' : hasBedBathCar || hasMarketEstimate ? 'grid-cols-3' : 'grid-cols-2'}`}>
             <Cell label="Land Size" value={formatM2(landSizeM2)} />
-            <Cell label="Frontage" value={frontage} />
-            <Cell
-              label="Bed / Bath / Car"
-              value={`${beds ?? '—'} / ${baths ?? '—'} / ${cars ?? '—'}`}
-            />
-            <Cell label="Market Estimate" value={marketEstimate} />
-          </div>
-
-          {/* Print-safe static Mapbox image */}
-          {staticMapUrl && (
-            <div className="w-full h-[200px] my-6 rounded-lg overflow-hidden border border-zinc-200 bg-zinc-50 relative">
-              <img
-                src={staticMapUrl}
-                alt="Site Map"
-                className="w-full h-full object-cover grayscale-[20%]"
-                crossOrigin="anonymous"
+            <Cell label="Frontage" value={frontage ?? '—'} />
+            {hasBedBathCar && (
+              <Cell
+                label="Bed / Bath / Car"
+                value={`${beds ?? '—'} / ${baths ?? '—'} / ${cars ?? '—'}`}
               />
-            </div>
-          )}
+            )}
+            {hasMarketEstimate && (
+              <Cell label="Market Estimate" value={marketEstimate} />
+            )}
+          </div>
         </section>
 
         {/* 2. Executive Summary */}
@@ -472,7 +480,7 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
                 Estimated Value Range
               </div>
               <div className="text-xl font-black text-black tabular-nums break-words">
-                {marketEstimate}
+                {marketEstimate ?? '—'}
               </div>
               <div className="text-[9px] text-gray-600 mt-1 font-mono leading-tight">
                 Based on comparable sales &amp; market analysis

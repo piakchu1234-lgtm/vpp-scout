@@ -552,6 +552,7 @@ function AppCanvas() {
         onClose={() => setIsSuccessModalOpen(false)}
         address={address}
         onDownload={handlePrint}
+        isLoadingData={isLoadingAI}
       />
 
       {/* Native window overlay print container. When isPrintingDocument is

@@ -1,6 +1,6 @@
 'use client';
 import React from 'react';
-import { CheckCircle, Download, Mail, X } from 'lucide-react';
+import { CheckCircle, Download, Loader2, Mail, X } from 'lucide-react';
 
 type ProductType = 'ai-report' | 'title-search';
 
@@ -17,12 +17,21 @@ interface SuccessModalProps {
    * targeting an ID that no longer renders, producing a blank A4.
    */
   onDownload?: () => void;
+  /** Print gate — disable download button while AI insight is loading */
+  isLoadingData?: boolean;
 }
 
-export default function SuccessModal({ isOpen, type, onClose, onDownload }: SuccessModalProps) {
+export default function SuccessModal({
+  isOpen,
+  type,
+  onClose,
+  onDownload,
+  isLoadingData = false,
+}: SuccessModalProps) {
   if (!isOpen) return null;
 
   function handleDownload() {
+    if (isLoadingData) return; // Print gate — block until data loads
     if (onDownload) {
       onDownload();
       return;
@@ -87,10 +96,24 @@ export default function SuccessModal({ isOpen, type, onClose, onDownload }: Succ
           ) : (
             <button
               onClick={handleDownload}
-              className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-[#E9E778] py-3 text-sm font-bold uppercase tracking-wider text-[#241F21] transition-colors hover:bg-[#d4d262]"
+              disabled={isLoadingData}
+              className={`mt-4 flex w-full items-center justify-center gap-2 rounded-full py-3 text-sm font-bold uppercase tracking-wider transition-colors ${
+                isLoadingData
+                  ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
+                  : 'bg-[#E9E778] text-[#241F21] hover:bg-[#d4d262]'
+              }`}
             >
-              <Download className="w-4 h-4" />
-              Download PDF
+              {isLoadingData ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Generating Insights...
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  Download PDF
+                </>
+              )}
             </button>
           )}
         </div>
