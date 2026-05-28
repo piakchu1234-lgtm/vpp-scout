@@ -21,7 +21,7 @@ function normaliseAddress(raw: string): string {
 
 export async function POST(req: Request) {
   try {
-    const { address } = await req.json();
+    const { address, language = 'English' } = await req.json();
     if (!address || typeof address !== 'string') {
       return NextResponse.json({ error: 'No address provided' }, { status: 400 });
     }
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
       );
     }
 
-    console.log(`[insight] CACHE MISS 🤖 (Calling Gemini) "${cacheKey}"`);
+    console.log(`[insight] CACHE MISS 🤖 (Calling Gemini) "${cacheKey}" [Language: ${language}]`);
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
@@ -62,6 +62,8 @@ export async function POST(req: Request) {
     });
 
     const prompt = `You are a Senior Victorian Town Planner and Project Architect with deep, on-the-ground knowledge of Melbourne suburbs, planning controls, listing markets, and school catchments. You are operating as a Context Engine: every field you return must be traceable to a verifiable source you found via web search, and you must reason about the specific property at "${address}" rather than describing the suburb generically.
+
+CRITICAL LANGUAGE DIRECTIVE: You must generate the 'executiveSummary' and 'ssdFeasibility.reasoning' values entirely in the requested language: ${language}. However, you MUST keep the JSON keys strictly in English to prevent breaking the frontend schema. All other text fields (propertyOverview, insightSummary, zoningDescription, overlay descriptions, hazards) should also be in ${language}.
 
 CRITICAL: You must detect if the property is currently vacant land (e.g., if the land size exists but floor area/building details are missing, 0, or flagged as vacant in the data). If it is a vacant lot, set 'isVacantLand' to true. If true, you MUST ignore any legacy building data (beds, baths, existing floor area) from demolished structures and treat them as null or 0.
 

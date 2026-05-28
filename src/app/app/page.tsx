@@ -118,6 +118,7 @@ function AppCanvas() {
   // window on first render where the timer could fire with a null insight.
   const [hasAttemptedAI, setHasAttemptedAI] = useState(false);
   const [showReportPreview, setShowReportPreview] = useState(false);
+  const [reportLanguage, setReportLanguage] = useState<'English' | 'Chinese'>('English');
 
   const paymentParam = params.get('payment');
   const typeParam = params.get('type');
@@ -240,12 +241,12 @@ function AppCanvas() {
   const hasPrimaryLandSize =
     typeof landSizeM2 === 'number' && Number.isFinite(landSizeM2) && landSizeM2 > 0;
 
-  // Clear stale AI insight on address change so live data is not contaminated
-  // by the previous lot's agentic estimates.
+  // Clear stale AI insight on address or language change so live data is not contaminated
+  // by the previous lot's agentic estimates or different language.
   useEffect(() => {
     setAiInsight(null);
     setHasAttemptedAI(false);
-  }, [address]);
+  }, [address, reportLanguage]);
 
   // Single source of truth: fetch agentic insight at the page level for
   // every address (Vicmap parcel data covers geometry only — beds/baths/
@@ -258,7 +259,7 @@ function AppCanvas() {
     fetch('/api/insight', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address }),
+      body: JSON.stringify({ address, language: reportLanguage }),
     })
       .then((res) => res.json())
       .then((response) => {
@@ -276,7 +277,7 @@ function AppCanvas() {
     return () => {
       cancelled = true;
     };
-  }, [address]);
+  }, [address, reportLanguage]);
 
   const effectiveLandSizeM2 = hasPrimaryLandSize
     ? landSizeM2
@@ -483,6 +484,35 @@ function AppCanvas() {
             </div>
           </nav>
           <div className="p-6 overflow-y-auto flex-1">
+            {/* Report Language Toggle */}
+            <div className="mb-6">
+              <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-2">
+                Report Language
+              </div>
+              <div className="flex bg-zinc-800 p-1 rounded-md w-fit border border-zinc-700">
+                <button
+                  onClick={() => setReportLanguage('English')}
+                  className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
+                    reportLanguage === 'English'
+                      ? 'bg-zinc-600 text-white shadow-sm'
+                      : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  EN
+                </button>
+                <button
+                  onClick={() => setReportLanguage('Chinese')}
+                  className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
+                    reportLanguage === 'Chinese'
+                      ? 'bg-zinc-600 text-white shadow-sm'
+                      : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  中文
+                </button>
+              </div>
+            </div>
+
             <AnimatePresence mode="wait">
               <motion.div
                 key={activeTab}
