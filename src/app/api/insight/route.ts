@@ -63,8 +63,10 @@ export async function POST(req: Request) {
 
     const prompt = `You are a Senior Victorian Town Planner and Project Architect with deep, on-the-ground knowledge of Melbourne suburbs, planning controls, listing markets, and school catchments. You are operating as a Context Engine: every field you return must be traceable to a verifiable source you found via web search, and you must reason about the specific property at "${address}" rather than describing the suburb generically.
 
+CRITICAL: You must detect if the property is currently vacant land (e.g., if the land size exists but floor area/building details are missing, 0, or flagged as vacant in the data). If it is a vacant lot, set 'isVacantLand' to true. If true, you MUST ignore any legacy building data (beds, baths, existing floor area) from demolished structures and treat them as null or 0.
+
 You MUST use Google Search to look up, in priority order:
-- realestate.com.au, domain.com.au — current/historical listing for **exact** bedroom, bathroom, and car-space counts; property description; design features (e.g. "open-plan living", "timber-look floorboards", "north-facing rear", "solar")
+- realestate.com.au, domain.com.au — current/historical listing for **exact** bedroom, bathroom, and car-space counts; property description; design features (e.g. "open-plan living", "timber-look floorboards", "north-facing rear", "solar"). CHECK IF THE LISTING INDICATES VACANT LAND OR DEMOLISHED STRUCTURE.
 - Vicmap, LANDATA, council records — Lot/Plan Number (e.g. "Lot 2 PS143510"), land size (m²), frontage
 - realestate.com.au, domain.com.au, pricefinder — recent sale price OR current market estimate range
 - realestate.com.au "Sold" history, domain.com.au sold listings, pricefinder, CoreLogic — the **most recent sale price** ("last sold price", formatted as a string e.g. "$680,000") AND the **contract date** of that sale ("contract date", formatted as "DD MMM YYYY" e.g. "11 May 2024"). These two fields are MANDATORY — search aggressively across multiple sources before falling back.
@@ -81,6 +83,7 @@ After searching, return ONLY a valid JSON object matching this exact schema (no 
     "isEligible": true,
     "reasoning": "Lot size is 650 m² (exceeds 300 m² threshold) and zoning is GRZ1 (General Residential Zone), which permits Small Second Dwellings under the 2026 SSD reforms."
   },
+  "isVacantLand": false,
   "estimatedLandSizeM2": 650,
   "estimatedFrontage": "15.5m",
   "marketEstimate": "$700,000 - $780,000",
@@ -107,12 +110,13 @@ After searching, return ONLY a valid JSON object matching this exact schema (no 
 }
 
 Rules:
+- isVacantLand: MANDATORY boolean. Set to true if the property is vacant land (no existing dwelling, demolished structure, or listings explicitly state "vacant land"). If true, set bedrooms/bathrooms/carspaces to 0 and propertyOverview to describe the vacant parcel characteristics (topography, vegetation, access).
 - executiveSummary: EXACTLY 2 sentences, highly analytical, written in a senior architect's voice. Must assess the site's development potential based on its zoning. Do not quote raw VPP legislation.
 - ssdFeasibility: Evaluate true/false based on the rule: "Lot size must be > 300 m², and Zoning must be GRZ, NRZ, MUZ, or TRZ3." Provide a 1-sentence reasoning string explaining the eligibility determination.
-- bedrooms / bathrooms / carspaces must come from a verifiable live or recent listing — extract the **exact** integer counts. If no listing is findable, return 0 for each and call this out in insightSummary.
+- bedrooms / bathrooms / carspaces must come from a verifiable live or recent listing — extract the **exact** integer counts. If no listing is findable OR isVacantLand is true, return 0 for each and call this out in insightSummary.
 - estimatedLastSoldPrice: string formatted with leading "$" and thousands separators (e.g. "$680,000"). estimatedContractDate: string formatted "DD MMM YYYY" (e.g. "11 May 2024"). Both must be sourced from a verifiable sale record (realestate.com.au "Sold", domain.com.au sold listings, pricefinder, CoreLogic). If no sale record can be located after exhaustive search, return empty string "" for the missing field(s) and explicitly note the gap in insightSummary — DO NOT fabricate prices or dates.
-- propertyOverview: EXACTLY 3 sentences, professional and concise, written in a senior architect's voice. Must describe the specific dwelling on the specific lot — its built form, orientation, and notable site characteristics — NOT the suburb in general. No marketing language, no asterisks, no markdown.
-- designFeatures: 4–5 short noun-phrases extracted from the listing or visible from imagery (e.g. "Open-plan living", "Timber-look floorboards", "North-facing rear"). Title-case-ish, 1–4 words each, no trailing punctuation. If fewer than 4 are verifiable, return only what is verifiable rather than padding.
+- propertyOverview: EXACTLY 3 sentences, professional and concise, written in a senior architect's voice. If isVacantLand is true, describe the vacant parcel (topography, vegetation, access, orientation). If false, describe the specific dwelling on the specific lot — its built form, orientation, and notable site characteristics — NOT the suburb in general. No marketing language, no asterisks, no markdown.
+- designFeatures: 4–5 short noun-phrases extracted from the listing or visible from imagery (e.g. "Open-plan living", "Timber-look floorboards", "North-facing rear"). Title-case-ish, 1–4 words each, no trailing punctuation. If isVacantLand is true OR fewer than 4 are verifiable, return only what is verifiable rather than padding.
 - nearbySchools: array of up to 2 verified schools, each with { "name": "<official school name>", "distance": "<short distance string e.g. '650 m' or '1.2 km'>" }. Order by proximity (closest first). Return [] if none can be verified.
 - zoningDescription / overlay.description: 1 sentence each, plain English, professional planner's voice.
 - hazards: only list hazards that are actually present per official mapping. Empty array if none.

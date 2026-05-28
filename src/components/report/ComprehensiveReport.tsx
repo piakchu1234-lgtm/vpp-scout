@@ -86,7 +86,8 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
     const displayLotPlan = lotPlan?.trim() || aiInsight?.lotPlanNumber?.trim() || '—';
 
     // Conditional rendering flags for dynamic grid
-    const hasBedBathCar = beds !== null || baths !== null || cars !== null;
+    const isVacantLand = aiInsight?.isVacantLand ?? false;
+    const hasBedBathCar = !isVacantLand && (beds !== null || baths !== null || cars !== null);
     const hasMarketEstimate = marketEstimate !== null && marketEstimate !== '—';
 
     const overview = aiInsight?.propertyOverview?.trim() || '';
@@ -200,6 +201,10 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
                   alt="Street View"
                   className="w-full h-full object-cover"
                   crossOrigin="anonymous"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    e.currentTarget.parentElement!.style.backgroundColor = '#f4f4f5';
+                  }}
                 />
               </div>
             )}
@@ -212,6 +217,10 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
                   alt="Aerial Map"
                   className="w-full h-full object-cover grayscale-[20%]"
                   crossOrigin="anonymous"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    e.currentTarget.parentElement!.style.backgroundColor = '#f4f4f5';
+                  }}
                 />
               </div>
             )}
@@ -259,6 +268,13 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
           <h2 className="text-xs uppercase tracking-[0.25em] text-gray-600 font-bold mb-3 border-b border-gray-300 pb-1.5">
             3. Property Overview
           </h2>
+          {isVacantLand && (
+            <div className="mb-4 px-4 py-2 bg-amber-50 border-2 border-amber-500 rounded-lg">
+              <span className="text-sm font-black uppercase tracking-wider text-amber-900">
+                ⚠ VACANT LAND PARCEL
+              </span>
+            </div>
+          )}
           {overview ? (
             <p className="text-sm leading-relaxed text-black mb-4 whitespace-pre-line">
               {overview}

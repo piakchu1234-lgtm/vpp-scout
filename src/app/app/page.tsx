@@ -40,6 +40,7 @@ export type AIInsightData = {
     isEligible: boolean;
     reasoning: string;
   };
+  isVacantLand: boolean;
   estimatedLandSizeM2: number;
   estimatedFrontage: string;
   marketEstimate: string;
