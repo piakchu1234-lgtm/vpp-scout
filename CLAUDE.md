@@ -1,4 +1,6 @@
-# SimplySite — Project Guide for AI Agents
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 @AGENTS.md
 
@@ -95,3 +97,133 @@ The map base must complement the `#241F21` dark theme. Base style derived from `
 ## Local environment notes
 - Windows machine intercepts TLS. npm and node need `NODE_OPTIONS=--use-system-ca`.
 - Shell is bash on Windows.
+
+---
+
+## Development Commands
+
+### Core Workflow
+```bash
+npm run dev          # Start development server (localhost:3000)
+npm run build        # Production build
+npm run start        # Start production server
+npm run lint         # Run ESLint
+npx tsc --noEmit     # Type-check without emitting files
+```
+
+### Cloudflare Pages Deployment
+```bash
+npm run preview      # Build and preview locally with Cloudflare Workers runtime
+npm run deploy       # Build and deploy to Cloudflare Pages
+npm run cf-typegen   # Generate TypeScript types for Cloudflare environment
+```
+
+### Database
+```bash
+npx prisma generate  # Generate Prisma client (runs automatically on postinstall)
+npx prisma studio    # Open Prisma Studio GUI
+npx prisma migrate dev --name <name>  # Create and apply migration
+```
+
+---
+
+## Architecture Overview
+
+### Data Flow — Property Analysis Pipeline
+
+**1. Address Search → Coordinates**
+- `src/lib/geocoding.ts`: Two-tier geocoding (Vicmap Address → Nominatim fallback)
+- Returns `{ lat, lon, displayName }` with source attribution
+- Handles unit prefixes (e.g., "3/12 Collins St") via lot-only retry logic
+
+**2. Coordinates → Geospatial Data (Parallel Fetches)**
+- `src/lib/vicPlanApi.ts`:
+  - `fetchVicParcelForPoint()`: Cadastral polygon + SPI from Vicmap_Parcel
+  - `fetchVicPlanForPoint()`: Zone + overlays from Vicmap_Planning layers 2 & 3
+- `src/lib/lgaApi.ts`: `fetchLgaForPoint()`: Council name from Vicmap_Admin layer 0
+- `src/lib/easementApi.ts`: Easement geometries from Vicmap_Property layer 1
+
+**3. Address → AI Enrichment (Cached)**
+- `src/app/api/insight/route.ts`: Gemini 2.5 Flash with Google Search grounding
+- PostgreSQL cache (7-day TTL) via Prisma (`propertyCache` table)
+- Returns: beds/baths/cars, market estimate, property overview, design features, nearby schools, overlays with descriptions, hazards, last sold price/date
+- **Address Recovery**: When URL `?address` param is dropped (e.g., payment redirect), `reverseGeocodeNearest()` recovers address from coordinates to unblock AI fetch
+
+**4. Analysis Engines**
+- `src/lib/yieldEngine.ts`: `calculateYield()` — SSD feasibility, land use estimates, permit requirements
+- `src/lib/feasibility.ts`: Core SSD eligibility logic (lot size, overlays, zone compatibility)
+- `src/lib/resCode.ts`: ResCode Clause 54/55 garden area calculations
+
+**5. Print Architecture**
+- Native window overlay (not iframe-based)
+- `isPrintingDocument` state triggers full-viewport overlay (`z-[99999]`)
+- `@media print` stylesheet hides dashboard, isolates report container
+- `src/components/report/ComprehensiveReport.tsx`: A4 print template with light-mode isolation
+
+### Key State Management Patterns
+
+**Page-Level State (`src/app/app/page.tsx`)**
+- Single source of truth for all property data
+- Coordinates drive all geospatial fetches (parcel, planning, LGA)
+- Address (URL param or recovered) drives AI insight fetch
+- All data flows down to sidebar tabs and print template via props
+
+**Data Hierarchy (Fallback Chain)**
+- Council: `liveCouncil` (Vicmap_Admin) → `aiInsight.localCouncil` → "—"
+- Zone: `planData.zoneCode` (Vicmap) → `aiInsight.zoning` → null
+- Land size: `landSizeM2` (Turf.js area from polygon) → `aiInsight.estimatedLandSizeM2` → null
+- Overlays: `aiInsight.overlays` (with descriptions) → `planData.overlayRaw` (codes only)
+
+### API Routes (Node Runtime)
+
+All API routes use `export const runtime = 'nodejs'` because Prisma's `pg` adapter requires Node.js built-ins (`node:net`, `node:tls`). Cloudflare Workers support this via `nodejs_compat` flag.
+
+- `/api/insight`: AI property enrichment with PostgreSQL cache
+- `/api/checkout`: Stripe checkout session creation (Clerk auth required)
+- `/api/report`: PDF report generation endpoint
+
+### CSP Configuration
+
+`src/middleware.ts` sets permissive CSP headers to allow:
+- `frame-src 'self' blob: data:`: Print iframe instantiation (legacy, now unused)
+- `connect-src`: Mapbox, ArcGIS, Nominatim, Google Maps, Stripe, Clerk
+- `script-src 'unsafe-eval'`: Required for Mapbox GL JS
+
+### Bilingual UI Pattern
+
+- All user-facing strings carry `{ en: string, zh: string }` objects
+- Language toggle (`en` | `zh`) controls which string is displayed
+- **Statutory terms stay English** even in Chinese prose (ResCode, overlay codes, clause numbers, SSD, NCC 2026)
+- Planning/building terms use canonical glossary (see above)
+
+### Map Integration
+
+- `src/components/MapPreview.tsx`: Mapbox GL wrapper with dark commercial theme
+- Runtime paint overrides for parcel boundaries, easements, TPZ circles
+- Click-to-fetch: Clicking neighboring parcels triggers reverse geocoding and navigation
+
+### Clerk Authentication
+
+- `src/middleware.ts`: `clerkMiddleware()` runs on all routes (required for `auth()` / `currentUser()` helpers)
+- All routes public by default; protect specific routes with `auth.protect()` inside middleware callback
+- Checkout flow requires authentication
+
+---
+
+## Critical Constraints
+
+### Cloudflare Pages Free Tier ($0 Cost)
+- Use static export (`output: 'export'`) or `@cloudflare/next-on-pages` edge runtime
+- Avoid Node-only server actions or paid Vercel `next/image` optimization
+- API routes use Node runtime but deploy to same Worker (no cost difference)
+
+### Next.js 16 + Tailwind v4 Breaking Changes
+- **Always consult `node_modules/next/dist/docs/`** before writing Next.js code
+- Tailwind v4 uses `@tailwindcss/postcss` and `@theme` in CSS (not `tailwind.config.js`)
+- React 19 concurrent rendering requires stable refs (use `isolation: isolate` for print containers)
+
+### Windows Development Environment
+- TLS interception requires `NODE_OPTIONS=--use-system-ca` for npm/node
+- Shell is bash on Windows (not PowerShell)
+
+---

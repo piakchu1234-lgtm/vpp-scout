@@ -61,7 +61,7 @@ export async function POST(req: Request) {
       tools: [{ googleSearch: {} } as any],
     });
 
-    const prompt = `Act as a Senior Victorian Architect AND an expert Australian real estate analyst — a professional with deep, on-the-ground knowledge of Melbourne suburbs, planning controls, listing markets, and school catchments. You are operating as a Context Engine: every field you return must be traceable to a verifiable source you found via web search, and you must reason about the specific property at "${address}" rather than describing the suburb generically.
+    const prompt = `You are a Senior Victorian Town Planner and Project Architect with deep, on-the-ground knowledge of Melbourne suburbs, planning controls, listing markets, and school catchments. You are operating as a Context Engine: every field you return must be traceable to a verifiable source you found via web search, and you must reason about the specific property at "${address}" rather than describing the suburb generically.
 
 You MUST use Google Search to look up, in priority order:
 - realestate.com.au, domain.com.au — current/historical listing for **exact** bedroom, bathroom, and car-space counts; property description; design features (e.g. "open-plan living", "timber-look floorboards", "north-facing rear", "solar")
@@ -76,6 +76,11 @@ You MUST use Google Search to look up, in priority order:
 After searching, return ONLY a valid JSON object matching this exact schema (no markdown fences, no prose):
 {
   "insightSummary": "3 short bullet points covering neighborhood context and development potential. No markdown, no asterisks.",
+  "executiveSummary": "A highly analytical, 2-sentence executive summary of the site's development potential based on its zoning. Do not quote raw VPP legislation.",
+  "ssdFeasibility": {
+    "isEligible": true,
+    "reasoning": "Lot size is 650 m² (exceeds 300 m² threshold) and zoning is GRZ1 (General Residential Zone), which permits Small Second Dwellings under the 2026 SSD reforms."
+  },
   "estimatedLandSizeM2": 650,
   "estimatedFrontage": "15.5m",
   "marketEstimate": "$700,000 - $780,000",
@@ -102,6 +107,8 @@ After searching, return ONLY a valid JSON object matching this exact schema (no 
 }
 
 Rules:
+- executiveSummary: EXACTLY 2 sentences, highly analytical, written in a senior architect's voice. Must assess the site's development potential based on its zoning. Do not quote raw VPP legislation.
+- ssdFeasibility: Evaluate true/false based on the rule: "Lot size must be > 300 m², and Zoning must be GRZ, NRZ, MUZ, or TRZ3." Provide a 1-sentence reasoning string explaining the eligibility determination.
 - bedrooms / bathrooms / carspaces must come from a verifiable live or recent listing — extract the **exact** integer counts. If no listing is findable, return 0 for each and call this out in insightSummary.
 - estimatedLastSoldPrice: string formatted with leading "$" and thousands separators (e.g. "$680,000"). estimatedContractDate: string formatted "DD MMM YYYY" (e.g. "11 May 2024"). Both must be sourced from a verifiable sale record (realestate.com.au "Sold", domain.com.au sold listings, pricefinder, CoreLogic). If no sale record can be located after exhaustive search, return empty string "" for the missing field(s) and explicitly note the gap in insightSummary — DO NOT fabricate prices or dates.
 - propertyOverview: EXACTLY 3 sentences, professional and concise, written in a senior architect's voice. Must describe the specific dwelling on the specific lot — its built form, orientation, and notable site characteristics — NOT the suburb in general. No marketing language, no asterisks, no markdown.

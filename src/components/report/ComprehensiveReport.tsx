@@ -75,13 +75,24 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
 
     const overview = aiInsight?.propertyOverview?.trim() || '';
     const features = (aiInsight?.designFeatures ?? []).filter((s) => s && s.trim().length > 0);
+    const executiveSummary = aiInsight?.executiveSummary?.trim() || '';
 
-    const hasLand = typeof landSizeM2 === 'number' && Number.isFinite(landSizeM2) && landSizeM2 > 0;
-    const ssdEligible = hasLand && (landSizeM2 as number) > SSD_MIN_LOT_SIZE_M2;
-    const ssdCoverageM2 = hasLand ? Math.round((landSizeM2 as number) * SITE_COVERAGE_FRACTION) : null;
-    const ssdPermeabilityM2 = hasLand
-      ? Math.round((landSizeM2 as number) * PERMEABILITY_FRACTION)
-      : null;
+    // Deterministic constraints detection — strict overlay parsing
+    const hasHeritage = overlays.some((o) => o.code.includes('HO'));
+    const hasBushfire = overlays.some((o) => o.code.includes('BMO') || o.code.includes('BPA'));
+    const hasFlood = overlays.some((o) => o.code.includes('SBO') || o.code.includes('LSIO') || o.code.includes('FO'));
+    const hasLandslide = overlays.some((o) => o.code.includes('EMO'));
+
+    // Statutory yield calculations — safe number parsing
+    const size = Number(landSizeM2) || 0;
+    const hasLand = size > 0;
+
+    // SSD Eligibility: prefer AI-driven ssdFeasibility when available, fall back to deterministic rule
+    const ssdEligible = aiInsight?.ssdFeasibility?.isEligible ?? (hasLand && size > SSD_MIN_LOT_SIZE_M2);
+    const ssdReasoning = aiInsight?.ssdFeasibility?.reasoning?.trim() || '';
+
+    const ssdCoverageM2 = hasLand ? (size * SITE_COVERAGE_FRACTION).toFixed(1) : null;
+    const ssdPermeabilityM2 = hasLand ? (size * PERMEABILITY_FRACTION).toFixed(1) : null;
 
     return (
       <div
@@ -157,10 +168,26 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
           </div>
         </section>
 
-        {/* 2. AI Property Overview */}
+        {/* 2. Executive Summary */}
         <section className="mb-6">
           <h2 className="text-xs uppercase tracking-[0.25em] text-gray-600 font-bold mb-3 border-b border-gray-300 pb-1.5">
-            2. Property Overview
+            2. Executive Summary
+          </h2>
+          {executiveSummary ? (
+            <p className="text-sm leading-relaxed text-black font-medium">
+              {executiveSummary}
+            </p>
+          ) : (
+            <p className="text-xs italic text-gray-500">
+              Executive summary unavailable from the Auditor for this address.
+            </p>
+          )}
+        </section>
+
+        {/* 3. Property Overview */}
+        <section className="mb-6">
+          <h2 className="text-xs uppercase tracking-[0.25em] text-gray-600 font-bold mb-3 border-b border-gray-300 pb-1.5">
+            3. Property Overview
           </h2>
           {overview ? (
             <p className="text-sm leading-relaxed text-black mb-4 whitespace-pre-line">
@@ -190,10 +217,118 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
           )}
         </section>
 
-        {/* 3. Planning Context */}
+        {/* 4. Deterministic Constraints Checklist */}
         <section className="mb-6">
           <h2 className="text-xs uppercase tracking-[0.25em] text-gray-600 font-bold mb-3 border-b border-gray-300 pb-1.5">
-            3. Planning Context
+            4. Constraints Checklist
+          </h2>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex justify-between items-center p-3 border-b border-zinc-200">
+              <span className="font-semibold text-zinc-800 text-sm">Heritage Overlay</span>
+              {hasHeritage ? (
+                <span className="text-amber-600 font-bold bg-amber-50 px-2 py-1 rounded text-xs">
+                  Detected
+                </span>
+              ) : (
+                <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-1 rounded text-xs">
+                  Clear
+                </span>
+              )}
+            </div>
+            <div className="flex justify-between items-center p-3 border-b border-zinc-200">
+              <span className="font-semibold text-zinc-800 text-sm">Bushfire Risk</span>
+              {hasBushfire ? (
+                <span className="text-amber-600 font-bold bg-amber-50 px-2 py-1 rounded text-xs">
+                  Detected
+                </span>
+              ) : (
+                <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-1 rounded text-xs">
+                  Clear
+                </span>
+              )}
+            </div>
+            <div className="flex justify-between items-center p-3 border-b border-zinc-200">
+              <span className="font-semibold text-zinc-800 text-sm">Flood / Inundation</span>
+              {hasFlood ? (
+                <span className="text-amber-600 font-bold bg-amber-50 px-2 py-1 rounded text-xs">
+                  Detected
+                </span>
+              ) : (
+                <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-1 rounded text-xs">
+                  Clear
+                </span>
+              )}
+            </div>
+            <div className="flex justify-between items-center p-3 border-b border-zinc-200">
+              <span className="font-semibold text-zinc-800 text-sm">Landslide / Erosion</span>
+              {hasLandslide ? (
+                <span className="text-amber-600 font-bold bg-amber-50 px-2 py-1 rounded text-xs">
+                  Detected
+                </span>
+              ) : (
+                <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-1 rounded text-xs">
+                  Clear
+                </span>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* 5. Statutory Yield Cards · ResCode & NCC 2026 */}
+        <section className="mb-6">
+          <h2 className="text-xs uppercase tracking-[0.25em] text-gray-600 font-bold mb-3 border-b border-gray-300 pb-1.5">
+            5. Statutory Yield · ResCode · NCC 2026
+          </h2>
+          <div className="grid grid-cols-3 gap-4">
+            {/* Card 1: SSD Eligibility */}
+            <div
+              className={`rounded p-4 ${
+                ssdEligible ? 'bg-black text-white' : 'bg-red-600 text-white'
+              }`}
+            >
+              <div className="text-[9px] uppercase tracking-widest font-bold mb-1 opacity-80">
+                SSD Eligibility
+              </div>
+              <div className="text-2xl font-black mb-2">
+                {ssdEligible ? 'Eligible' : 'Ineligible'}
+              </div>
+              {ssdReasoning && (
+                <div className="text-[10px] leading-tight opacity-90">{ssdReasoning}</div>
+              )}
+            </div>
+
+            {/* Card 2: Max Site Coverage */}
+            <div className="border border-gray-300 rounded p-4 bg-gray-50">
+              <div className="text-[9px] uppercase tracking-widest text-gray-600 font-bold mb-1">
+                Max Site Coverage
+              </div>
+              <div className="text-2xl font-black text-black tabular-nums">
+                {ssdCoverageM2 !== null ? `${ssdCoverageM2} m²` : '—'}
+              </div>
+              <div className="text-[9px] text-gray-600 mt-1 font-mono leading-tight">
+                {Math.round(SITE_COVERAGE_FRACTION * 100)}% · GRZ / NRZ · Standard B8
+              </div>
+            </div>
+
+            {/* Card 3: Min Permeability */}
+            <div className="border border-gray-300 rounded p-4 bg-gray-50">
+              <div className="text-[9px] uppercase tracking-widest text-gray-600 font-bold mb-1">
+                Min Permeability
+              </div>
+              <div className="text-2xl font-black text-black tabular-nums">
+                {ssdPermeabilityM2 !== null ? `${ssdPermeabilityM2} m²` : '—'}
+              </div>
+              <div className="text-[9px] text-gray-600 mt-1 font-mono leading-tight">
+                {Math.round(PERMEABILITY_FRACTION * 100)}% · ResCode · Standard B9
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* 6. Planning Context */}
+        <section className="mb-6">
+          <h2 className="text-xs uppercase tracking-[0.25em] text-gray-600 font-bold mb-3 border-b border-gray-300 pb-1.5">
+            6. Planning Context
           </h2>
 
           {/* Zoning */}
@@ -265,55 +400,6 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
             ) : (
               <p className="text-xs text-black">No natural hazards mapped for this parcel.</p>
             )}
-          </div>
-        </section>
-
-        {/* 4. SSD Feasibility */}
-        <section className="mb-6">
-          <h2 className="text-xs uppercase tracking-[0.25em] text-gray-600 font-bold mb-3 border-b border-gray-300 pb-1.5">
-            4. SSD Feasibility · ResCode · NCC 2026
-          </h2>
-          <div
-            className={`rounded p-4 mb-3 ${
-              ssdEligible ? 'bg-black text-white' : 'border-2 border-gray-400 bg-gray-100'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <div
-                  className={`text-xs uppercase tracking-widest font-bold ${
-                    ssdEligible ? 'text-white' : 'text-gray-700'
-                  }`}
-                >
-                  {ssdEligible
-                    ? 'SSD Eligible'
-                    : `SSD Ineligible (Lot ≤ ${SSD_MIN_LOT_SIZE_M2} m²)`}
-                </div>
-                <div
-                  className={`text-[10px] mt-0.5 font-mono ${
-                    ssdEligible ? 'text-gray-300' : 'text-gray-500'
-                  }`}
-                >
-                  Lot {formatM2(landSizeM2)} · Threshold &gt; {SSD_MIN_LOT_SIZE_M2} m²
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Cell
-              label="Max Site Coverage"
-              value={ssdCoverageM2 !== null ? `${ssdCoverageM2.toLocaleString('en-AU')} m²` : '—'}
-              caption={`${Math.round(SITE_COVERAGE_FRACTION * 100)}% · GRZ / NRZ · Standard B8`}
-            />
-            <Cell
-              label="Min Permeability"
-              value={
-                ssdPermeabilityM2 !== null
-                  ? `${ssdPermeabilityM2.toLocaleString('en-AU')} m²`
-                  : '—'
-              }
-              caption={`${Math.round(PERMEABILITY_FRACTION * 100)}% · ResCode · Standard B9`}
-            />
           </div>
         </section>
 

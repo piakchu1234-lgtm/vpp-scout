@@ -35,6 +35,11 @@ export type AINearbySchool = { name: string; distance: string };
 
 export type AIInsightData = {
   insightSummary: string;
+  executiveSummary: string;
+  ssdFeasibility: {
+    isEligible: boolean;
+    reasoning: string;
+  };
   estimatedLandSizeM2: number;
   estimatedFrontage: string;
   marketEstimate: string;
