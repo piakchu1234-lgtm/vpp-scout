@@ -23,11 +23,12 @@ import {
   type ParcelPolygon,
   type VicPlanData,
 } from '@/lib/vicPlanApi';
+import { fetchLgaForPoint } from '@/lib/lgaApi';
 import { reverseGeocodeNearest } from '@/lib/geocoding';
 import { calculateYield, emptyYield, type YieldData } from '@/lib/yieldEngine';
 
 const MELBOURNE_FALLBACK = { lat: -37.8136, lon: 144.9631 };
-const VICMAP_TIMEOUT_MS = 5000;
+const VICMAP_TIMEOUT_MS = 15000;
 
 export type AIOverlay = { code: string; description: string };
 
@@ -91,12 +92,20 @@ function AppCanvas() {
   const [parcelLoading, setParcelLoading] = useState(false);
   const [parcelMessage, setParcelMessage] = useState<string | null>(null);
   const [planData, setPlanData] = useState<VicPlanData | null>(null);
+  const [liveCouncil, setLiveCouncil] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('property');
   const [isStorefrontOpen, setIsStorefrontOpen] = useState(false);
   const [language, setLanguage] = useState<Lang>('en');
   const [isNavigating, setIsNavigating] = useState(false);
   const [aiInsight, setAiInsight] = useState<AIInsightData | null>(null);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
+  // Tracks whether the AI insight fetch has *settled at least once* for the
+  // current address (success, failure, or cancellation). The post-checkout
+  // auto-print path gates on this so the print can't fire before the
+  // Auditor has had a chance to populate the report — `isLoadingAI`
+  // alone is insufficient because it initialises false, opening a race
+  // window on first render where the timer could fire with a null insight.
+  const [hasAttemptedAI, setHasAttemptedAI] = useState(false);
 
   const paymentParam = params.get('payment');
   const typeParam = params.get('type');
@@ -124,6 +133,7 @@ function AppCanvas() {
     setPolygon(null);
     setSpi(null);
     setPlanData(null);
+    setLiveCouncil(null);
 
     fetchVicParcelForPoint(lon, lat, VICMAP_TIMEOUT_MS)
       .then((result) => {
@@ -156,6 +166,20 @@ function AppCanvas() {
         setPlanData(null);
       });
 
+    // Deterministic LGA lookup — Vicmap_Admin layer 0. Authoritative,
+    // free, and doesn't depend on the AI Auditor returning successfully.
+    // Council display in the sidebar prefers this over aiInsight.localCouncil.
+    fetchLgaForPoint(lon, lat)
+      .then((name) => {
+        if (stale) return;
+        setLiveCouncil(name);
+      })
+      .catch((err: unknown) => {
+        if (stale) return;
+        console.warn('[AppCanvas] LGA fetch failed', err);
+        setLiveCouncil(null);
+      });
+
     return () => {
       stale = true;
     };
@@ -178,6 +202,7 @@ function AppCanvas() {
   // by the previous lot's agentic estimates.
   useEffect(() => {
     setAiInsight(null);
+    setHasAttemptedAI(false);
   }, [address]);
 
   // Single source of truth: fetch agentic insight at the page level for
@@ -201,7 +226,10 @@ function AppCanvas() {
         if (!cancelled) console.error('[AppCanvas] AI insight fetch failed', err);
       })
       .finally(() => {
-        if (!cancelled) setIsLoadingAI(false);
+        if (!cancelled) {
+          setIsLoadingAI(false);
+          setHasAttemptedAI(true);
+        }
       });
     return () => {
       cancelled = true;
@@ -226,18 +254,22 @@ function AppCanvas() {
   // (which strips ?payment=success via replaceState) can't race with us.
   const [shouldAutoPrint, setShouldAutoPrint] = useState(paymentParam === 'success');
 
-  // Hold the print until the AI Auditor settles. isLoadingAI flips false on
-  // either success or failure, so a stuck loading state can't block forever
-  // — if the Auditor fails we still print with whatever Vicmap data we have.
+  // Hold the print until the AI Auditor settles. We require both
+  // `hasAttemptedAI` (the fetch has been kicked off and finished — success
+  // OR failure) and `!isLoadingAI` (no in-flight request right now). On
+  // initial mount, isLoadingAI is false before the AI effect runs, so
+  // gating on it alone opens a race window where the timer could fire
+  // with aiInsight=null. hasAttemptedAI closes that window.
   useEffect(() => {
     if (!shouldAutoPrint) return;
+    if (!hasAttemptedAI) return;
     if (isLoadingAI) return;
     const id = window.setTimeout(() => {
       if (reportRef.current) handlePrint();
       setShouldAutoPrint(false);
     }, 400);
     return () => window.clearTimeout(id);
-  }, [shouldAutoPrint, isLoadingAI, handlePrint]);
+  }, [shouldAutoPrint, hasAttemptedAI, isLoadingAI, handlePrint]);
 
   const overlays: PlanningOverlay[] | null = useMemo(() => {
     if (!planData) return null;
@@ -426,6 +458,7 @@ function AppCanvas() {
                     lotPlan={spi}
                     lang={language}
                     aiInsight={aiInsight}
+                    liveCouncil={liveCouncil}
                   />
                 )}
                 {activeTab === 'planning' && (
@@ -495,6 +528,7 @@ function AppCanvas() {
           lotPlan={spi}
           planData={planData}
           aiInsight={aiInsight}
+          liveCouncil={liveCouncil}
         />
       </div>
     </div>

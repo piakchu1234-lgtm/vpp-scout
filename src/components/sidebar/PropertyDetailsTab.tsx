@@ -139,6 +139,10 @@ type Props = {
   lotPlan?: string | null;
   lang?: Lang;
   aiInsight?: AIInsightData | null;
+  /** Authoritative LGA name from Vicmap_Admin (uppercase, e.g.
+   * "GREATER DANDENONG"). Preferred over the AI Auditor's localCouncil
+   * because it's deterministic, free, and survives Gemini failures. */
+  liveCouncil?: string | null;
 };
 
 export default function PropertyDetailsTab({
@@ -149,6 +153,7 @@ export default function PropertyDetailsTab({
   lotPlan,
   lang = 'en',
   aiInsight,
+  liveCouncil,
 }: Props = {}) {
   const t = COPY[lang];
   const data = MOCK_DOMAIN_DATA;
@@ -171,8 +176,14 @@ export default function PropertyDetailsTab({
   const displayMarketEstimate = aiInsight?.marketEstimate || t.tbc;
   const isMarketEstimateAI = !!aiInsight?.marketEstimate;
 
-  const displayCouncil = aiInsight?.localCouncil || t.tbc;
-  const isCouncilAI = !!aiInsight?.localCouncil;
+  // Council: deterministic Vicmap_Admin (liveCouncil) preferred over the
+  // AI Auditor's reading. The "AI estimate" tooltip only shows when the
+  // value falls back to aiInsight.localCouncil — Vicmap is authoritative
+  // and shouldn't be flagged as estimated.
+  const liveCouncilTrimmed = liveCouncil?.trim() ?? '';
+  const aiCouncilTrimmed = aiInsight?.localCouncil?.trim() ?? '';
+  const displayCouncil = liveCouncilTrimmed || aiCouncilTrimmed || t.tbc;
+  const isCouncilAI = !liveCouncilTrimmed && !!aiCouncilTrimmed;
 
   const displayLotPlan = hasPrimaryLotPlan
     ? lotPlan!.trim()

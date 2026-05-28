@@ -57,7 +57,7 @@ export async function POST(req: Request) {
 
     // Agentic workflow: Gemini with Google Search Grounding
     const model = genAI.getGenerativeModel({
-      model: 'gemini-3.5-flash',
+      model: 'gemini-2.5-flash',
       tools: [{ googleSearch: {} } as any],
     });
 

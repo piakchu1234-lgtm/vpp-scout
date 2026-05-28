@@ -100,7 +100,7 @@ const PAPER_ROAD_MAJOR = '#52525b';
 const PAPER_ROAD_MAJOR_CASING = '#52525b';
 const PAPER_LABEL = '#d4d4d8';
 const PAPER_LABEL_HALO = '#18181b';
-const PARCEL_LINE = '#52525b';
+const PARCEL_LINE = '#a1a1aa';
 const PARCEL_HIGHLIGHT_LIME = '#E9E778';
 
 const HATCH_IMAGE_ID = 'simplysite-easement-hatch';
@@ -762,8 +762,8 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
                 type="line"
                 paint={{
                   'line-color': PARCEL_LINE,
-                  'line-width': 1.5,
-                  'line-opacity': 0.65,
+                  'line-width': 1.25,
+                  'line-opacity': 0.75,
                 }}
               />
               <Layer

@@ -18,6 +18,10 @@ export interface ComprehensiveReportProps {
   lotPlan: string | null;
   planData: VicPlanData | null;
   aiInsight: AIInsightData | null;
+  /** Authoritative LGA name from Vicmap_Admin. Preferred over the AI
+   * Auditor's localCouncil so the PDF carries deterministic council
+   * data even when Gemini fails. */
+  liveCouncil?: string | null;
 }
 
 const formatDate = (d: Date) =>
@@ -30,7 +34,7 @@ const formatM2 = (n: number | null | undefined) =>
 
 const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>(
   function ComprehensiveReport(
-    { address, lat, lon, landSizeM2, lotPlan, planData, aiInsight },
+    { address, lat, lon, landSizeM2, lotPlan, planData, aiInsight, liveCouncil },
     ref,
   ) {
     // Zone: live Vicmap → AI Auditor → unavailable.
@@ -65,7 +69,8 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
 
     const frontage = aiInsight?.estimatedFrontage?.trim() || '—';
     const marketEstimate = aiInsight?.marketEstimate?.trim() || '—';
-    const council = aiInsight?.localCouncil?.trim() || '—';
+    const council =
+      liveCouncil?.trim() || aiInsight?.localCouncil?.trim() || '—';
     const displayLotPlan = lotPlan?.trim() || aiInsight?.lotPlanNumber?.trim() || '—';
 
     const overview = aiInsight?.propertyOverview?.trim() || '';
