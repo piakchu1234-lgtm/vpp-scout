@@ -248,6 +248,10 @@ function AppCanvas() {
     documentTitle: address
       ? `SimplySite – ${address}`
       : 'SimplySite Comprehensive Feasibility Report',
+    onBeforePrint: () => new Promise((resolve) => setTimeout(resolve, 150)),
+    onPrintError: (errorLocation, error) => {
+      console.error(`[react-to-print] ${errorLocation} failed:`, error);
+    },
   });
 
   // Capture the print intent at mount so the existing URL-cleanup effect
