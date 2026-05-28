@@ -37,6 +37,12 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
     { address, lat, lon, landSizeM2, lotPlan, planData, aiInsight, liveCouncil },
     ref,
   ) {
+    // Mapbox Static Images API — print-safe high-resolution map
+    const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+    const staticMapUrl = lat && lon && mapboxToken
+      ? `https://api.mapbox.com/styles/v1/mapbox/light-v11/static/pin-l-star+18181b(${lon},${lat})/${lon},${lat},17.5,0/1000x400@2x?access_token=${mapboxToken}`
+      : null;
+
     // Zone: live Vicmap → AI Auditor → unavailable.
     const liveZone = planData?.zoneCode?.trim();
     const aiZone = aiInsight?.zoning?.trim();
@@ -93,6 +99,10 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
 
     const ssdCoverageM2 = hasLand ? (size * SITE_COVERAGE_FRACTION).toFixed(1) : null;
     const ssdPermeabilityM2 = hasLand ? (size * PERMEABILITY_FRACTION).toFixed(1) : null;
+
+    // Financial metrics — last sale history and market estimate
+    const lastSoldPrice = aiInsight?.estimatedLastSoldPrice?.trim() || '';
+    const contractDate = aiInsight?.estimatedContractDate?.trim() || '';
 
     return (
       <div
@@ -166,6 +176,18 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
             />
             <Cell label="Market Estimate" value={marketEstimate} />
           </div>
+
+          {/* Print-safe static Mapbox image */}
+          {staticMapUrl && (
+            <div className="w-full h-[200px] my-6 rounded-lg overflow-hidden border border-zinc-200 bg-zinc-50 relative">
+              <img
+                src={staticMapUrl}
+                alt="Site Map"
+                className="w-full h-full object-cover grayscale-[20%]"
+                crossOrigin="anonymous"
+              />
+            </div>
+          )}
         </section>
 
         {/* 2. Executive Summary */}
@@ -400,6 +422,48 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
             ) : (
               <p className="text-xs text-black">No natural hazards mapped for this parcel.</p>
             )}
+          </div>
+        </section>
+
+        {/* 7. Market & Financial Context */}
+        <section className="mb-6">
+          <h2 className="text-xs uppercase tracking-[0.25em] text-gray-600 font-bold mb-3 border-b border-gray-300 pb-1.5">
+            7. Market &amp; Financial Context
+          </h2>
+          <div className="grid grid-cols-2 gap-4">
+            {/* Card 1: Estimated Value Range */}
+            <div className="border border-gray-300 rounded p-4 bg-gray-50">
+              <div className="text-[9px] uppercase tracking-widest text-gray-600 font-bold mb-1">
+                Estimated Value Range
+              </div>
+              <div className="text-xl font-black text-black tabular-nums break-words">
+                {marketEstimate}
+              </div>
+              <div className="text-[9px] text-gray-600 mt-1 font-mono leading-tight">
+                Based on comparable sales &amp; market analysis
+              </div>
+            </div>
+
+            {/* Card 2: Last Sale History */}
+            <div className="border border-gray-300 rounded p-4 bg-gray-50">
+              <div className="text-[9px] uppercase tracking-widest text-gray-600 font-bold mb-1">
+                Last Sale History
+              </div>
+              {lastSoldPrice && contractDate ? (
+                <>
+                  <div className="text-xl font-black text-black tabular-nums">
+                    {lastSoldPrice}
+                  </div>
+                  <div className="text-[9px] text-gray-600 mt-1 font-mono leading-tight">
+                    Contract Date: {contractDate}
+                  </div>
+                </>
+              ) : (
+                <div className="text-sm text-gray-500 italic">
+                  No recent sale record available
+                </div>
+              )}
+            </div>
           </div>
         </section>
 
