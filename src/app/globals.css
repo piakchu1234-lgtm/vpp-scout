@@ -59,6 +59,13 @@ input[type="number"] {
 /* Native window overlay print isolation — hide the dashboard during print
    execution and ensure only the report container is visible. */
 @media print {
+  @page {
+    margin: 0 !important; /* Strips default browser headers/footers */
+  }
+  body {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
   /* Hide the entire main dashboard app interface completely */
   body > :not(.fixed.inset-0.z-\[99999\]) {
     display: none !important;

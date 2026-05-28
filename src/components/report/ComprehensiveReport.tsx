@@ -104,16 +104,33 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
     const lastSoldPrice = aiInsight?.estimatedLastSoldPrice?.trim() || '';
     const contractDate = aiInsight?.estimatedContractDate?.trim() || '';
 
+    // Localized timestamp for professional branding
+    const generatedDate = new Date().toLocaleDateString('en-AU', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+
     return (
       <div
         ref={ref}
-        // A4 page. Explicit light colors so dashboard dark-mode classes can
-        // never bleed in via the cloned print iframe.
-        className="w-[210mm] min-h-[297mm] bg-white text-black p-10 print:p-0 font-sans"
+        // A4 page with strict padding wrapper acting as physical margin.
+        // Explicit light colors so dashboard dark-mode classes can never bleed in.
+        className="p-[15mm] max-w-[210mm] mx-auto bg-white text-black font-sans"
         style={{ colorScheme: 'light' }}
       >
+        {/* Professional Branding Header */}
+        <div className="flex items-center justify-between mb-6 pb-3 border-b border-zinc-200">
+          <div className="text-[10px] uppercase tracking-wider font-bold text-zinc-500">
+            SimplySite · Comprehensive Site Feasibility
+          </div>
+          <div className="text-[10px] uppercase tracking-wider font-bold text-zinc-500">
+            Generated: {generatedDate}
+          </div>
+        </div>
+
         {/* Header */}
-        <header className="border-b-2 border-black pb-5 mb-6">
+        <header className="border-b-2 border-black pb-5 mb-6 break-inside-avoid">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-black flex items-center justify-center">
@@ -142,7 +159,7 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
         </header>
 
         {/* Subject Property */}
-        <section className="mb-6">
+        <section className="mb-6 break-inside-avoid">
           <div className="text-[10px] uppercase tracking-[0.25em] text-gray-600 font-bold mb-1.5">
             Subject Property
           </div>
@@ -163,11 +180,11 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
         </section>
 
         {/* 1. Site Dimensions */}
-        <section className="mb-6">
+        <section className="mb-6 break-inside-avoid">
           <h2 className="text-xs uppercase tracking-[0.25em] text-gray-600 font-bold mb-3 border-b border-gray-300 pb-1.5">
             1. Site Dimensions
           </h2>
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-4 gap-3 break-inside-avoid">
             <Cell label="Land Size" value={formatM2(landSizeM2)} />
             <Cell label="Frontage" value={frontage} />
             <Cell
@@ -191,7 +208,7 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
         </section>
 
         {/* 2. Executive Summary */}
-        <section className="mb-6">
+        <section className="mb-6 break-inside-avoid">
           <h2 className="text-xs uppercase tracking-[0.25em] text-gray-600 font-bold mb-3 border-b border-gray-300 pb-1.5">
             2. Executive Summary
           </h2>
@@ -207,7 +224,7 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
         </section>
 
         {/* 3. Property Overview */}
-        <section className="mb-6">
+        <section className="mb-6 break-inside-avoid">
           <h2 className="text-xs uppercase tracking-[0.25em] text-gray-600 font-bold mb-3 border-b border-gray-300 pb-1.5">
             3. Property Overview
           </h2>
@@ -240,11 +257,11 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
         </section>
 
         {/* 4. Deterministic Constraints Checklist */}
-        <section className="mb-6">
+        <section className="mb-6 break-inside-avoid">
           <h2 className="text-xs uppercase tracking-[0.25em] text-gray-600 font-bold mb-3 border-b border-gray-300 pb-1.5">
             4. Constraints Checklist
           </h2>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4 break-inside-avoid">
             <div className="flex justify-between items-center p-3 border-b border-zinc-200">
               <span className="font-semibold text-zinc-800 text-sm">Heritage Overlay</span>
               {hasHeritage ? (
@@ -297,11 +314,11 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
         </section>
 
         {/* 5. Statutory Yield Cards · ResCode & NCC 2026 */}
-        <section className="mb-6">
+        <section className="mb-6 break-inside-avoid">
           <h2 className="text-xs uppercase tracking-[0.25em] text-gray-600 font-bold mb-3 border-b border-gray-300 pb-1.5">
             5. Statutory Yield · ResCode · NCC 2026
           </h2>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-4 break-inside-avoid">
             {/* Card 1: SSD Eligibility */}
             <div
               className={`rounded p-4 ${
@@ -348,7 +365,7 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
         </section>
 
         {/* 6. Planning Context */}
-        <section className="mb-6">
+        <section className="mb-6 break-inside-avoid">
           <h2 className="text-xs uppercase tracking-[0.25em] text-gray-600 font-bold mb-3 border-b border-gray-300 pb-1.5">
             6. Planning Context
           </h2>
@@ -426,11 +443,11 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
         </section>
 
         {/* 7. Market & Financial Context */}
-        <section className="mb-6">
+        <section className="mb-6 break-inside-avoid">
           <h2 className="text-xs uppercase tracking-[0.25em] text-gray-600 font-bold mb-3 border-b border-gray-300 pb-1.5">
             7. Market &amp; Financial Context
           </h2>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4 break-inside-avoid">
             {/* Card 1: Estimated Value Range */}
             <div className="border border-gray-300 rounded p-4 bg-gray-50">
               <div className="text-[9px] uppercase tracking-widest text-gray-600 font-bold mb-1">
