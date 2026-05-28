@@ -55,39 +55,3 @@ input[type="number"] {
   0%   { transform: translateX(-100%); }
   100% { transform: translateX(400%); }
 }
-
-@media print {
-  /* Hide absolutely everything by default */
-  body * {
-    visibility: hidden;
-  }
-
-  /* Reveal ONLY the report template and its children */
-  #pdf-report-template, #pdf-report-template * {
-    visibility: visible;
-  }
-
-  /* Position the report and force it to be visible despite Tailwind screen classes */
-  #pdf-report-template {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
-    width: 100% !important;
-    opacity: 1 !important;
-    z-index: 9999 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-
-  /* Force all browsers to print the dark theme backgrounds and colors */
-  * {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  /* Set native page formatting */
-  @page {
-    size: A4 portrait;
-    margin: 0;
-  }
-}
