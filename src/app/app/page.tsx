@@ -79,12 +79,18 @@ const TABS: { id: TabId; disabled?: boolean }[] = [
 function AppCanvas() {
   const params = useSearchParams();
   const router = useRouter();
-  const address = params.get('address');
+  const addressParam = params.get('address');
   const latParam = params.get('lat');
   const lonParam = params.get('lon');
   const lat = latParam ? Number(latParam) : MELBOURNE_FALLBACK.lat;
   const lon = lonParam ? Number(lonParam) : MELBOURNE_FALLBACK.lon;
   const hasCoords = Number.isFinite(lat) && Number.isFinite(lon);
+
+  // Address recovery state — when the checkout pipeline drops the address
+  // parameter but preserves lat/lon, we reverse-geocode to recover the
+  // authoritative Vicmap address string so the AI insight fetch can proceed.
+  const [recoveredAddress, setRecoveredAddress] = useState<string | null>(null);
+  const address = addressParam || recoveredAddress;
 
   const [polygon, setPolygon] = useState<ParcelPolygon | null>(null);
   const [spi, setSpi] = useState<string | null>(null);
@@ -124,6 +130,36 @@ function AppCanvas() {
     url.searchParams.delete('type');
     window.history.replaceState({}, '', url.toString());
   }, [paymentParam]);
+
+  // Address recovery — when the checkout pipeline drops the address parameter
+  // but preserves lat/lon (payment success redirect), reverse-geocode to
+  // recover the authoritative Vicmap address string so the AI insight fetch
+  // can proceed. This effect runs once per coordinate change when addressParam
+  // is missing, then sets recoveredAddress to unblock the /api/insight call.
+  useEffect(() => {
+    if (addressParam) {
+      // Address parameter is present — clear any stale recovery state.
+      setRecoveredAddress(null);
+      return;
+    }
+    if (!hasCoords) return;
+    let cancelled = false;
+    reverseGeocodeNearest(lon, lat)
+      .then((hit) => {
+        if (cancelled) return;
+        if (hit?.result.displayName) {
+          console.log('[AppCanvas] Recovered address from Vicmap:', hit.result.displayName);
+          setRecoveredAddress(hit.result.displayName);
+        }
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        console.warn('[AppCanvas] Address recovery failed', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [addressParam, hasCoords, lat, lon]);
 
   useEffect(() => {
     if (!hasCoords) return;
