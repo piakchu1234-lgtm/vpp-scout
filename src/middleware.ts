@@ -22,7 +22,7 @@ export default clerkMiddleware(async (auth, req) => {
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com data:",
       "img-src 'self' data: blob: https://*.tile.openstreetmap.org https://api.mapbox.com https://*.basemaps.cartocdn.com https://img.clerk.com",
-      "connect-src 'self' https://api.mapbox.com https://services.land.vic.gov.au https://maps.googleapis.com https://api.stripe.com https://*.clerk.accounts.dev wss://*.clerk.accounts.dev",
+      "connect-src 'self' https://*.mapbox.com https://*.arcgis.com https://services.land.vic.gov.au https://*.openstreetmap.org https://nominatim.openstreetmap.org https://maps.googleapis.com https://api.stripe.com https://*.clerk.accounts.dev wss://*.clerk.accounts.dev data: blob:",
       "frame-src 'self' blob: data: https://js.stripe.com https://*.clerk.accounts.dev",
       "child-src 'self' blob: data:",
       "worker-src 'self' blob:",
