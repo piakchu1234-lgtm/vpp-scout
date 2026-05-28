@@ -117,7 +117,7 @@ function AppCanvas() {
   // alone is insufficient because it initialises false, opening a race
   // window on first render where the timer could fire with a null insight.
   const [hasAttemptedAI, setHasAttemptedAI] = useState(false);
-  const [isPrintingDocument, setIsPrintingDocument] = useState(false);
+  const [showReportPreview, setShowReportPreview] = useState(false);
 
   const paymentParam = params.get('payment');
   const typeParam = params.get('type');
@@ -282,38 +282,36 @@ function AppCanvas() {
     ? landSizeM2
     : aiInsight?.estimatedLandSizeM2 ?? null;
 
-  // Native window overlay print handler — replaces fragile iframe cloning.
-  // Temporarily overlays the report on top of the dashboard, triggers the
-  // browser's native print dialog, then restores the dashboard view.
+  // Report preview handler — opens full-screen preview instead of directly printing
   const reportRef = useRef<HTMLDivElement>(null);
+  const handleOpenPreview = () => {
+    setShowReportPreview(true);
+  };
+
   const handlePrint = () => {
-    setIsPrintingDocument(true);
-    setTimeout(() => {
-      window.print();
-      setIsPrintingDocument(false);
-    }, 300); // 300ms layout stabilization delay
+    window.print();
   };
 
   // Capture the print intent at mount so the existing URL-cleanup effect
   // (which strips ?payment=success via replaceState) can't race with us.
-  const [shouldAutoPrint, setShouldAutoPrint] = useState(paymentParam === 'success');
+  const [shouldAutoOpenPreview, setShouldAutoOpenPreview] = useState(paymentParam === 'success');
 
-  // Hold the print until the AI Auditor settles. We require both
+  // Hold the preview until the AI Auditor settles. We require both
   // `hasAttemptedAI` (the fetch has been kicked off and finished — success
   // OR failure) and `!isLoadingAI` (no in-flight request right now). On
   // initial mount, isLoadingAI is false before the AI effect runs, so
   // gating on it alone opens a race window where the timer could fire
   // with aiInsight=null. hasAttemptedAI closes that window.
   useEffect(() => {
-    if (!shouldAutoPrint) return;
+    if (!shouldAutoOpenPreview) return;
     if (!hasAttemptedAI) return;
     if (isLoadingAI) return;
     const id = window.setTimeout(() => {
-      handlePrint();
-      setShouldAutoPrint(false);
+      handleOpenPreview();
+      setShouldAutoOpenPreview(false);
     }, 400);
     return () => window.clearTimeout(id);
-  }, [shouldAutoPrint, hasAttemptedAI, isLoadingAI]);
+  }, [shouldAutoOpenPreview, hasAttemptedAI, isLoadingAI]);
 
   const overlays: PlanningOverlay[] | null = useMemo(() => {
     if (!planData) return null;
@@ -552,33 +550,49 @@ function AppCanvas() {
         type={successType}
         onClose={() => setIsSuccessModalOpen(false)}
         address={address}
-        onDownload={handlePrint}
+        onDownload={handleOpenPreview}
         isLoadingData={isLoadingAI}
       />
 
-      {/* Native window overlay print container. When isPrintingDocument is
-          active, this overlays the entire viewport with the report on a white
-          background. The global print stylesheet hides the dashboard and
-          ensures only this container is visible during print execution. */}
-      <div
-        className={
-          isPrintingDocument
-            ? 'fixed inset-0 z-[99999] bg-white overflow-y-auto block p-8'
-            : 'hidden'
-        }
-      >
-        <ComprehensiveReport
-          ref={reportRef}
-          address={address}
-          lat={lat}
-          lon={lon}
-          landSizeM2={landSizeM2}
-          lotPlan={spi}
-          planData={planData}
-          aiInsight={aiInsight}
-          liveCouncil={liveCouncil}
-        />
-      </div>
+      {/* Report Preview Mode — Full-screen scrollable preview with action bar */}
+      {showReportPreview ? (
+        <div className="fixed inset-0 z-[99999] min-h-screen bg-zinc-200 overflow-y-auto">
+          {/* Floating Action Bar — Hidden during print */}
+          <div className="sticky top-0 z-50 bg-white border-b border-zinc-300 shadow-sm print:hidden">
+            <div className="max-w-[210mm] mx-auto px-6 py-4 flex items-center justify-between">
+              <button
+                onClick={() => setShowReportPreview(false)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold text-zinc-700 hover:bg-zinc-100 transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to Map
+              </button>
+              <button
+                onClick={handlePrint}
+                className="flex items-center gap-2 px-6 py-2 rounded-lg bg-[#E9E778] text-[#241F21] text-sm font-bold uppercase tracking-wider hover:bg-[#d4d262] transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                Print / Save PDF
+              </button>
+            </div>
+          </div>
+
+          {/* Report Container */}
+          <div className="py-12 flex justify-center">
+            <ComprehensiveReport
+              ref={reportRef}
+              address={address}
+              lat={lat}
+              lon={lon}
+              landSizeM2={landSizeM2}
+              lotPlan={spi}
+              planData={planData}
+              aiInsight={aiInsight}
+              liveCouncil={liveCouncil}
+            />
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

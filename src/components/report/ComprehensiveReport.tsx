@@ -258,7 +258,7 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
             </p>
           ) : (
             <p className="text-xs italic text-gray-500">
-              Executive summary unavailable from the Auditor for this address.
+              Architectural synthesis is currently processing. Please consult local council guidelines for specific zoning implications.
             </p>
           )}
         </section>
