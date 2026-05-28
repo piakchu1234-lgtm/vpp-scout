@@ -243,14 +243,67 @@ function AppCanvas() {
   // Premium PDF generation — react-to-print clones the report node into an
   // isolated iframe, so the dashboard's dark theme can't bleed through.
   const reportRef = useRef<HTMLDivElement>(null);
+
+  // Fallback print handler for environments where iframe instantiation is
+  // blocked by strict CSP or browser security policies. Opens a dedicated
+  // print window with the cloned report content.
+  const handlePrintFallback = () => {
+    if (!reportRef.current) {
+      console.error('[Print] Report ref not available');
+      return;
+    }
+
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    if (!printWindow) {
+      console.error('[Print] Failed to open print window');
+      return;
+    }
+
+    const title = address
+      ? `SimplySite - ${address}`
+      : 'SimplySite Comprehensive Feasibility Report';
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>${title}</title>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: system-ui, -apple-system, sans-serif; }
+            @media print {
+              @page { margin: 0; size: A4 portrait; }
+              body { margin: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          ${reportRef.current.innerHTML}
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+
+    // Wait for content to render before triggering print
+    setTimeout(() => {
+      printWindow.focus();
+      printWindow.print();
+      printWindow.close();
+    }, 250);
+  };
+
   const handlePrint = useReactToPrint({
     contentRef: reportRef,
     documentTitle: address
-      ? `SimplySite – ${address}`
+      ? `SimplySite - ${address}`
       : 'SimplySite Comprehensive Feasibility Report',
     onBeforePrint: () => new Promise((resolve) => setTimeout(resolve, 150)),
     onPrintError: (errorLocation, error) => {
       console.error(`[react-to-print] ${errorLocation} failed:`, error);
+      console.warn('[Print] Falling back to window-based print strategy');
+      // Invoke fallback if iframe instantiation fails
+      handlePrintFallback();
     },
   });
 
@@ -518,10 +571,19 @@ function AppCanvas() {
       {/* Off-screen, aria-hidden A4 report. react-to-print clones this node
           into a fresh iframe on demand; positioning it at left:-10000px keeps
           it out of the dashboard layout while still letting the browser
-          compute its styles for the clone. */}
+          compute its styles for the clone. The container must remain firmly
+          anchored in the DOM throughout the print lifecycle — React 19's
+          concurrent rendering can't unmount this ref context mid-execution. */}
       <div
         aria-hidden="true"
         className="fixed left-[-10000px] top-0 -z-50 pointer-events-none opacity-0"
+        style={{
+          width: '210mm',
+          minHeight: '297mm',
+          overflow: 'visible',
+          isolation: 'isolate',
+          contain: 'layout style paint'
+        }}
       >
         <ComprehensiveReport
           ref={reportRef}
