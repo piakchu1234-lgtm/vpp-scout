@@ -1,4 +1,3 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
@@ -51,23 +50,20 @@ export async function POST(req: Request) {
       );
     }
 
-    console.log(`[insight] CACHE MISS 🤖 (Calling Gemini) "${cacheKey}" [Language: ${language}]`);
+    console.log(`[insight] CACHE MISS 🤖 (Calling Claude) "${cacheKey}" [Language: ${language}]`);
 
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      throw new Error('ANTHROPIC_API_KEY environment variable is not set');
+    }
 
-    // Agentic workflow: Gemini with Google Search Grounding
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      tools: [{ googleSearch: {} } as any],
-    });
-
-    const prompt = `You are a Senior Victorian Town Planner and Project Architect with deep, on-the-ground knowledge of Melbourne suburbs, planning controls, listing markets, and school catchments. You are operating as a Context Engine: every field you return must be traceable to a verifiable source you found via web search, and you must reason about the specific property at "${address}" rather than describing the suburb generically.
+    const systemPrompt = `You are a Senior Victorian Town Planner and Project Architect with deep, on-the-ground knowledge of Melbourne suburbs, planning controls, listing markets, and school catchments. You are operating as a Context Engine: every field you return must be traceable to a verifiable source you found via web search, and you must reason about the specific property at "${address}" rather than describing the suburb generically.
 
 CRITICAL LANGUAGE DIRECTIVE: You must generate the 'executiveSummary' and 'ssdFeasibility.reasoning' values entirely in the requested language: ${language}. However, you MUST keep the JSON keys strictly in English to prevent breaking the frontend schema. All other text fields (propertyOverview, insightSummary, zoningDescription, overlay descriptions, hazards) should also be in ${language}.
 
 CRITICAL: You must detect if the property is currently vacant land (e.g., if the land size exists but floor area/building details are missing, 0, or flagged as vacant in the data). If it is a vacant lot, set 'isVacantLand' to true. If true, you MUST ignore any legacy building data (beds, baths, existing floor area) from demolished structures and treat them as null or 0.
 
-You MUST use Google Search to look up, in priority order:
+You MUST use the web_search tool to look up, in priority order:
 - realestate.com.au, domain.com.au — current/historical listing for **exact** bedroom, bathroom, and car-space counts; property description; design features (e.g. "open-plan living", "timber-look floorboards", "north-facing rear", "solar"). CHECK IF THE LISTING INDICATES VACANT LAND OR DEMOLISHED STRUCTURE.
 - Vicmap, LANDATA, council records — Lot/Plan Number (e.g. "Lot 2 PS143510"), land size (m²), frontage
 - realestate.com.au, domain.com.au, pricefinder — recent sale price OR current market estimate range
@@ -124,11 +120,35 @@ Rules:
 - hazards: only list hazards that are actually present per official mapping. Empty array if none.
 - If a value cannot be confirmed via search, provide a best-effort estimate based on neighbourhood context and clearly note uncertainty in insightSummary.`;
 
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
+    // Call Anthropic API
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'claude-opus-4-7',
+        max_tokens: 16000,
+        tools: [{ type: 'web_search_20260209', name: 'web_search' }],
+        messages: [{ role: 'user', content: systemPrompt }],
+      }),
+    });
 
-    // Strip markdown fences if the model returned any (grounded responses sometimes wrap JSON)
-    const cleaned = text.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Anthropic API error: ${response.status} ${errorText}`);
+    }
+
+    const result = await response.json();
+    const textBlock = result.content?.find((block: any) => block.type === 'text');
+    if (!textBlock?.text) {
+      throw new Error('No text content in Anthropic response');
+    }
+
+    // Strip markdown fences if the model returned any
+    const cleaned = textBlock.text.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
     const data = JSON.parse(cleaned);
 
     // Defensive coercion: nearbySchools is a new field; older cached prompts
