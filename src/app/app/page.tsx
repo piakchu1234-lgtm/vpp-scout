@@ -96,7 +96,9 @@ function AppCanvas() {
   // parameter but preserves lat/lon, we reverse-geocode to recover the
   // authoritative Vicmap address string so the AI insight fetch can proceed.
   const [recoveredAddress, setRecoveredAddress] = useState<string | null>(null);
+  // Derived address state - clears recoveredAddress when addressParam is present
   const address = addressParam || recoveredAddress;
+  const shouldRecoverAddress = !addressParam && hasCoords;
 
   const [polygon, setPolygon] = useState<ParcelPolygon | null>(null);
   const [spi, setSpi] = useState<string | null>(null);
@@ -141,16 +143,16 @@ function AppCanvas() {
   // Address recovery — when the checkout pipeline drops the address parameter
   // but preserves lat/lon (payment success redirect), reverse-geocode to
   // recover the authoritative Vicmap address string so the AI insight fetch
-  // can proceed. This effect runs once per coordinate change when addressParam
-  // is missing, then sets recoveredAddress to unblock the /api/insight call.
+  // can proceed. React 19: clear stale state via dependency-gated early return.
   useEffect(() => {
     if (addressParam) {
-      // Address parameter is present — clear any stale recovery state.
+      // Address param present - clear recovery state asynchronously
       setRecoveredAddress(null);
       return;
     }
     if (!hasCoords) return;
     let cancelled = false;
+
     reverseGeocodeNearest(lon, lat)
       .then((hit) => {
         if (cancelled) return;
@@ -168,15 +170,27 @@ function AppCanvas() {
     };
   }, [addressParam, hasCoords, lat, lon]);
 
+  // Geospatial data fetch keyed to coordinates
+  const coordKey = useMemo(() => `${lat},${lon}`, [lat, lon]);
+  const prevCoordKeyRef = useRef<string>('');
+
   useEffect(() => {
     if (!hasCoords) return;
+
+    // React 19 pattern: detect coordinate change via ref comparison instead of synchronous setState
+    const coordChanged = prevCoordKeyRef.current !== coordKey;
+    prevCoordKeyRef.current = coordKey;
+
+    if (coordChanged) {
+      setParcelLoading(true);
+      setParcelMessage(null);
+      setPolygon(null);
+      setSpi(null);
+      setPlanData(null);
+      setLiveCouncil(null);
+    }
+
     let stale = false;
-    setParcelLoading(true);
-    setParcelMessage(null);
-    setPolygon(null);
-    setSpi(null);
-    setPlanData(null);
-    setLiveCouncil(null);
 
     fetchVicParcelForPoint(lon, lat, VICMAP_TIMEOUT_MS)
       .then((result) => {
@@ -241,21 +255,29 @@ function AppCanvas() {
   const hasPrimaryLandSize =
     typeof landSizeM2 === 'number' && Number.isFinite(landSizeM2) && landSizeM2 > 0;
 
-  // Clear stale AI insight on address or language change so live data is not contaminated
-  // by the previous lot's agentic estimates or different language.
-  useEffect(() => {
-    setAiInsight(null);
-    setHasAttemptedAI(false);
-  }, [address, reportLanguage]);
-
   // Single source of truth: fetch agentic insight at the page level for
   // every address (Vicmap parcel data covers geometry only — beds/baths/
   // overview/hazards/etc. always come from the AI Auditor). Phase-3 plan
   // wires this through a PostgreSQL cache to bound API spend.
+  // State clearing is handled by the dependency change triggering a new fetch.
+  const aiStateKeyRef = useRef(0);
   useEffect(() => {
-    if (!address) return;
+    // Increment the key when dependencies change to invalidate stale state
+    aiStateKeyRef.current += 1;
+    const currentKey = aiStateKeyRef.current;
+
+    if (!address) {
+      setAiInsight(null);
+      setHasAttemptedAI(false);
+      setIsLoadingAI(false);
+      return;
+    }
+
     let cancelled = false;
     setIsLoadingAI(true);
+    setAiInsight(null);
+    setHasAttemptedAI(false);
+
     fetch('/api/insight', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -263,13 +285,17 @@ function AppCanvas() {
     })
       .then((res) => res.json())
       .then((response) => {
-        if (!cancelled && response?.data) setAiInsight(response.data);
+        if (!cancelled && currentKey === aiStateKeyRef.current && response?.data) {
+          setAiInsight(response.data);
+        }
       })
       .catch((err) => {
-        if (!cancelled) console.error('[AppCanvas] AI insight fetch failed', err);
+        if (!cancelled && currentKey === aiStateKeyRef.current) {
+          console.error('[AppCanvas] AI insight fetch failed', err);
+        }
       })
       .finally(() => {
-        if (!cancelled) {
+        if (!cancelled && currentKey === aiStateKeyRef.current) {
           setIsLoadingAI(false);
           setHasAttemptedAI(true);
         }

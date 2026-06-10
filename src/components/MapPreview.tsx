@@ -690,6 +690,9 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
           : null;
         if (match) setHighlightedParcel(match);
         onParcelClick([e.lngLat.lng, e.lngLat.lat]);
+      } else {
+        // Clear highlight when clicking empty space
+        setHighlightedParcel(null);
       }
     }
 

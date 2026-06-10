@@ -42,13 +42,12 @@ export default function LandingPage() {
   const abortRef = useRef<AbortController | null>(null);
   const lastQueryRef = useRef('');
 
+  // React 19 compliance: derive state instead of synchronous setState in effect
   useEffect(() => {
     const q = searchQuery.trim();
+
+    // Early return for short queries — state resets happen via derived state below
     if (q.length < MIN_CHARS) {
-      setSuggestions([]);
-      setOpen(false);
-      setLoading(false);
-      setSource(null);
       return;
     }
     if (q === lastQueryRef.current) return;
@@ -80,6 +79,17 @@ export default function LandingPage() {
 
     return () => clearTimeout(handle);
   }, [searchQuery]);
+
+  // Derived state: reset suggestions when query is too short
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < MIN_CHARS && suggestions.length > 0) {
+      setSuggestions([]);
+      setOpen(false);
+      setLoading(false);
+      setSource(null);
+    }
+  }, [searchQuery, suggestions.length]);
 
   useEffect(() => {
     function handleMouseDown(e: MouseEvent) {

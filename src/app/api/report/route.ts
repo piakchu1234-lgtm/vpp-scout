@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { calculateYield, type YieldData } from '@/lib/yieldEngine';
+import type { SpatialMetrics } from '@/lib/spatialAnalysis';
 
 import type {
   FeasibilityReport,
@@ -10,7 +12,9 @@ import type {
 export const runtime = 'edge';
 
 const ANTHROPIC_DEFAULT_BASE_URL = 'https://api.anthropic.com';
-const ANTHROPIC_MODEL = 'claude-opus-4-7';
+// AGENT 3 MODEL: Locked to Sonnet for cost efficiency.
+// Opus is overkill when Agent 1 & 2 provide deterministic math.
+const ANTHROPIC_MODEL = 'claude-3-5-sonnet-20241022';
 const ANTHROPIC_VERSION = '2023-06-01';
 
 function resolveAnthropicUrl(): string {
@@ -18,6 +22,11 @@ function resolveAnthropicUrl(): string {
   const trimmed = base.replace(/\/+$/, '');
   return `${trimmed}/v1/messages`;
 }
+
+// AGENT 3: The Commercial Synthesizer (Bilingual Director)
+// Mission: Take cold deterministic math from Agent 1 (yieldEngine) and
+// Agent 2 (spatialAnalysis), then synthesize premium bilingual executive
+// summaries for the PDF report.
 
 const SECTION_KEYS = [
   'verdict',
@@ -31,10 +40,13 @@ const SECTION_KEYS = [
 
 function buildSystemPrompt(): string {
   return [
-    'You are a Senior Victorian Architect practising in Victoria, Australia.',
-    'You are fluent in the Victoria Planning Provisions (VPP), ResCode (Clauses 54 and 55),',
-    'the 2026 Small Second Dwelling (SSD) reforms, and the National Construction Code 2026 (NCC 2026).',
-    'You give precise, cautious advice that a client could act on.',
+    'You are the Lead Architect and Client Director for SimplySite, a Victorian property feasibility platform.',
+    'You are fluent in the Victoria Planning Provisions (VPP), ResCode, and the 2026 SSD reforms.',
+    '',
+    'CRITICAL CONSTRAINT: You have been provided with PRE-CALCULATED, mathematically verified',
+    'statutory yields from our deterministic engineering backend (Agent 1: Yield Engine, Agent 2: Spatial Analysis).',
+    'DO NOT recalculate site coverage, permeability, SSD eligibility, or frontage measurements.',
+    'DO NOT second-guess the math. Your role is synthesis and translation, not calculation.',
     '',
     'OUTPUT FORMAT — you MUST respond with a single JSON object and nothing else. No prose, no markdown fence.',
     'The JSON object MUST conform to this schema:',
@@ -52,60 +64,71 @@ function buildSystemPrompt(): string {
     'unchanged and untranslated, to preserve legal accuracy:',
     '- ResCode (do NOT translate as 住宅设计准则)',
     '- Overlay codes: HO, BMO, FO, LSIO, VPO, SBO, DDO, PO, DCPO',
-    '- Zone codes: GRZ, NRZ, RGZ, MUZ, TZ, C1Z, C2Z, and any "Housing Choice and Transport Zone" or similar named zone',
-    '- SSD, NCC 2026, VPP, SPI, Clause references (e.g. Clause 54.03-5, Clause 55.04-1, Clause 52.20)',
-    '- VC282 and other amendment numbers',
+    '- Zone codes: GRZ, NRZ, RGZ, MUZ, TZ, C1Z, C2Z',
+    '- SSD, NCC 2026, VPP, SPI',
+    '- Clause references (e.g. Clause 54.03-5, Clause 55.04-1)',
     '',
-    'BILINGUAL STYLE — the zh strings use the Victorian Government\'s published Mandarin renderings for plain UI terms,',
-    'e.g. "规划覆盖区" for overlay, "退界" for setback, "分区" for zone. Do not invent translations.',
+    'BILINGUAL STYLE — the zh strings use the Victorian Government\'s published Mandarin renderings:',
+    '规划覆盖区 (overlay), 退界 (setback), 分区 (zone), 地块面积 (lot size).',
+    'Do not invent translations. Refer to CLAUDE.md canonical glossary.',
     '',
-    'TONE — confident, specific, and clause-cited where you can. Distinguish as-of-right outcomes from',
-    'outcomes requiring a planning permit. If data is missing, say so plainly rather than fabricating values.',
+    'TONE — confident, specific, clause-cited. Distinguish as-of-right outcomes from permit-required pathways.',
+    'If the backend math flags missing data, acknowledge it plainly rather than fabricating values.',
     '',
-    'LENGTH — each section should be 1-3 sentences. The verdict field is a short phrase (e.g. "Permit Required" / "需申请规划许可").',
+    'LENGTH — each section 1-3 sentences. Verdict is a short phrase (e.g. "Permit Required" / "需申请规划许可").',
   ].join('\n');
 }
 
-function buildUserPrompt(m: ReportSiteMetrics): string {
+function buildUserPrompt(
+  m: ReportSiteMetrics,
+  yieldData: YieldData,
+  spatialMetrics: SpatialMetrics | null
+): string {
   const lines: string[] = [];
   lines.push(`Address: ${m.address}`);
-  lines.push(`Coordinates: ${m.lat.toFixed(5)}, ${m.lon.toFixed(5)}`);
   if (m.spi) lines.push(`SPI: ${m.spi}`);
   if (m.council) lines.push(`Council: ${m.council}`);
   lines.push('');
-  lines.push('PLANNING CONTEXT');
-  lines.push(`- Zone code: ${m.zoneCode ?? 'unknown'}`);
-  if (m.zoneDescription) lines.push(`- Zone description: ${m.zoneDescription}`);
-  lines.push(
-    `- Overlay categories: ${m.overlayCodes.length ? m.overlayCodes.join(', ') : 'none'}`,
-  );
+
+  lines.push('=== PLANNING CONTEXT ===');
+  lines.push(`Zone: ${m.zoneCode ?? 'unknown'}${m.zoneDescription ? ` - ${m.zoneDescription}` : ''}`);
+  lines.push(`Overlays: ${m.overlayCodes.length ? m.overlayCodes.join(', ') : 'none'}`);
   if (m.overlayRaw.length) {
-    lines.push(`- Raw scheme codes: ${m.overlayRaw.join(', ')}`);
+    lines.push(`Raw scheme codes: ${m.overlayRaw.join(', ')}`);
   }
   lines.push('');
-  lines.push('SITE METRICS');
-  lines.push(
-    `- Lot area: ${m.lotAreaM2 != null ? `${m.lotAreaM2} m²` : 'unknown'}`,
-  );
-  lines.push(
-    `- Frontage (shortest cadastral edge): ${m.frontageM != null ? `${m.frontageM.toFixed(1)} m` : 'unknown'}`,
-  );
-  lines.push(
-    `- Site coverage: ${m.siteCoveragePct != null ? `${m.siteCoveragePct.toFixed(1)}%` : 'unknown'}`,
-  );
-  lines.push(
-    `- Front setback (longest edge → nearest building corner): ${m.setbackFrontM != null ? `${m.setbackFrontM.toFixed(1)} m` : 'vacant or unknown'}`,
-  );
-  lines.push(
-    `- Side setback (minimum): ${m.setbackSideMinM != null ? `${m.setbackSideMinM.toFixed(1)} m` : 'vacant or unknown'}`,
-  );
-  lines.push(
-    `- Rear setback: ${m.setbackRearM != null ? `${m.setbackRearM.toFixed(1)} m` : 'vacant or unknown'}`,
-  );
+
+  lines.push('=== AGENT 1 OUTPUT: VERIFIED STATUTORY YIELD (DO NOT RECALCULATE) ===');
+  lines.push(JSON.stringify(yieldData, null, 2));
   lines.push('');
-  lines.push(
-    'Produce a bilingual feasibility brief for this lot. Evaluate development capacity against ResCode Clauses 54/55, the 2026 SSD reforms, and NCC 2026 where relevant. Note any overlay-driven permit triggers. Return the JSON object only.',
-  );
+
+  if (spatialMetrics) {
+    lines.push('=== AGENT 2 OUTPUT: SPATIAL ANALYSIS (DO NOT RECALCULATE) ===');
+    lines.push(JSON.stringify(spatialMetrics, null, 2));
+    lines.push('');
+  }
+
+  lines.push('=== ADDITIONAL SITE CONTEXT (FOR NARRATIVE ONLY) ===');
+  if (m.siteCoveragePct != null) {
+    lines.push(`Existing site coverage: ${m.siteCoveragePct.toFixed(1)}%`);
+  }
+  if (m.setbackFrontM != null) {
+    lines.push(`Front setback: ${m.setbackFrontM.toFixed(1)} m`);
+  }
+  if (m.setbackSideMinM != null) {
+    lines.push(`Side setback (min): ${m.setbackSideMinM.toFixed(1)} m`);
+  }
+  if (m.setbackRearM != null) {
+    lines.push(`Rear setback: ${m.setbackRearM.toFixed(1)} m`);
+  }
+  lines.push('');
+
+  lines.push('=== YOUR TASK ===');
+  lines.push('Synthesize the verified mathematical outputs above into a premium bilingual feasibility brief.');
+  lines.push('Use the Agent 1 yield data and Agent 2 spatial metrics as ground truth.');
+  lines.push('Cite relevant ResCode clauses (54/55), SSD reforms, and overlay triggers.');
+  lines.push('Return ONLY the JSON object. No markdown fences.');
+
   return lines.join('\n');
 }
 
@@ -155,8 +178,7 @@ export async function POST(request: Request): Promise<Response> {
     return NextResponse.json<ReportResponse>(
       {
         ok: false,
-        error:
-          'ANTHROPIC_API_KEY is not configured on the server. Set it in your environment and redeploy.',
+        error: 'ANTHROPIC_API_KEY is not configured. Set it in .env.local and redeploy.',
       },
       { status: 503 },
     );
@@ -179,6 +201,22 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
+  // === HYBRID ARCHITECTURE: STEP 1 - AGENT 1 (Deterministic Yield Engine) ===
+  // Run statutory calculations entirely outside the LLM to eliminate hallucination risk.
+  const yieldData = calculateYield(
+    body.metrics.lotAreaM2 ?? 0,
+    body.metrics.zoneCode ?? ''
+  );
+
+  // === HYBRID ARCHITECTURE: STEP 2 - AGENT 2 (Spatial Analysis) ===
+  // If parcel polygon is available, calculate exact spatial metrics.
+  const spatialMetrics: SpatialMetrics | null = null;
+  // Note: In production, you would pass the polygon from the frontend via body.metrics.polygon
+  // For now, this is a placeholder for when polygon data is integrated into ReportRequest.
+
+  // === HYBRID ARCHITECTURE: STEP 3 - AGENT 3 (Commercial Synthesizer) ===
+  // Call Sonnet (not Opus - cost optimization) to synthesize bilingual narrative
+  // from the verified mathematical outputs above.
   const upstream = await fetch(resolveAnthropicUrl(), {
     method: 'POST',
     headers: {
@@ -193,7 +231,7 @@ export async function POST(request: Request): Promise<Response> {
       messages: [
         {
           role: 'user',
-          content: buildUserPrompt(body.metrics),
+          content: buildUserPrompt(body.metrics, yieldData, spatialMetrics),
         },
       ],
     }),

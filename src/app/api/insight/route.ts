@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { calculateYield, emptyYield, type YieldData } from '@/lib/yieldEngine';
 
 // Node runtime: required because `pg` (used by the Prisma driver adapter)
 // reaches into node:net / node:tls / node:util/types. Next.js's edge runtime
@@ -57,12 +56,6 @@ export async function POST(req: Request) {
     if (!apiKey) {
       throw new Error('ANTHROPIC_API_KEY environment variable is not set');
     }
-
-    // PRE-CALCULATED YIELD ENGINE (Deterministic Math)
-    // We execute ResCode and NCC 2026 calculations client-side to guarantee
-    // 100% accuracy. The AI agent receives these as factual input and does
-    // NOT recalculate them — its role is synthesis and bilingual translation.
-    const preliminaryYield = emptyYield('Pending web search for lot size verification');
 
     const systemPrompt = `You are a Senior Victorian Town Planner and Project Architect with deep, on-the-ground knowledge of Melbourne suburbs, planning controls, listing markets, and school catchments.
 
@@ -150,8 +143,12 @@ Rules:
       throw new Error(`Anthropic API error: ${response.status} ${errorText}`);
     }
 
-    const result = await response.json();
-    const textBlock = result.content?.find((block: any) => block.type === 'text');
+    type AnthropicContentBlock = { type: string; text?: string };
+    type AnthropicResponse = { content?: AnthropicContentBlock[] };
+    type SchoolRecord = { name?: unknown; distance?: unknown };
+
+    const result = (await response.json()) as AnthropicResponse;
+    const textBlock = result.content?.find((block) => block.type === 'text');
     if (!textBlock?.text) {
       throw new Error('No text content in Anthropic response');
     }
@@ -167,12 +164,12 @@ Rules:
       data.nearbySchools = [];
     } else {
       data.nearbySchools = data.nearbySchools
-        .filter((s: any) => s && typeof s === 'object')
-        .map((s: any) => ({
+        .filter((s: unknown): s is SchoolRecord => typeof s === 'object' && s !== null)
+        .map((s: SchoolRecord) => ({
           name: typeof s.name === 'string' ? s.name.trim() : '',
           distance: typeof s.distance === 'string' ? s.distance.trim() : '',
         }))
-        .filter((s: { name: string }) => s.name.length > 0)
+        .filter((s: { name: string; distance: string }) => s.name.length > 0)
         .slice(0, 2);
     }
 
@@ -190,8 +187,9 @@ Rules:
       });
 
     return NextResponse.json({ data, cached: false });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Gemini API Error:', error);
-    return NextResponse.json({ error: error?.message || 'Failed to generate insight' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Failed to generate insight';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
