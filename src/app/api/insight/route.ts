@@ -123,7 +123,10 @@ Rules:
 - If a value cannot be confirmed via search, provide a best-effort estimate based on neighbourhood context and clearly note uncertainty in insightSummary.`;
 
     // Call Anthropic API with Claude Sonnet 4.6 (optimized for speed/cost)
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const baseUrl = process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com';
+    const endpoint = `${baseUrl}/v1/messages`;
+
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'x-api-key': apiKey,
