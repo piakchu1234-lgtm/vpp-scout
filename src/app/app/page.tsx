@@ -15,6 +15,7 @@ import FeasibilityTab from '@/components/sidebar/FeasibilityTab';
 import StorefrontDrawer from '@/components/sidebar/StorefrontDrawer';
 import SuccessModal from '@/components/sidebar/SuccessModal';
 import ComprehensiveReport from '@/components/report/ComprehensiveReport';
+import ComplianceStatus from '@/components/dashboard/ComplianceStatus';
 import { MapPreview } from '@/components/MapPreview';
 import {
   fetchVicParcelForPoint,
@@ -510,6 +511,21 @@ function AppCanvas() {
             </div>
           </nav>
           <div className="p-6 overflow-y-auto flex-1">
+            {/* Deemed-to-Comply Status Block */}
+            <ComplianceStatus
+              landSizeM2={landSizeM2}
+              zoneCode={planData?.zoneCode ?? null}
+              overlays={overlays?.map((o) => o.code) ?? []}
+              frontageM={
+                aiInsight?.estimatedFrontage
+                  ? parseFloat(aiInsight.estimatedFrontage.replace(/[^\d.]/g, '')) || null
+                  : null
+              }
+              isVacantLand={aiInsight?.isVacantLand ?? false}
+              isLoadingData={isLoadingAI || parcelLoading}
+              lang={language}
+            />
+
             {/* Report Language Toggle */}
             <div className="mb-6">
               <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-2">
