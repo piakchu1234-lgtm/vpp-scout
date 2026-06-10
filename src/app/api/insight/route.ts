@@ -134,7 +134,7 @@ Rules:
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
+        model: 'claude-sonnet-4-20250514',
         max_tokens: 16000,
         tools: [{ type: 'web_search_20260209', name: 'web_search' }],
         messages: [{ role: 'user', content: systemPrompt }],
