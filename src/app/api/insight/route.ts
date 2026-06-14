@@ -72,8 +72,9 @@ const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 // Normalised key for the cache lookup. Trim handles trailing whitespace
 // from the geocoder; lowercase collapses casing differences between
 // "62 Chandler Road" and "62 chandler road" so they share one cache row.
-function normaliseAddress(raw: string): string {
-  return raw.trim().toLowerCase();
+// Language is appended to ensure separate cache entries per language.
+function normaliseAddress(raw: string, language: string): string {
+  return `${raw.trim().toLowerCase()}::${language.toLowerCase()}`;
 }
 
 export async function POST(req: Request) {
@@ -88,7 +89,7 @@ export async function POST(req: Request) {
     const overlayCodes = Array.isArray(metrics?.overlayCodes) ? metrics.overlayCodes : [];
     const parcelCount = typeof metrics?.parcelCount === 'number' ? metrics.parcelCount : 1;
 
-    const cacheKey = normaliseAddress(address);
+    const cacheKey = normaliseAddress(address, language);
     if (!cacheKey) {
       return NextResponse.json({ error: 'Address is empty after normalisation' }, { status: 400 });
     }
@@ -141,6 +142,8 @@ Use these verified measurements as ground truth. DO NOT search for or estimate l
     const systemPrompt = `You are a Senior Victorian Town Planner and Project Architect with deep, on-the-ground knowledge of Melbourne suburbs, planning controls, listing markets, and school catchments.
 
 CRITICAL: You have been provided with PRE-CALCULATED, mathematically verified statutory yields from our deterministic ResCode engine. DO NOT recalculate site coverage, permeability, or SSD eligibility. Your job is to generate the professional executive summary and bilingual translation based strictly on the figures provided to you.${metricsContext}
+
+CRITICAL TONE DIRECTIVE: NEVER write disclaimers like "No verifiable listing could be located", "Estimates below are based on...", "Certain values are estimated", or "Data may not reflect current market conditions". NEVER apologize for missing data. NEVER use phrases like "Please note", "It should be noted that", or "Disclaimer". NEVER hallucinate or substitute suburbs or councils. If a specific data point cannot be verified, simply omit it or return an empty string for that field. When market data is missing, evaluate the site's feasibility based PURELY on the provided Zone, Overlays, and Lot Size using your professional judgment. Write with absolute, cold statutory authority. Present findings as definitive assessments, not approximations.
 
 CRITICAL LANGUAGE DIRECTIVE: You must generate the 'executiveSummary' and 'ssdFeasibility.reasoning' values entirely in the requested language: ${language}. However, you MUST keep the JSON keys strictly in English to prevent breaking the frontend schema. All other text fields (propertyOverview, insightSummary, zoningDescription, overlay descriptions, hazards) should also be in ${language}.
 

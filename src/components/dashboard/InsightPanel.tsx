@@ -1,11 +1,12 @@
 'use client';
 
-import React from 'react';
-import { Bed, Bath, Car, MapPin, Loader2, ChevronDown } from 'lucide-react';
+import React, { useState } from 'react';
+import { Bed, Bath, Car, MapPin, Loader2, Landmark } from 'lucide-react';
 import ComplianceStatus from '@/components/dashboard/ComplianceStatus';
 import PlanningCard from '@/components/dashboard/PlanningCard';
 import YieldCard from '@/components/dashboard/YieldCard';
 import FeasibilityCard from '@/components/dashboard/FeasibilityCard';
+import DocumentStorefront from '@/components/dashboard/DocumentStorefront';
 import type { AIInsightData } from '@/app/app/page';
 import type { MarketDataResult } from '@/lib/marketData';
 import type { VicPlanData } from '@/lib/vicPlanApi';
@@ -38,10 +39,13 @@ const LABELS = {
   quickStats: { en: 'Quick Stats', zh: '快速统计' },
   aiIntelligence: { en: 'AI Intelligence', zh: 'AI 洞察' },
   loadingAI: { en: 'Loading AI analysis...', zh: '正在加载 AI 分析...' },
-  planningConstraints: { en: 'Planning & Constraints', zh: '规划与限制' },
-  developmentPotential: { en: 'Development Potential', zh: '开发潜力' },
-  financialFeasibility: { en: 'Financial Feasibility', zh: '财务可行性' },
+  vacantLand: { en: 'Vacant Land', zh: '空置土地' },
+  property: { en: 'Property', zh: '物业' },
+  planning: { en: 'Planning', zh: '规划' },
+  feasibility: { en: 'Feasibility', zh: '可行性' },
 };
+
+type TabId = 'property' | 'planning' | 'feasibility';
 
 export default function InsightPanel({
   address,
@@ -61,10 +65,16 @@ export default function InsightPanel({
   yieldData,
   effectiveLandSizeM2,
 }: InsightPanelProps) {
+  // Tab state for advanced analysis sections
+  const [activeTab, setActiveTab] = useState<TabId>('property');
+
   // Prioritize market data over AI insight for property attributes
   const bedrooms = marketData?.bedrooms ?? aiInsight?.bedrooms ?? null;
   const bathrooms = marketData?.bathrooms ?? aiInsight?.bathrooms ?? null;
   const carspaces = marketData?.carspaces ?? aiInsight?.carspaces ?? null;
+
+  // Detect vacant land: explicit flag from AI OR all property metrics are 0/null
+  const isVacantLand = aiInsight?.isVacantLand || (bedrooms === 0 && bathrooms === 0 && carspaces === 0);
 
   const formatLandSize = (m2: number | null) => {
     if (!m2 || !Number.isFinite(m2) || m2 <= 0) return '—';
@@ -113,29 +123,42 @@ export default function InsightPanel({
 
       {/* 2. QUICK STATS: Horizontal pill row */}
       <div className="flex flex-wrap items-center gap-3">
-        {/* Bedrooms */}
-        <div className="flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-800/50 px-3 py-1.5">
-          <Bed className="w-4 h-4 text-zinc-400" />
-          <span className="text-sm font-bold text-white">
-            {bedrooms && bedrooms > 0 ? bedrooms : '—'}
-          </span>
-        </div>
+        {isVacantLand ? (
+          /* Single "Vacant Land" badge when property has no improvements */
+          <div className="flex items-center gap-2 rounded-full border border-amber-600 bg-amber-900/30 px-4 py-1.5">
+            <Landmark className="w-4 h-4 text-amber-400" />
+            <span className="text-sm font-bold text-amber-200">
+              {LABELS.vacantLand[language]}
+            </span>
+          </div>
+        ) : (
+          /* Individual property metrics for improved sites */
+          <>
+            {/* Bedrooms */}
+            <div className="flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-800/50 px-3 py-1.5">
+              <Bed className="w-4 h-4 text-zinc-400" />
+              <span className="text-sm font-bold text-white">
+                {bedrooms && bedrooms > 0 ? bedrooms : '—'}
+              </span>
+            </div>
 
-        {/* Bathrooms */}
-        <div className="flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-800/50 px-3 py-1.5">
-          <Bath className="w-4 h-4 text-zinc-400" />
-          <span className="text-sm font-bold text-white">
-            {bathrooms && bathrooms > 0 ? bathrooms : '—'}
-          </span>
-        </div>
+            {/* Bathrooms */}
+            <div className="flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-800/50 px-3 py-1.5">
+              <Bath className="w-4 h-4 text-zinc-400" />
+              <span className="text-sm font-bold text-white">
+                {bathrooms && bathrooms > 0 ? bathrooms : '—'}
+              </span>
+            </div>
 
-        {/* Carspaces */}
-        <div className="flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-800/50 px-3 py-1.5">
-          <Car className="w-4 h-4 text-zinc-400" />
-          <span className="text-sm font-bold text-white">
-            {carspaces && carspaces > 0 ? carspaces : '—'}
-          </span>
-        </div>
+            {/* Carspaces */}
+            <div className="flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-800/50 px-3 py-1.5">
+              <Car className="w-4 h-4 text-zinc-400" />
+              <span className="text-sm font-bold text-white">
+                {carspaces && carspaces > 0 ? carspaces : '—'}
+              </span>
+            </div>
+          </>
+        )}
 
         {/* Land Size - CRITICAL: Use effectiveLandSizeM2 for multi-parcel consolidation */}
         <div className="flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-800/50 px-3 py-1.5">
@@ -185,57 +208,91 @@ export default function InsightPanel({
         )}
       </div>
 
-      {/* 5. ADVANCED ANALYSIS ACCORDIONS */}
-      <div className="space-y-3 border-t border-white/10 pt-6">
-        {/* Accordion 1: Planning & Constraints */}
-        <details className="group rounded-lg border border-zinc-700 bg-zinc-800/50 overflow-hidden">
-          <summary className="flex items-center justify-between px-5 py-4 cursor-pointer list-none hover:bg-zinc-700/30 transition-colors">
-            <span className="text-sm font-bold uppercase tracking-widest text-zinc-200 flex items-center gap-2">
-              <span>🗺️</span>
-              {LABELS.planningConstraints[language]}
-            </span>
-            <ChevronDown className="w-4 h-4 text-zinc-400 transition-transform duration-200 group-open:rotate-180" />
-          </summary>
-          <div className="px-5 pb-5 border-t border-zinc-700">
-            <PlanningCard
-              zoneCode={planData?.zoneCode}
-              zoneDescription={planData?.zoneDescription}
-              overlays={overlays}
-              aiInsight={aiInsight}
-              effectiveLandSizeM2={effectiveLandSizeM2}
-              address={address}
-              lang={language}
-            />
-          </div>
-        </details>
+      {/* 5. ADVANCED ANALYSIS TABS */}
+      <div className="border-t border-white/10 pt-6">
+        {/* Tab Navigation */}
+        <div className="flex gap-2 mb-4" role="tablist">
+          <button
+            role="tab"
+            aria-selected={activeTab === 'property'}
+            aria-controls="tab-panel-property"
+            onClick={() => setActiveTab('property')}
+            className={`
+              flex-1 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all
+              ${
+                activeTab === 'property'
+                  ? 'bg-[#E9E778] text-[#241F21]'
+                  : 'bg-zinc-800/50 text-zinc-400 hover:bg-zinc-700/50 hover:text-zinc-200 border border-zinc-700'
+              }
+            `}
+          >
+            {LABELS.property[language]}
+          </button>
+          <button
+            role="tab"
+            aria-selected={activeTab === 'planning'}
+            aria-controls="tab-panel-planning"
+            onClick={() => setActiveTab('planning')}
+            className={`
+              flex-1 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all
+              ${
+                activeTab === 'planning'
+                  ? 'bg-[#E9E778] text-[#241F21]'
+                  : 'bg-zinc-800/50 text-zinc-400 hover:bg-zinc-700/50 hover:text-zinc-200 border border-zinc-700'
+              }
+            `}
+          >
+            {LABELS.planning[language]}
+          </button>
+          <button
+            role="tab"
+            aria-selected={activeTab === 'feasibility'}
+            aria-controls="tab-panel-feasibility"
+            onClick={() => setActiveTab('feasibility')}
+            className={`
+              flex-1 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all
+              ${
+                activeTab === 'feasibility'
+                  ? 'bg-[#E9E778] text-[#241F21]'
+                  : 'bg-zinc-800/50 text-zinc-400 hover:bg-zinc-700/50 hover:text-zinc-200 border border-zinc-700'
+              }
+            `}
+          >
+            {LABELS.feasibility[language]}
+          </button>
+        </div>
 
-        {/* Accordion 2: Development Potential */}
-        <details className="group rounded-lg border border-zinc-700 bg-zinc-800/50 overflow-hidden">
-          <summary className="flex items-center justify-between px-5 py-4 cursor-pointer list-none hover:bg-zinc-700/30 transition-colors">
-            <span className="text-sm font-bold uppercase tracking-widest text-zinc-200 flex items-center gap-2">
-              <span>🏗️</span>
-              {LABELS.developmentPotential[language]}
-            </span>
-            <ChevronDown className="w-4 h-4 text-zinc-400 transition-transform duration-200 group-open:rotate-180" />
-          </summary>
-          <div className="px-5 pb-5 border-t border-zinc-700">
-            <YieldCard yieldData={yieldData} />
-          </div>
-        </details>
+        {/* Tab Panels */}
+        <div className="rounded-lg border border-zinc-700 bg-zinc-800/30 p-5">
+          {activeTab === 'property' && (
+            <div role="tabpanel" id="tab-panel-property" aria-labelledby="tab-property">
+              <PlanningCard
+                zoneCode={planData?.zoneCode}
+                zoneDescription={planData?.zoneDescription}
+                overlays={overlays}
+                aiInsight={aiInsight}
+                effectiveLandSizeM2={effectiveLandSizeM2}
+                address={address}
+                lang={language}
+              />
+            </div>
+          )}
+          {activeTab === 'planning' && (
+            <div role="tabpanel" id="tab-panel-planning" aria-labelledby="tab-planning">
+              <YieldCard yieldData={yieldData} />
+            </div>
+          )}
+          {activeTab === 'feasibility' && (
+            <div role="tabpanel" id="tab-panel-feasibility" aria-labelledby="tab-feasibility">
+              <FeasibilityCard yieldData={yieldData} />
+            </div>
+          )}
+        </div>
+      </div>
 
-        {/* Accordion 3: Financial Feasibility */}
-        <details className="group rounded-lg border border-zinc-700 bg-zinc-800/50 overflow-hidden">
-          <summary className="flex items-center justify-between px-5 py-4 cursor-pointer list-none hover:bg-zinc-700/30 transition-colors">
-            <span className="text-sm font-bold uppercase tracking-widest text-zinc-200 flex items-center gap-2">
-              <span>📊</span>
-              {LABELS.financialFeasibility[language]}
-            </span>
-            <ChevronDown className="w-4 h-4 text-zinc-400 transition-transform duration-200 group-open:rotate-180" />
-          </summary>
-          <div className="px-5 pb-5 border-t border-zinc-700">
-            <FeasibilityCard yieldData={yieldData} />
-          </div>
-        </details>
+      {/* 6. DOCUMENT STOREFRONT - Landata Intelligence & Monetization */}
+      <div className="border-t border-white/10 pt-6">
+        <DocumentStorefront lotPlan={lotPlan} lang={language} />
       </div>
     </div>
   );
