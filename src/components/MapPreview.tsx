@@ -30,6 +30,7 @@ import {
   type OverlayPolygonFeature,
   type ParcelFeature,
   type ParcelPolygon,
+  type ParcelGeometry,
 } from '@/lib/vicPlanApi';
 import type { EasementData } from '@/lib/easementApi';
 import { tpzRadiusM } from '@/lib/tpz';
@@ -61,7 +62,7 @@ type Props = {
   lat: number;
   lon: number;
   lang?: 'en' | 'zh';
-  polygon?: ParcelPolygon | null;
+  polygon?: ParcelGeometry | null;
   envelope?: ParcelPolygon | null;
   envelopeExceeded?: boolean;
   proposedFootprint?: ParcelPolygon | null;
@@ -231,14 +232,30 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
         let minLat = Infinity;
         let maxLon = -Infinity;
         let maxLat = -Infinity;
-        for (const ring of polygon.coordinates) {
-          for (const [x, y] of ring) {
-            if (x < minLon) minLon = x;
-            if (y < minLat) minLat = y;
-            if (x > maxLon) maxLon = x;
-            if (y > maxLat) maxLat = y;
+
+        // Handle both Polygon and MultiPolygon geometries
+        if (polygon.type === 'Polygon') {
+          for (const ring of polygon.coordinates) {
+            for (const [x, y] of ring) {
+              if (x < minLon) minLon = x;
+              if (y < minLat) minLat = y;
+              if (x > maxLon) maxLon = x;
+              if (y > maxLat) maxLat = y;
+            }
+          }
+        } else if (polygon.type === 'MultiPolygon') {
+          for (const poly of polygon.coordinates) {
+            for (const ring of poly) {
+              for (const [x, y] of ring) {
+                if (x < minLon) minLon = x;
+                if (y < minLat) minLat = y;
+                if (x > maxLon) maxLon = x;
+                if (y > maxLat) maxLat = y;
+              }
+            }
           }
         }
+
         if (Number.isFinite(minLon) && Number.isFinite(minLat)) {
           map.fitBounds(
             [

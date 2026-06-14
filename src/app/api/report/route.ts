@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { calculateYield, type YieldData } from '@/lib/yieldEngine';
-import type { SpatialMetrics } from '@/lib/spatialAnalysis';
 
 import type {
   FeasibilityReport,
@@ -82,7 +81,7 @@ function buildSystemPrompt(): string {
 function buildUserPrompt(
   m: ReportSiteMetrics,
   yieldData: YieldData,
-  spatialMetrics: SpatialMetrics | null
+  spatialMetrics: Record<string, unknown> | null
 ): string {
   const lines: string[] = [];
   lines.push(`Address: ${m.address}`);
@@ -210,7 +209,7 @@ export async function POST(request: Request): Promise<Response> {
 
   // === HYBRID ARCHITECTURE: STEP 2 - AGENT 2 (Spatial Analysis) ===
   // If parcel polygon is available, calculate exact spatial metrics.
-  const spatialMetrics: SpatialMetrics | null = null;
+  const spatialMetrics: Record<string, unknown> | null = null;
   // Note: In production, you would pass the polygon from the frontend via body.metrics.polygon
   // For now, this is a placeholder for when polygon data is integrated into ReportRequest.
 

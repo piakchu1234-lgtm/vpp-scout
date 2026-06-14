@@ -78,10 +78,15 @@ function normaliseAddress(raw: string): string {
 
 export async function POST(req: Request) {
   try {
-    const { address, language = 'English' } = await req.json();
+    const { address, language = 'English', metrics } = await req.json();
     if (!address || typeof address !== 'string') {
       return NextResponse.json({ error: 'No address provided' }, { status: 400 });
     }
+
+    // Extract consolidated metrics from frontend spatial analysis
+    const lotAreaM2 = metrics?.lotAreaM2 ?? null;
+    const overlayCodes = Array.isArray(metrics?.overlayCodes) ? metrics.overlayCodes : [];
+    const parcelCount = typeof metrics?.parcelCount === 'number' ? metrics.parcelCount : 1;
 
     const cacheKey = normaliseAddress(address);
     if (!cacheKey) {
@@ -120,9 +125,22 @@ export async function POST(req: Request) {
       throw new Error('ANTHROPIC_API_KEY environment variable is not set');
     }
 
+    // Inject consolidated metrics into the prompt context so the AI Auditor
+    // knows the true site area and overlay constraints when multiple parcels
+    // are selected. This enables accurate SSD feasibility assessment and yield
+    // calculations for multi-lot acquisition scenarios.
+    const metricsContext = lotAreaM2
+      ? `\n\nCONSOLIDATED SITE METRICS (from frontend spatial analysis):
+- Total lot area: ${lotAreaM2.toFixed(2)} m²
+- Parcel count: ${parcelCount}
+- Known overlays: ${overlayCodes.length > 0 ? overlayCodes.join(', ') : 'none detected'}
+
+Use these verified measurements as ground truth. DO NOT search for or estimate lot size — this value is computed from authoritative Vicmap cadastral polygons.`
+      : '';
+
     const systemPrompt = `You are a Senior Victorian Town Planner and Project Architect with deep, on-the-ground knowledge of Melbourne suburbs, planning controls, listing markets, and school catchments.
 
-CRITICAL: You have been provided with PRE-CALCULATED, mathematically verified statutory yields from our deterministic ResCode engine. DO NOT recalculate site coverage, permeability, or SSD eligibility. Your job is to generate the professional executive summary and bilingual translation based strictly on the figures provided to you.
+CRITICAL: You have been provided with PRE-CALCULATED, mathematically verified statutory yields from our deterministic ResCode engine. DO NOT recalculate site coverage, permeability, or SSD eligibility. Your job is to generate the professional executive summary and bilingual translation based strictly on the figures provided to you.${metricsContext}
 
 CRITICAL LANGUAGE DIRECTIVE: You must generate the 'executiveSummary' and 'ssdFeasibility.reasoning' values entirely in the requested language: ${language}. However, you MUST keep the JSON keys strictly in English to prevent breaking the frontend schema. All other text fields (propertyOverview, insightSummary, zoningDescription, overlay descriptions, hazards) should also be in ${language}.
 

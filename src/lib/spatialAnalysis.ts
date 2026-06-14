@@ -1,155 +1,96 @@
-import type { Polygon } from 'geojson';
-import area from '@turf/area';
-import length from '@turf/length';
-import { lineString } from '@turf/helpers';
+/**
+ * Spatial analysis utilities for multi-parcel feasibility calculations.
+ * Merges cadastral parcels using Turf.js polygon union operations to support
+ * multi-lot acquisition scenarios where developers need combined site metrics.
+ */
 
-export type SpatialMetrics = {
+import union from '@turf/union';
+import area from '@turf/area';
+import type { Feature, Polygon, MultiPolygon } from 'geojson';
+import type { ParcelFeature } from './vicPlanApi';
+
+export type UnifiedSiteGeometry = {
+  /** Merged polygon (may be MultiPolygon if parcels are non-contiguous). */
+  geometry: Polygon | MultiPolygon;
+  /** Total site area in square meters. */
   areaM2: number;
-  perimeterM: number;
-  frontageM: number;
-  frontageEdgeIndex: number;
-  isIrregular: boolean;
-  irregularityReason: string | null;
 };
 
 /**
- * Calculate exact site area in square meters from a Vicmap polygon.
- * Uses Turf.js geodesic area calculation for precision.
+ * Merge multiple parcel geometries into a unified site polygon for
+ * multi-parcel feasibility analysis. Uses @turf/union to combine
+ * geometries, handling both contiguous and non-contiguous parcels.
+ *
+ * @param parcels - Array of cadastral parcel features from Vicmap
+ * @returns Unified geometry with total area, or null if merge fails
+ *
+ * @example
+ * ```ts
+ * const parcels = [parcel1, parcel2, parcel3];
+ * const site = mergeParcelGeometries(parcels);
+ * console.log(`Combined site: ${site.areaM2.toFixed(0)} m²`);
+ * ```
  */
-export function calculateSiteArea(polygon: Polygon): number {
-  const m2 = area({ type: 'Feature', properties: {}, geometry: polygon });
-  return Number.isFinite(m2) && m2 > 0 ? m2 : 0;
-}
+export function mergeParcelGeometries(
+  parcels: ParcelFeature[],
+): UnifiedSiteGeometry | null {
+  if (parcels.length === 0) return null;
 
-/**
- * Calculate the length of each edge in a polygon and identify the longest
- * edge as the primary street frontage (fallback heuristic until road
- * casement data is integrated).
- */
-export function calculateFrontage(polygon: Polygon): {
-  frontageM: number;
-  frontageEdgeIndex: number;
-  allEdgeLengths: number[];
-} {
-  const coords = polygon.coordinates[0]; // exterior ring
-  if (!coords || coords.length < 4) {
-    return { frontageM: 0, frontageEdgeIndex: -1, allEdgeLengths: [] };
-  }
-
-  const edgeLengths: number[] = [];
-  let maxLength = 0;
-  let maxIndex = 0;
-
-  // Calculate length of each edge (point i to point i+1)
-  for (let i = 0; i < coords.length - 1; i++) {
-    const p1 = coords[i];
-    const p2 = coords[i + 1];
-
-    // Create a line segment and calculate geodesic length in kilometers
-    const line = lineString([p1, p2]);
-    const lengthKm = length(line, { units: 'kilometers' });
-    const lengthM = lengthKm * 1000;
-
-    edgeLengths.push(lengthM);
-
-    if (lengthM > maxLength) {
-      maxLength = lengthM;
-      maxIndex = i;
+  // Single parcel - return as-is with computed area
+  if (parcels.length === 1) {
+    const geom = parcels[0].geometry;
+    try {
+      const m2 = area({ type: 'Feature', properties: {}, geometry: geom });
+      return {
+        geometry: geom,
+        areaM2: Number.isFinite(m2) && m2 > 0 ? m2 : 0,
+      };
+    } catch (error) {
+      console.error('[spatialAnalysis] Area calculation failed:', error);
+      return null;
     }
   }
 
-  return {
-    frontageM: maxLength,
-    frontageEdgeIndex: maxIndex,
-    allEdgeLengths: edgeLengths,
-  };
-}
-
-/**
- * Detect irregular lot shapes that require specialized setback rules.
- * Flags battle-axe blocks (narrow access corridor), L-shaped lots, and
- * parcels with extreme aspect ratios.
- */
-export function detectIrregularShape(
-  polygon: Polygon,
-  areaM2: number,
-  edgeLengths: number[]
-): { isIrregular: boolean; reason: string | null } {
-  if (edgeLengths.length < 4) {
-    return { isIrregular: false, reason: null };
-  }
-
-  // Sort edges to find longest and shortest
-  const sorted = [...edgeLengths].sort((a, b) => b - a);
-  const longest = sorted[0];
-  const shortest = sorted[sorted.length - 1];
-  const secondLongest = sorted[1];
-
-  // Flag 1: Battle-axe block heuristic
-  // A very narrow edge (< 4m) suggests an access corridor
-  if (shortest < 4) {
-    return {
-      isIrregular: true,
-      reason: 'Potential battle-axe block detected (access corridor < 4m)',
+  // Multiple parcels - perform union
+  try {
+    // Start with the first parcel as a Feature (non-nullable because we
+    // initialize it with a concrete geometry and only assign non-null results)
+    let combined: Feature<Polygon | MultiPolygon> = {
+      type: 'Feature',
+      properties: {},
+      geometry: parcels[0].geometry,
     };
-  }
 
-  // Flag 2: Extreme aspect ratio
-  // If longest edge is > 3x the shortest edge, flag as irregular
-  if (longest > shortest * 3) {
+    // Iteratively union each subsequent parcel
+    for (let i = 1; i < parcels.length; i++) {
+      const nextFeature: Feature<Polygon> = {
+        type: 'Feature',
+        properties: {},
+        geometry: parcels[i].geometry,
+      };
+
+      // union() expects two features and returns a feature or null
+      // Type assertion needed because @turf/union has inconsistent type definitions
+      const unionResult = union(
+        combined as any,
+        nextFeature as any,
+      ) as Feature<Polygon | MultiPolygon> | null;
+
+      if (!unionResult) {
+        console.warn('[spatialAnalysis] Union operation returned null at parcel', i);
+        return null;
+      }
+
+      combined = unionResult;
+    }
+
+    const m2 = area(combined);
     return {
-      isIrregular: true,
-      reason: `Extreme aspect ratio (${(longest / shortest).toFixed(1)}:1)`,
+      geometry: combined.geometry,
+      areaM2: Number.isFinite(m2) && m2 > 0 ? m2 : 0,
     };
+  } catch (error) {
+    console.error('[spatialAnalysis] Parcel union failed:', error);
+    return null;
   }
-
-  // Flag 3: L-shaped or complex geometry
-  // If the polygon has more than 6 vertices (excluding the closing point),
-  // it's likely non-rectangular and may have complex setback requirements
-  const coords = polygon.coordinates[0];
-  if (coords.length > 7) {
-    // 7 = 6 vertices + 1 closing point
-    return {
-      isIrregular: true,
-      reason: 'Complex polygon geometry (non-rectangular)',
-    };
-  }
-
-  // Flag 4: Very small frontage relative to area
-  // A 600m² lot with only 10m frontage is likely irregular
-  const estimatedDepth = areaM2 / longest;
-  if (estimatedDepth > longest * 2) {
-    return {
-      isIrregular: true,
-      reason: 'Depth significantly exceeds frontage (potential flag lot)',
-    };
-  }
-
-  return { isIrregular: false, reason: null };
-}
-
-/**
- * Calculate total perimeter of the polygon.
- */
-export function calculatePerimeter(edgeLengths: number[]): number {
-  return edgeLengths.reduce((sum, len) => sum + len, 0);
-}
-
-/**
- * Master function: Analyze a Vicmap polygon and return all spatial metrics.
- */
-export function analyzeSpatialMetrics(polygon: Polygon): SpatialMetrics {
-  const areaM2 = calculateSiteArea(polygon);
-  const { frontageM, frontageEdgeIndex, allEdgeLengths } = calculateFrontage(polygon);
-  const perimeterM = calculatePerimeter(allEdgeLengths);
-  const { isIrregular, reason } = detectIrregularShape(polygon, areaM2, allEdgeLengths);
-
-  return {
-    areaM2,
-    perimeterM,
-    frontageM,
-    frontageEdgeIndex,
-    isIrregular,
-    irregularityReason: reason,
-  };
 }

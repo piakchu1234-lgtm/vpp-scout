@@ -29,6 +29,7 @@ import {
 import { fetchLgaForPoint } from '@/lib/lgaApi';
 import { reverseGeocodeNearest } from '@/lib/geocoding';
 import { calculateYield, emptyYield, type YieldData } from '@/lib/yieldEngine';
+import { mergeParcelGeometries } from '@/lib/spatialAnalysis';
 
 const MELBOURNE_FALLBACK = { lat: -37.8136, lon: 144.9631 };
 const VICMAP_TIMEOUT_MS = 15000;
@@ -254,15 +255,32 @@ function AppCanvas() {
     };
   }, [hasCoords, lat, lon]);
 
+  // Active site geometry — unified polygon representing either the single
+  // clicked parcel or the merged result of multiple selected parcels. This
+  // drives all downstream feasibility calculations for multi-lot acquisitions.
+  const activeSiteGeometry = useMemo(() => {
+    if (selectedParcels.length > 1) {
+      // Multi-parcel mode: merge all selected parcels into unified geometry
+      const merged = mergeParcelGeometries(selectedParcels);
+      return merged?.geometry ?? null;
+    } else if (selectedParcels.length === 1) {
+      // Single selected parcel from map click
+      return selectedParcels[0].geometry;
+    } else {
+      // No selection: fall back to coordinate-based fetch polygon
+      return polygon;
+    }
+  }, [selectedParcels, polygon]);
+
   const landSizeM2 = useMemo(() => {
-    if (!polygon) return null;
+    if (!activeSiteGeometry) return null;
     try {
-      const m2 = area({ type: 'Feature', properties: {}, geometry: polygon });
+      const m2 = area({ type: 'Feature', properties: {}, geometry: activeSiteGeometry });
       return Number.isFinite(m2) && m2 > 0 ? m2 : null;
     } catch {
       return null;
     }
-  }, [polygon]);
+  }, [activeSiteGeometry]);
 
   const hasPrimaryLandSize =
     typeof landSizeM2 === 'number' && Number.isFinite(landSizeM2) && landSizeM2 > 0;
@@ -290,10 +308,26 @@ function AppCanvas() {
     setAiInsight(null);
     setHasAttemptedAI(false);
 
+    // Construct consolidated address string for multi-parcel selections
+    const consolidatedAddress = selectedParcels.length > 1
+      ? `Consolidated Site (${selectedParcels.length} Parcels) - ${address}`
+      : address;
+
+    // Extract overlay codes from planData for backend eligibility checks
+    const overlayCodes = planData?.overlayRaw ?? [];
+
     fetch('/api/insight', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address, language: reportLanguage }),
+      body: JSON.stringify({
+        address: consolidatedAddress,
+        language: reportLanguage,
+        metrics: {
+          lotAreaM2: landSizeM2,
+          overlayCodes,
+          parcelCount: selectedParcels.length || 1,
+        },
+      }),
     })
       .then((res) => res.json())
       .then((response) => {
@@ -436,7 +470,7 @@ function AppCanvas() {
               <MapPreview
                 lat={lat}
                 lon={lon}
-                polygon={polygon}
+                polygon={activeSiteGeometry}
                 selectedParcels={selectedParcels}
                 viewMode={viewMode}
                 setViewMode={setViewMode}

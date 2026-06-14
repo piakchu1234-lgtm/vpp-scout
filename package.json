@@ -25,6 +25,7 @@
     "@turf/circle": "^7.3.5",
     "@turf/helpers": "^7.3.5",
     "@turf/length": "^7.3.5",
+    "@turf/union": "^7.3.5",
     "axios": "^1.16.0",
     "clsx": "^2.1.1",
     "dotenv": "^17.4.2",

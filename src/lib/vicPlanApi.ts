@@ -131,6 +131,11 @@ export type ParcelPolygon = {
   coordinates: number[][][];
 };
 
+export type ParcelGeometry = ParcelPolygon | {
+  type: 'MultiPolygon';
+  coordinates: number[][][][];
+};
+
 type ArcgisPolygonFeature = {
   geometry?: { rings?: number[][][] };
 };
