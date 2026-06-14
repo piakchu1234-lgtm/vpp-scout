@@ -74,6 +74,7 @@ type Props = {
   tool?: MapTool;
   distancePoints?: LonLat[];
   areaPoints?: LonLat[];
+  selectedParcels?: ParcelPolygon[];
   onMapClick?: (lonLat: LonLat) => void;
   onParcelClick?: (lonLat: LonLat) => void;
   hoverInfo?: MapHoverInfo | null;
@@ -156,6 +157,7 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
       tool = 'pan',
       distancePoints = [],
       areaPoints = [],
+      selectedParcels = [],
       onMapClick,
       onParcelClick,
       hoverInfo,
@@ -171,6 +173,7 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
     const parcelFetchRef = useRef<AbortController | null>(null);
     const [viewMode, setViewMode] = useState<ViewMode>('plan');
     const [proGateOpen, setProGateOpen] = useState(false);
+    const [isPitched, setIsPitched] = useState(false);
 
     // Phase A & B planning overlay vector layers — HO / BMO / FO. The
     // Set drives both the toggle UI's pressed state and the imperative
@@ -812,6 +815,31 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
           )}
           {/* property-boundary source/layers are attached imperatively in
               the useEffect above so they survive Mapbox style switches. */}
+          {selectedParcels.map((parcel, idx) => (
+            <Source
+              key={`multi-parcel-${idx}`}
+              id={`multi-parcel-${idx}`}
+              type="geojson"
+              data={{ type: 'Feature', properties: {}, geometry: parcel }}
+            >
+              <Layer
+                id={`multi-parcel-fill-${idx}`}
+                type="fill"
+                paint={{
+                  'fill-color': PARCEL_HIGHLIGHT_LIME,
+                  'fill-opacity': 0.2,
+                }}
+              />
+              <Layer
+                id={`multi-parcel-line-${idx}`}
+                type="line"
+                paint={{
+                  'line-color': PARCEL_HIGHLIGHT_LIME,
+                  'line-width': 2,
+                }}
+              />
+            </Source>
+          ))}
           {buildings.length > 0 && (
             <Source
               id="vicmap-buildings"

@@ -17,6 +17,7 @@
     "@google/generative-ai": "^0.24.1",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
+    "@radix-ui/react-accordion": "^1.2.13",
     "@stripe/stripe-js": "^9.4.0",
     "@swc/helpers": "0.5.21",
     "@turf/area": "^7.3.5",

@@ -16,7 +16,9 @@ import StorefrontDrawer from '@/components/sidebar/StorefrontDrawer';
 import SuccessModal from '@/components/sidebar/SuccessModal';
 import ComprehensiveReport from '@/components/report/ComprehensiveReport';
 import ComplianceStatus from '@/components/dashboard/ComplianceStatus';
+import PropertyInspector from '@/components/dashboard/PropertyInspector';
 import { MapPreview } from '@/components/MapPreview';
+import MapControlsToolbar from '@/components/MapControlsToolbar';
 import {
   fetchVicParcelForPoint,
   fetchVicPlanForPoint,
@@ -122,6 +124,9 @@ function AppCanvas() {
   const [hasAttemptedAI, setHasAttemptedAI] = useState(false);
   const [showReportPreview, setShowReportPreview] = useState(false);
   const [reportLanguage, setReportLanguage] = useState<'English' | 'Chinese'>('English');
+
+  // Multi-parcel selection state for MapControlsToolbar
+  const [selectedParcels, setSelectedParcels] = useState<ParcelPolygon[]>([]);
 
   const paymentParam = params.get('payment');
   const typeParam = params.get('type');
@@ -422,8 +427,14 @@ function AppCanvas() {
                 lat={lat}
                 lon={lon}
                 polygon={polygon}
+                selectedParcels={selectedParcels}
                 onParcelClick={handleMapParcelClick}
                 className="h-full w-full"
+              />
+              <MapControlsToolbar
+                selectedParcels={selectedParcels}
+                onClearSelection={() => setSelectedParcels([])}
+                lang={language}
               />
               {(parcelLoading || parcelMessage || isNavigating) && (
                 <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/10 bg-black/60 backdrop-blur-md text-xs font-medium tracking-wide pointer-events-none">
@@ -523,6 +534,13 @@ function AppCanvas() {
               }
               isVacantLand={aiInsight?.isVacantLand ?? false}
               isLoadingData={isLoadingAI || parcelLoading}
+              lang={language}
+            />
+
+            {/* Property Inspector Accordion */}
+            <PropertyInspector
+              aiInsight={aiInsight}
+              isLoadingAI={isLoadingAI}
               lang={language}
             />
 

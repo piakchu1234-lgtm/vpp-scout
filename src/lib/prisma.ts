@@ -11,9 +11,13 @@ import { Pool } from 'pg';
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
 function buildPrisma(): PrismaClient {
-  const connectionString = process.env.DATABASE_URL;
+  // Use DIRECT_URL for pg adapter runtime connections. The pg driver cannot
+  // authenticate against Supabase's PgBouncer pooler (port 6543). DIRECT_URL
+  // bypasses the pooler and connects directly to Postgres (port 5432).
+  // DATABASE_URL (pooled) is only for Prisma migrations.
+  const connectionString = process.env.DIRECT_URL || process.env.DATABASE_URL;
   if (!connectionString) {
-    throw new Error('DATABASE_URL is not set — required for Prisma + pg adapter');
+    throw new Error('DIRECT_URL or DATABASE_URL is not set — required for Prisma + pg adapter');
   }
   const pool = new Pool({ connectionString });
   const adapter = new PrismaPg(pool);

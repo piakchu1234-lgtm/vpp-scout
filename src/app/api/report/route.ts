@@ -14,7 +14,7 @@ export const runtime = 'edge';
 const ANTHROPIC_DEFAULT_BASE_URL = 'https://api.anthropic.com';
 // AGENT 3 MODEL: Locked to Sonnet for cost efficiency.
 // Opus is overkill when Agent 1 & 2 provide deterministic math.
-const ANTHROPIC_MODEL = 'claude-3-5-sonnet-20241022';
+const ANTHROPIC_MODEL = 'claude-sonnet-4.6';
 const ANTHROPIC_VERSION = '2023-06-01';
 
 function resolveAnthropicUrl(): string {

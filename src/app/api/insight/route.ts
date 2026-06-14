@@ -9,6 +9,64 @@ import { prisma } from '@/lib/prisma';
 // same Worker, so there is no $0-tier cost difference.
 export const runtime = 'nodejs';
 
+// Basic web search by scraping Google Search results (free, no API key).
+// Fragile to HTML structure changes, but keeps costs at $0.
+async function executeWebSearch(query: string): Promise<string> {
+  try {
+    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&num=10`;
+    const response = await fetch(searchUrl, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      },
+    });
+
+    if (!response.ok) {
+      return `Search failed: ${response.status}`;
+    }
+
+    const html = await response.text();
+
+    // Extract snippets from Google's search results (basic scraping)
+    const snippetRegex = new RegExp('<div[^>]*class="[^"]*VwiC3b[^"]*"[^>]*>(.*?)<\\/div>', 'gs');
+    const titleRegex = new RegExp('<h3[^>]*>(.*?)<\\/h3>', 'gs');
+
+    const snippets: string[] = [];
+    const titles: string[] = [];
+
+    let match;
+    while ((match = titleRegex.exec(html)) !== null && titles.length < 5) {
+      const cleaned = match[1].replace(/<[^>]*>/g, '').trim();
+      if (cleaned && cleaned.length > 10) {
+        titles.push(cleaned);
+      }
+    }
+
+    while ((match = snippetRegex.exec(html)) !== null && snippets.length < 5) {
+      const cleaned = match[1].replace(/<[^>]*>/g, '').trim();
+      if (cleaned && cleaned.length > 20) {
+        snippets.push(cleaned);
+      }
+    }
+
+    if (titles.length === 0 && snippets.length === 0) {
+      return `No results found for query: ${query}`;
+    }
+
+    // Format results
+    let result = `Search results for "${query}":\n\n`;
+    for (let i = 0; i < Math.max(titles.length, snippets.length); i++) {
+      if (titles[i]) result += `${i + 1}. ${titles[i]}\n`;
+      if (snippets[i]) result += `   ${snippets[i]}\n`;
+      result += '\n';
+    }
+
+    return result;
+  } catch (error) {
+    return `Search error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+  }
+}
+
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Normalised key for the cache lookup. Trim handles trailing whitespace
@@ -53,6 +111,11 @@ export async function POST(req: Request) {
     console.log(`[insight] CACHE MISS 🤖 (Calling Claude Sonnet 4.6) "${cacheKey}" [Language: ${language}]`);
 
     const apiKey = process.env.ANTHROPIC_API_KEY;
+    const baseUrl = process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com';
+
+    console.log('[insight] DEBUG - API Key:', apiKey ? `${apiKey.substring(0, 10)}...` : 'MISSING');
+    console.log('[insight] DEBUG - Base URL:', baseUrl);
+
     if (!apiKey) {
       throw new Error('ANTHROPIC_API_KEY environment variable is not set');
     }
@@ -122,42 +185,135 @@ Rules:
 - hazards: only list hazards that are actually present per official mapping. Empty array if none.
 - If a value cannot be confirmed via search, provide a best-effort estimate based on neighbourhood context and clearly note uncertainty in insightSummary.`;
 
-    // Call Anthropic API with Claude Sonnet 4.6 (optimized for speed/cost)
-    const baseUrl = process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com';
-    const endpoint = `${baseUrl}/v1/messages`;
+    // Multi-turn conversation with tool execution
+    type AnthropicMessage = {
+      role: 'user' | 'assistant';
+      content: string | Array<{ type: string; text?: string; id?: string; name?: string; input?: unknown; content?: string }>;
+    };
 
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 16000,
-        tools: [{ type: 'web_search_20260209', name: 'web_search' }],
-        messages: [{ role: 'user', content: systemPrompt }],
-      }),
-    });
+    type AnthropicContentBlock =
+      | { type: 'text'; text: string }
+      | { type: 'tool_use'; id: string; name: string; input: { query: string } };
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Anthropic API error: ${response.status} ${errorText}`);
-    }
+    type AnthropicResponse = {
+      content: AnthropicContentBlock[];
+      stop_reason: string;
+    };
 
-    type AnthropicContentBlock = { type: string; text?: string };
-    type AnthropicResponse = { content?: AnthropicContentBlock[] };
     type SchoolRecord = { name?: unknown; distance?: unknown };
 
-    const result = (await response.json()) as AnthropicResponse;
-    const textBlock = result.content?.find((block) => block.type === 'text');
-    if (!textBlock?.text) {
-      throw new Error('No text content in Anthropic response');
+    const endpoint = `${baseUrl}/v1/messages`;
+    const messages: AnthropicMessage[] = [
+      {
+        role: 'user',
+        content: `Analyze this property address and return the JSON object as instructed: ${address}`,
+      },
+    ];
+
+    let finalText: string | null = null;
+    let iterationCount = 0;
+    const MAX_ITERATIONS = 10; // Prevent infinite loops
+
+    while (!finalText && iterationCount < MAX_ITERATIONS) {
+      iterationCount++;
+      console.log(`[insight] API call iteration ${iterationCount}`);
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4.6',
+          max_tokens: 16000,
+          system: systemPrompt,
+          tools: [{ type: 'web_search_20260209', name: 'web_search' }],
+          messages,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Anthropic API error: ${response.status} ${errorText}`);
+      }
+
+      const result = (await response.json()) as AnthropicResponse;
+      console.log(`[insight] Stop reason: ${result.stop_reason}`);
+
+      if (result.stop_reason === 'tool_use') {
+        // Claude wants to use tools - execute them
+        const toolUseBlocks = result.content.filter(
+          (block): block is Extract<AnthropicContentBlock, { type: 'tool_use' }> =>
+            block.type === 'tool_use'
+        );
+
+        console.log(`[insight] Executing ${toolUseBlocks.length} web searches...`);
+
+        // Execute all tool requests
+        const toolResults = await Promise.all(
+          toolUseBlocks.map(async (toolUse) => {
+            if (toolUse.name === 'web_search') {
+              const query = toolUse.input.query;
+              console.log(`[insight]   Search: "${query}"`);
+
+              try {
+                const searchResults = await executeWebSearch(query);
+                return {
+                  type: 'tool_result',
+                  tool_use_id: toolUse.id,
+                  content: searchResults,
+                };
+              } catch (err) {
+                console.error(`[insight]   Search failed:`, err);
+                return {
+                  type: 'tool_result',
+                  tool_use_id: toolUse.id,
+                  content: `Search failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+                  is_error: true,
+                };
+              }
+            }
+            return {
+              type: 'tool_result',
+              tool_use_id: toolUse.id,
+              content: 'Unsupported tool',
+              is_error: true,
+            };
+          })
+        );
+
+        // Add assistant's tool_use message and user's tool_result message to conversation
+        messages.push({
+          role: 'assistant',
+          content: result.content,
+        });
+        messages.push({
+          role: 'user',
+          content: toolResults,
+        });
+
+        // Loop continues to get Claude's response with tool results
+      } else {
+        // Claude returned final text response
+        const textBlock = result.content.find((block): block is Extract<AnthropicContentBlock, { type: 'text' }> => block.type === 'text');
+
+        if (!textBlock?.text) {
+          console.error('[insight] ERROR - No text in final response:', result);
+          throw new Error('No text content in Anthropic response');
+        }
+
+        finalText = textBlock.text;
+      }
+    }
+
+    if (!finalText) {
+      throw new Error(`Tool execution loop exceeded ${MAX_ITERATIONS} iterations`);
     }
 
     // Strip markdown fences if the model returned any
-    const cleaned = textBlock.text.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+    const cleaned = finalText.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
     const data = JSON.parse(cleaned);
 
     // Defensive coercion: nearbySchools is a new field; older cached prompts

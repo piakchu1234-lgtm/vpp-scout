@@ -68,7 +68,7 @@ The design is a **modern, high-contrast SaaS dashboard**.
 ⚠ **Consult `node_modules/next/dist/docs/`** for the canonical API. Tailwind v4 uses `@tailwindcss/postcss` and `@theme` in CSS.
 
 ## Hosting constraint — $0 on Cloudflare Pages
-The product must remain hostable on **Cloudflare Pages' free tier** at **$0 ongoing cost**. Use static export `output: 'export'` or the `@cloudflare/next-on-pages` edge runtime. Avoid Node-only server actions or paid Vercel `next/image` optimization.
+The product must remain hostable on **Cloudflare Pages' free tier** at **$0 ongoing cost**. Use static export `output: 'export'` or the `opennextjs-cloudflare` adapter. Avoid Node-only server actions or paid Vercel `next/image` optimization.
 
 ### Approved API Deviations 
 1. **Google Places (New) v1:** `src/lib/placesService.ts` calls Google Places Nearby Search. Key is `NEXT_PUBLIC_GOOGLE_PLACES_API_KEY`. Module falls back to deterministic seeded list when key is missing. *Note: If Domain enrichment ever surfaces school / childcare proximity natively, demote `placesService.ts` back to a fallback rung to save costs.*
@@ -98,6 +98,29 @@ The map base must complement the `#241F21` dark theme. Base style derived from `
 - Windows machine intercepts TLS. npm and node need `NODE_OPTIONS=--use-system-ca`.
 - Shell is bash on Windows.
 
+## Environment Variables (Required)
+
+Copy `.env.local.example` to `.env.local` and populate:
+
+**Geospatial & Map Services:**
+- `NEXT_PUBLIC_MAPBOX_TOKEN`: Mapbox GL JS base map tiles
+
+**AI & Property Enrichment:**
+- `ANTHROPIC_API_KEY` + `ANTHROPIC_BASE_URL`: Custom Anthropic proxy for Gemini AI auditor
+- `NEXT_PUBLIC_GOOGLE_PLACES_API_KEY`: Google Places Nearby Search (schools, childcare)
+
+**Database (Supabase):**
+- `DATABASE_URL`: Pooled connection (port 6543) for Prisma migrations
+- `DIRECT_URL`: Non-pooled connection (port 5432) for runtime queries via pg adapter
+
+**Payment & Auth:**
+- `STRIPE_SECRET_KEY` + `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
+- `CLERK_SECRET_KEY` + `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+- `NEXT_PUBLIC_APP_URL`: Base URL for redirects (e.g., `http://localhost:3000`)
+
+**Optional (Native Data Parity):**
+- `DOMAIN_CLIENT_ID` + `DOMAIN_CLIENT_SECRET`: Domain API for property listings
+
 ---
 
 ## Development Commands
@@ -125,6 +148,14 @@ npx prisma studio    # Open Prisma Studio GUI
 npx prisma migrate dev --name <name>  # Create and apply migration
 ```
 
+### Database — Prisma 7 Connection Architecture
+
+**Critical:** Prisma 7 uses a split URL pattern for Supabase:
+- **DIRECT_URL** (port 5432, non-pooled): Used by `src/lib/prisma.ts` for runtime connections via the `pg` driver adapter. The pg driver cannot authenticate against PgBouncer.
+- **DATABASE_URL** (port 6543, pooled via PgBouncer): Used by Prisma CLI for migrations only (via `prisma.config.ts`).
+
+The datasource URL is no longer declared in `schema.prisma` — it lives in `prisma.config.ts`. The runtime client in `src/lib/prisma.ts` constructs a Pool with DIRECT_URL and passes it to `PrismaPg` adapter.
+
 ---
 
 ## Architecture Overview
@@ -148,6 +179,7 @@ npx prisma migrate dev --name <name>  # Create and apply migration
 - PostgreSQL cache (7-day TTL) via Prisma (`propertyCache` table)
 - Returns: beds/baths/cars, market estimate, property overview, design features, nearby schools, overlays with descriptions, hazards, last sold price/date
 - **Address Recovery**: When URL `?address` param is dropped (e.g., payment redirect), `reverseGeocodeNearest()` recovers address from coordinates to unblock AI fetch
+- **Web Search (Grounding)**: Google Search scraping (no API key) provides real-estate context for Gemini. Fragile to HTML structure changes but maintains $0 cost.
 
 **4. Analysis Engines**
 - `src/lib/yieldEngine.ts`: `calculateYield()` — SSD feasibility, land use estimates, permit requirements
@@ -213,9 +245,21 @@ All API routes use `export const runtime = 'nodejs'` because Prisma's `pg` adapt
 ## Critical Constraints
 
 ### Cloudflare Pages Free Tier ($0 Cost)
-- Use static export (`output: 'export'`) or `@cloudflare/next-on-pages` edge runtime
+- Use static export (`output: 'export'`) or `opennextjs-cloudflare` adapter
 - Avoid Node-only server actions or paid Vercel `next/image` optimization
 - API routes use Node runtime but deploy to same Worker (no cost difference)
+
+### Cloudflare Build Constraints
+
+`next.config.ts` applies memory/CPU limits when building on CI (Cloudflare Pages):
+```typescript
+experimental: {
+  cpus: 1,
+  workerThreads: false,
+  memoryBasedWorkersCount: true,
+}
+```
+This prevents OOM errors on the Cloudflare Pages free tier's 1GB memory limit during static generation.
 
 ### Next.js 16 + Tailwind v4 Breaking Changes
 - **Always consult `node_modules/next/dist/docs/`** before writing Next.js code
