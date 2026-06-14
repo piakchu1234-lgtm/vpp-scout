@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { ShieldAlert, BookOpen, AlertCircle, AlertTriangle, CheckCircle2, Loader2, ChevronDown } from 'lucide-react';
 import SSDFeasibilityWidget from '../sidebar/SSDFeasibilityWidget';
 import type { AIInsightData } from '@/app/app/page';
+import { getZoneDefinitionWithLanguage } from '@/lib/zoningDictionary';
 
 type Lang = 'en' | 'zh';
 
@@ -209,9 +210,19 @@ export default function PlanningCard({
             <p className="text-[10px] font-bold tracking-widest text-[#E9E778] uppercase mb-2">
               {t.legalDefinition}
             </p>
-            <p className="text-xs text-zinc-400 leading-relaxed italic">
-              {t.legalDefinitionPending}
-            </p>
+            {(() => {
+              const zoneDefinition = getZoneDefinitionWithLanguage(zone.code, lang);
+              return zoneDefinition ? (
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-white">{zoneDefinition.title}</p>
+                  <p className="text-xs text-zinc-400 leading-relaxed">{zoneDefinition.purpose}</p>
+                </div>
+              ) : (
+                <p className="text-xs text-zinc-400 leading-relaxed italic">
+                  {t.legalDefinitionPending}
+                </p>
+              );
+            })()}
           </div>
         )}
       </div>

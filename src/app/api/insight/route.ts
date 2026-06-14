@@ -149,6 +149,19 @@ CRITICAL LANGUAGE DIRECTIVE: You must generate the 'executiveSummary' and 'ssdFe
 
 CRITICAL: You must detect if the property is currently vacant land (e.g., if the land size exists but floor area/building details are missing, 0, or flagged as vacant in the data). If it is a vacant lot, set 'isVacantLand' to true. If true, you MUST ignore any legacy building data (beds, baths, existing floor area) from demolished structures and treat them as null or 0.
 
+CRITICAL WEB SEARCH DIRECTIVE — BEDS/BATHS/PRICE MANDATORY:
+Before generating your final JSON response, you MUST execute web searches to find missing property metrics. If ANY of the following fields are missing, unknown, or 0 after your initial data gathering, you MUST perform a targeted web search specifically for that metric:
+- Bedrooms (bedrooms)
+- Bathrooms (bathrooms)
+- Carspaces (carspaces)
+- Last Sold Price (estimatedLastSoldPrice)
+- Contract Date (estimatedContractDate)
+
+Search strategy:
+1. First search: "{address} realestate.com.au" OR "{address} domain.com.au" to find listing data
+2. If beds/baths/cars are still missing: "{address} property details bedrooms bathrooms"
+3. If sold price/date are missing: "{address} sold property history" OR "{address} realestate sold"
+
 You MUST use the web_search tool to look up, in priority order:
 - realestate.com.au, domain.com.au — current/historical listing for **exact** bedroom, bathroom, and car-space counts; property description; design features (e.g. "open-plan living", "timber-look floorboards", "north-facing rear", "solar"). CHECK IF THE LISTING INDICATES VACANT LAND OR DEMOLISHED STRUCTURE.
 - Vicmap, LANDATA, council records — Lot/Plan Number (e.g. "Lot 2 PS143510"), land size (m²), frontage
