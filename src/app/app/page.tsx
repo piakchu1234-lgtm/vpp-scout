@@ -471,12 +471,14 @@ function AppCanvas() {
     projectState.clearState();
   };
 
-  // Multi-parcel selection — clicking cadastral parcels toggles them in
-  // the selection array. Clicking empty space clears all selections.
-  // Navigation logic removed per 2026-06-14 dashboard expansion spec.
+  // Multi-parcel selection with Shift + Click modifier for site consolidation.
+  // Standard click: single-parcel selection (clears array, then adds one).
+  // Shift + Click: multi-parcel toggle (adds/removes without clearing).
+  // Clicking empty space: clears all selections.
   function handleMapParcelClick(
     lonLat: [number, number],
     clickedParcel: ParcelFeature | null,
+    shiftKey: boolean = false,
   ) {
     // If no parcel was clicked (empty space), clear selection array
     if (!clickedParcel) {
@@ -484,7 +486,13 @@ function AppCanvas() {
       return;
     }
 
-    // If a parcel was clicked, toggle its presence in the array
+    // Standard click (no Shift): replace selection with single parcel
+    if (!shiftKey) {
+      setSelectedParcels([clickedParcel]);
+      return;
+    }
+
+    // Shift + Click: toggle parcel in array for multi-site consolidation
     setSelectedParcels((prev) => {
       const pfi = clickedParcel.properties.PARCEL_PFI;
       const exists = prev.some((p) => p.properties.PARCEL_PFI === pfi);
