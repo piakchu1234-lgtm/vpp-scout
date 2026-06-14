@@ -1,8 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import * as Accordion from '@radix-ui/react-accordion';
-import { ChevronDown, Bed, Bath, Car, Calendar, Home, Save, FileText } from 'lucide-react';
+import { ChevronDown, Bed, Bath, Car, Calendar, Home, Save, FileText, Check } from 'lucide-react';
 import type { AIInsightData } from '@/app/app/page';
 
 type Lang = 'en' | 'zh';
@@ -11,8 +11,9 @@ type PropertyInspectorProps = {
   aiInsight: AIInsightData | null;
   isLoadingAI: boolean;
   lang: Lang;
-  onSaveToProject?: () => void;
-  onPurchaseTitleSearch?: () => void;
+  address: string | null;
+  onSaveToProject: () => void;
+  onPurchaseTitleSearch: () => void;
 };
 
 const LABELS = {
@@ -28,6 +29,7 @@ const LABELS = {
   overlays: { en: 'Overlays', zh: '规划覆盖区' },
   hazards: { en: 'Hazards', zh: '风险' },
   saveToProject: { en: 'Save to Project', zh: '保存至项目' },
+  saved: { en: 'Saved!', zh: '已保存!' },
   purchaseTitle: { en: 'Purchase Title & Easement Search', zh: '购买产权与地役权搜索' },
   noData: { en: 'No data available', zh: '暂无数据' },
   premium: { en: 'Premium', zh: '高级功能' },
@@ -40,6 +42,19 @@ export default function PropertyInspector({
   onSaveToProject,
   onPurchaseTitleSearch,
 }: PropertyInspectorProps) {
+  const [saveStatus, setSaveStatus] = React.useState<'idle' | 'saving' | 'saved'>('idle');
+
+  const handleSaveClick = () => {
+    setSaveStatus('saving');
+    if (onSaveToProject) {
+      onSaveToProject();
+    }
+    setTimeout(() => {
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    }, 300);
+  };
+
   if (isLoadingAI || !aiInsight) {
     return (
       <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4">
@@ -240,11 +255,25 @@ export default function PropertyInspector({
           <div className="space-y-2 pt-2">
             {/* Save to Project */}
             <button
-              onClick={onSaveToProject}
-              className="w-full flex items-center justify-center gap-2 rounded-md bg-[#E9E778] px-4 py-2.5 text-sm font-bold uppercase tracking-wider text-[#241F21] transition-colors hover:bg-[#d4d262]"
+              onClick={handleSaveClick}
+              disabled={saveStatus !== 'idle'}
+              className={`w-full flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-bold uppercase tracking-wider transition-colors ${
+                saveStatus === 'saved'
+                  ? 'bg-green-600 text-white'
+                  : 'bg-[#E9E778] text-[#241F21] hover:bg-[#d4d262]'
+              }`}
             >
-              <Save className="w-4 h-4" />
-              {LABELS.saveToProject[lang]}
+              {saveStatus === 'saved' ? (
+                <>
+                  <Check className="w-4 h-4" />
+                  {LABELS.saved[lang]}
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  {LABELS.saveToProject[lang]}
+                </>
+              )}
             </button>
 
             {/* Purchase Title & Easement Search */}

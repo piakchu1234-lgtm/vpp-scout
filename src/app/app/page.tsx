@@ -30,6 +30,7 @@ import { fetchLgaForPoint } from '@/lib/lgaApi';
 import { reverseGeocodeNearest } from '@/lib/geocoding';
 import { calculateYield, emptyYield, type YieldData } from '@/lib/yieldEngine';
 import { mergeParcelGeometries } from '@/lib/spatialAnalysis';
+import { useProjectState } from '@/hooks/useProjectState';
 
 const MELBOURNE_FALLBACK = { lat: -37.8136, lon: 144.9631 };
 const VICMAP_TIMEOUT_MS = 15000;
@@ -127,13 +128,32 @@ function AppCanvas() {
   const [showReportPreview, setShowReportPreview] = useState(false);
   const [reportLanguage, setReportLanguage] = useState<'English' | 'Chinese'>('English');
 
-  // Multi-parcel selection state for MapControlsToolbar
+  // Multi-parcel selection state for MapControlsToolbar — restored from localStorage on mount
   const [selectedParcels, setSelectedParcels] = useState<ParcelFeature[]>([]);
+
+  // Initialize state from localStorage on mount (client-side only to avoid hydration mismatch)
+  // Session persistence hook
+  const projectState = useProjectState();
 
   // View mode and camera state for MapControlsToolbar
   type ViewMode = 'plan' | 'satellite' | 'hybrid';
   const [viewMode, setViewMode] = useState<ViewMode>('plan');
   const [is3D, setIs3D] = useState(false);
+
+  // Hydrate state from localStorage on mount (client-side only to avoid SSR mismatch)
+  const [hasHydrated, setHasHydrated] = useState(false);
+  useEffect(() => {
+    if (!projectState.isLoaded) return;
+
+    if (projectState.savedState?.selectedParcels && projectState.savedState.selectedParcels.length > 0) {
+      setSelectedParcels(projectState.savedState.selectedParcels);
+    }
+    if (projectState.savedState?.aiInsight) {
+      setAiInsight(projectState.savedState.aiInsight);
+    }
+
+    setHasHydrated(true);
+  }, [projectState.isLoaded, projectState.savedState]);
 
   const paymentParam = params.get('payment');
   const typeParam = params.get('type');
@@ -351,6 +371,15 @@ function AppCanvas() {
     };
   }, [address, reportLanguage]);
 
+  // Auto-save to localStorage when key state changes (debounced)
+  useEffect(() => {
+    if (!hasHydrated) return; // Don't save on initial hydration
+    const timeoutId = setTimeout(() => {
+      projectState.saveState(selectedParcels, aiInsight);
+    }, 500);
+    return () => clearTimeout(timeoutId);
+  }, [selectedParcels, aiInsight, hasHydrated, projectState]);
+
   const effectiveLandSizeM2 = hasPrimaryLandSize
     ? landSizeM2
     : aiInsight?.estimatedLandSizeM2 ?? null;
@@ -408,6 +437,23 @@ function AppCanvas() {
     return calculateYield(landSizeM2, planData?.zoneCode ?? '');
   }, [landSizeM2, planData?.zoneCode]);
 
+  // SaaS CTA handlers
+  const handleSaveToProject = () => {
+    projectState.saveState(selectedParcels, aiInsight);
+    return true; // Signal success to PropertyInspector
+  };
+
+  const handlePurchaseTitleSearch = () => {
+    if (!address) return;
+    const landataUrl = `https://www.landata.vic.gov.au/order?address=${encodeURIComponent(address)}`;
+    window.open(landataUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleClearSelection = () => {
+    setSelectedParcels([]);
+    projectState.clearState();
+  };
+
   // Multi-parcel selection — clicking cadastral parcels toggles them in
   // the selection array. Clicking empty space clears all selections.
   // Navigation logic removed per 2026-06-14 dashboard expansion spec.
@@ -417,7 +463,7 @@ function AppCanvas() {
   ) {
     // If no parcel was clicked (empty space), clear selection array
     if (!clickedParcel) {
-      setSelectedParcels([]);
+      handleClearSelection();
       return;
     }
 
@@ -594,6 +640,9 @@ function AppCanvas() {
               aiInsight={aiInsight}
               isLoadingAI={isLoadingAI}
               lang={language}
+              onSaveToProject={handleSaveToProject}
+              onPurchaseTitleSearch={handlePurchaseTitleSearch}
+              address={address}
             />
 
             {/* Report Language Toggle */}
