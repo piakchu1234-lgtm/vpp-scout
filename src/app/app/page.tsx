@@ -22,6 +22,7 @@ import MapControlsToolbar from '@/components/MapControlsToolbar';
 import {
   fetchVicParcelForPoint,
   fetchVicPlanForPoint,
+  type ParcelFeature,
   type ParcelPolygon,
   type VicPlanData,
 } from '@/lib/vicPlanApi';
@@ -126,7 +127,12 @@ function AppCanvas() {
   const [reportLanguage, setReportLanguage] = useState<'English' | 'Chinese'>('English');
 
   // Multi-parcel selection state for MapControlsToolbar
-  const [selectedParcels, setSelectedParcels] = useState<ParcelPolygon[]>([]);
+  const [selectedParcels, setSelectedParcels] = useState<ParcelFeature[]>([]);
+
+  // View mode and camera state for MapControlsToolbar
+  type ViewMode = 'plan' | 'satellite' | 'hybrid';
+  const [viewMode, setViewMode] = useState<ViewMode>('plan');
+  const [is3D, setIs3D] = useState(false);
 
   const paymentParam = params.get('payment');
   const typeParam = params.get('type');
@@ -368,30 +374,34 @@ function AppCanvas() {
     return calculateYield(landSizeM2, planData?.zoneCode ?? '');
   }, [landSizeM2, planData?.zoneCode]);
 
-  // Click-to-Fetch — when the user clicks a neighbouring cadastral parcel
-  // in pan mode, reverse-geocode the point and push it into the URL.
-  // The lat/lon-driven useEffect above then re-runs the parcel + planning
-  // fetches automatically, so no extra state plumbing is needed.
-  async function handleMapParcelClick(lonLat: [number, number]) {
-    const [clickedLon, clickedLat] = lonLat;
-    if (!Number.isFinite(clickedLon) || !Number.isFinite(clickedLat)) return;
-    setIsNavigating(true);
-    try {
-      const hit = await reverseGeocodeNearest(clickedLon, clickedLat);
-      const nextAddress = hit?.result.displayName
-        ?? `${clickedLat.toFixed(6)}, ${clickedLon.toFixed(6)}`;
-      const nextLat = hit?.result.lat ?? clickedLat;
-      const nextLon = hit?.result.lon ?? clickedLon;
-      const qs = new URLSearchParams({
-        address: nextAddress,
-        lat: String(nextLat),
-        lon: String(nextLon),
-      });
-      router.push(`/app?${qs.toString()}`);
-    } finally {
-      setIsNavigating(false);
+  // Multi-parcel selection — clicking cadastral parcels toggles them in
+  // the selection array. Clicking empty space clears all selections.
+  // Navigation logic removed per 2026-06-14 dashboard expansion spec.
+  function handleMapParcelClick(
+    lonLat: [number, number],
+    clickedParcel: ParcelFeature | null,
+  ) {
+    // If no parcel was clicked (empty space), clear selection array
+    if (!clickedParcel) {
+      setSelectedParcels([]);
+      return;
     }
+
+    // If a parcel was clicked, toggle its presence in the array
+    setSelectedParcels((prev) => {
+      const pfi = clickedParcel.properties.PARCEL_PFI;
+      const exists = prev.some((p) => p.properties.PARCEL_PFI === pfi);
+
+      if (exists) {
+        // Remove from array
+        return prev.filter((p) => p.properties.PARCEL_PFI !== pfi);
+      } else {
+        // Add to array
+        return [...prev, clickedParcel];
+      }
+    });
   }
+
 
   return (
     <div className="relative min-h-screen w-full bg-[#241F21] text-white font-sans selection:bg-[#E9E778] selection:text-[#241F21]">
@@ -428,12 +438,20 @@ function AppCanvas() {
                 lon={lon}
                 polygon={polygon}
                 selectedParcels={selectedParcels}
+                viewMode={viewMode}
+                setViewMode={setViewMode}
+                is3D={is3D}
+                setIs3D={setIs3D}
                 onParcelClick={handleMapParcelClick}
                 className="h-full w-full"
               />
               <MapControlsToolbar
                 selectedParcels={selectedParcels}
                 onClearSelection={() => setSelectedParcels([])}
+                viewMode={viewMode}
+                setViewMode={setViewMode}
+                is3D={is3D}
+                setIs3D={setIs3D}
                 lang={language}
               />
               {(parcelLoading || parcelMessage || isNavigating) && (

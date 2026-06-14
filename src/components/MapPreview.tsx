@@ -47,12 +47,12 @@ export type MapHoverInfo = {
 
 export type MapTool = 'pan' | 'tree' | 'distance' | 'area';
 
-export type ViewMode = 'plan' | 'aerial' | 'hybrid';
+export type ViewMode = 'plan' | 'satellite' | 'hybrid';
 
 const STYLE_BY_VIEW: Record<ViewMode, string> = {
   plan: 'mapbox://styles/mapbox/dark-v11',
-  aerial: 'mapbox://styles/mapbox/satellite-v9',
-  hybrid: 'mapbox://styles/mapbox/satellite-v9',
+  satellite: 'mapbox://styles/mapbox/satellite-streets-v12',
+  hybrid: 'mapbox://styles/mapbox/satellite-streets-v12',
 };
 
 type LonLat = [number, number];
@@ -74,9 +74,13 @@ type Props = {
   tool?: MapTool;
   distancePoints?: LonLat[];
   areaPoints?: LonLat[];
-  selectedParcels?: ParcelPolygon[];
+  selectedParcels?: ParcelFeature[];
+  viewMode?: ViewMode;
+  setViewMode?: (mode: ViewMode) => void;
+  is3D?: boolean;
+  setIs3D?: (is3D: boolean) => void;
   onMapClick?: (lonLat: LonLat) => void;
-  onParcelClick?: (lonLat: LonLat) => void;
+  onParcelClick?: (lonLat: LonLat, parcel: ParcelFeature | null) => void;
   hoverInfo?: MapHoverInfo | null;
   className?: string;
 };
@@ -158,6 +162,10 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
       distancePoints = [],
       areaPoints = [],
       selectedParcels = [],
+      viewMode = 'plan',
+      setViewMode,
+      is3D = false,
+      setIs3D,
       onMapClick,
       onParcelClick,
       hoverInfo,
@@ -171,9 +179,6 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
     const [cadastralParcels, setCadastralParcels] = useState<ParcelFeature[]>([]);
     const [highlightedParcel, setHighlightedParcel] = useState<ParcelFeature | null>(null);
     const parcelFetchRef = useRef<AbortController | null>(null);
-    const [viewMode, setViewMode] = useState<ViewMode>('plan');
-    const [proGateOpen, setProGateOpen] = useState(false);
-    const [isPitched, setIsPitched] = useState(false);
 
     // Phase A & B planning overlay vector layers — HO / BMO / FO. The
     // Set drives both the toggle UI's pressed state and the imperative
@@ -200,6 +205,19 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
       return feature.geometry;
     }, [treeLonResolved, treeLatResolved, treeDbhMm]);
 
+    // Camera animation for 2D/3D toggle
+    useEffect(() => {
+      const map = mapRef.current?.getMap();
+      if (!map) return;
+      const targetPitch = is3D ? 60 : 0;
+      map.easeTo({
+        pitch: targetPitch,
+        bearing: 0,
+        duration: 800,
+        easing: (t) => t * (2 - t),
+      });
+    }, [is3D]);
+
     useEffect(() => {
       const map = mapRef.current?.getMap();
       if (!map) return;
@@ -207,6 +225,7 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
       // gives a deterministic, lot-sized view independent of the geocoded
       // centroid's zoom. Fall back to flyTo on the point when no
       // polygon is available yet.
+      const targetPitch = is3D ? 60 : 0;
       if (polygon) {
         let minLon = Infinity;
         let minLat = Infinity;
@@ -226,7 +245,7 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
               [minLon, minLat],
               [maxLon, maxLat],
             ],
-            { padding: 80, duration: 1500, pitch: 45, essential: true, maxZoom: 20 },
+            { padding: 80, duration: 1500, pitch: targetPitch, essential: true, maxZoom: 20 },
           );
           return;
         }
@@ -234,12 +253,12 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
       map.flyTo({
         center: [lon, lat],
         zoom: 19,
-        pitch: 45,
+        pitch: targetPitch,
         duration: 1500,
         essential: true,
         easing: (t) => t * (2 - t),
       });
-    }, [lat, lon, polygon]);
+    }, [lat, lon, polygon, is3D]);
 
     useImperativeHandle(
       ref,
@@ -692,10 +711,13 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
           ? cadastralParcels.find((p) => p.properties.PARCEL_PFI === pfi)
           : null;
         if (match) setHighlightedParcel(match);
-        onParcelClick([e.lngLat.lng, e.lngLat.lat]);
+        onParcelClick([e.lngLat.lng, e.lngLat.lat], match ?? null);
       } else {
         // Clear highlight when clicking empty space
         setHighlightedParcel(null);
+        if (onParcelClick) {
+          onParcelClick([e.lngLat.lng, e.lngLat.lat], null);
+        }
       }
     }
 
@@ -749,7 +771,7 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
           onMouseLeave={handleMouseLeave}
           onClick={handleClick}
         >
-          {viewMode !== 'aerial' && cadastralParcels.length > 0 && (
+          {viewMode === 'plan' && cadastralParcels.length > 0 && (
             <Source
               id="cadastral-parcels"
               type="geojson"
@@ -817,10 +839,10 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
               the useEffect above so they survive Mapbox style switches. */}
           {selectedParcels.map((parcel, idx) => (
             <Source
-              key={`multi-parcel-${idx}`}
+              key={`multi-parcel-${parcel.properties.PARCEL_PFI}`}
               id={`multi-parcel-${idx}`}
               type="geojson"
-              data={{ type: 'Feature', properties: {}, geometry: parcel }}
+              data={parcel}
             >
               <Layer
                 id={`multi-parcel-fill-${idx}`}
@@ -1127,70 +1149,8 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
           </div>
         )}
 
-        <div className="absolute bottom-10 left-2 flex gap-1.5 rounded-sm bg-[#241F21] p-1.5 shadow-lg">
-          <ViewThumb
-            label="Plan"
-            active={viewMode === 'plan'}
-            onClick={() => setViewMode('plan')}
-            swatch={
-              <div className="h-full w-full bg-[#F5F2ED]">
-                <div className="absolute inset-0 grid grid-cols-3 grid-rows-3">
-                  <div className="border-r border-b border-zinc-400/60" />
-                  <div className="border-r border-b border-zinc-400/60" />
-                  <div className="border-b border-zinc-400/60" />
-                  <div className="border-r border-b border-zinc-400/60" />
-                  <div className="border-r border-b border-zinc-400/60" />
-                  <div className="border-b border-zinc-400/60" />
-                  <div className="border-r border-zinc-400/60" />
-                  <div className="border-r border-zinc-400/60" />
-                  <div />
-                </div>
-              </div>
-            }
-          />
-          <ViewThumb
-            label="Aerial"
-            active={viewMode === 'aerial'}
-            onClick={() => setViewMode('aerial')}
-            swatch={
-              <div className="h-full w-full bg-gradient-to-br from-[#4a5d3a] via-[#6b7a4f] to-[#3d4a2e]" />
-            }
-          />
-          <ViewThumb
-            label="Hybrid"
-            active={viewMode === 'hybrid'}
-            onClick={() => setViewMode('hybrid')}
-            swatch={
-              <div className="relative h-full w-full bg-gradient-to-br from-[#4a5d3a] via-[#6b7a4f] to-[#3d4a2e]">
-                <div className="absolute inset-0 grid grid-cols-3 grid-rows-3">
-                  <div className="border-r border-b border-white/70" />
-                  <div className="border-r border-b border-white/70" />
-                  <div className="border-b border-white/70" />
-                  <div className="border-r border-b border-white/70" />
-                  <div className="border-r border-b border-white/70" />
-                  <div className="border-b border-white/70" />
-                  <div className="border-r border-white/70" />
-                  <div className="border-r border-white/70" />
-                  <div />
-                </div>
-              </div>
-            }
-          />
-          <ViewThumb
-            label="High-Res"
-            active={false}
-            locked
-            onClick={() => setProGateOpen(true)}
-            swatch={
-              <div className="h-full w-full bg-gradient-to-br from-[#5b6f48] via-[#8a9968] to-[#4a5d3a]" />
-            }
-          />
-        </div>
-
-        {/* Planning overlay layer toggles — HO / BMO / FO. Sits above the
-            view-mode thumbs so the architect can layer overlays onto any
-            basemap (Plan or Aerial) without losing their viewport. */}
-        <div className="absolute bottom-32 left-2 flex flex-col gap-1 rounded-sm bg-[#241F21] p-1.5 shadow-lg">
+        {/* Planning overlay layer toggles — HO / BMO / FO. */}
+        <div className="absolute bottom-4 left-2 flex flex-col gap-1 rounded-sm bg-[#241F21] p-1.5 shadow-lg">
           <span className="px-1 pb-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
             {lang === 'en' ? 'Overlays' : '规划覆盖区'}
           </span>
@@ -1247,109 +1207,10 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
           })}
         </div>
 
-        {proGateOpen && (
-          <div
-            className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-            onClick={() => setProGateOpen(false)}
-          >
-            <div
-              className="mx-4 max-w-sm rounded-sm border border-[#E9E778]/40 bg-[#241F21] p-6 shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="mb-3 flex size-10 items-center justify-center rounded-sm bg-[#E9E778]/15">
-                <PadlockIcon className="size-5 text-[#E9E778]" />
-              </div>
-              <h3 className="mb-2 text-base font-semibold tracking-tight text-white">
-                SimplySite Pro Required
-              </h3>
-              <p className="mb-5 text-xs leading-relaxed text-zinc-300">
-                High-Res Nearmap imagery (sub-10 cm aerial captures, refreshed quarterly) is part of the SimplySite Pro tier. Upgrade to access historical captures, oblique views, and AI-derived footprint analytics.
-              </p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setProGateOpen(false)}
-                  className="flex-1 rounded-sm border border-zinc-700 bg-transparent px-3 py-2 text-xs font-medium text-zinc-300 transition-colors hover:bg-zinc-800"
-                >
-                  Not now
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setProGateOpen(false)}
-                  className="flex-1 rounded-sm bg-[#E9E778] px-3 py-2 text-xs font-semibold text-[#241F21] transition-opacity hover:opacity-90"
-                >
-                  Upgrade to Pro
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     );
   },
 );
-
-function ViewThumb({
-  label,
-  active,
-  locked = false,
-  onClick,
-  swatch,
-}: {
-  label: string;
-  active: boolean;
-  locked?: boolean;
-  onClick: () => void;
-  swatch: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`group relative flex w-16 flex-col overflow-hidden rounded-sm border transition-all ${
-        active
-          ? 'border-[#E9E778] ring-1 ring-[#E9E778]'
-          : 'border-zinc-700 hover:border-zinc-500'
-      }`}
-      aria-label={`${label} view${locked ? ' (locked)' : ''}`}
-      aria-pressed={active}
-    >
-      <span className="relative block h-12 w-full overflow-hidden">
-        {swatch}
-        {locked && (
-          <span className="absolute inset-0 flex items-center justify-center bg-black/45">
-            <PadlockIcon className="size-4 text-[#E9E778]" />
-          </span>
-        )}
-      </span>
-      <span
-        className={`block px-1 py-1 text-[10px] font-medium tracking-wide ${
-          active ? 'bg-[#E9E778] text-[#241F21]' : 'bg-[#241F21] text-zinc-300'
-        }`}
-      >
-        {label}
-      </span>
-    </button>
-  );
-}
-
-function PadlockIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden
-    >
-      <rect x="3" y="7" width="10" height="7" rx="1" />
-      <path d="M5.5 7V5a2.5 2.5 0 015 0v2" />
-    </svg>
-  );
-}
 
 function Crosshair() {
   const color = '#18181b';
