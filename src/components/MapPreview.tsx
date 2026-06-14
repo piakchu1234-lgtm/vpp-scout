@@ -81,7 +81,7 @@ type Props = {
   is3D?: boolean;
   setIs3D?: (is3D: boolean) => void;
   onMapClick?: (lonLat: LonLat) => void;
-  onParcelClick?: (lonLat: LonLat, parcel: ParcelFeature | null) => void;
+  onParcelClick?: (lonLat: LonLat, parcel: ParcelFeature | null, shiftKey: boolean) => void;
   hoverInfo?: MapHoverInfo | null;
   className?: string;
 };
@@ -718,6 +718,10 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
         onMapClick?.([e.lngLat.lng, e.lngLat.lat]);
         return;
       }
+
+      // Detect shift-click for multi-parcel selection
+      const isShiftHeld = e.originalEvent.shiftKey;
+
       const hit = e.features?.find(
         (f) => f.layer?.id === 'cadastral-parcels-fill',
       );
@@ -727,13 +731,26 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
         const match = pfi
           ? cadastralParcels.find((p) => p.properties.PARCEL_PFI === pfi)
           : null;
+
+        // Update highlighted parcel for visual feedback
         if (match) setHighlightedParcel(match);
-        onParcelClick([e.lngLat.lng, e.lngLat.lat], match ?? null);
+
+        // Pass shift-key state to parent handler via a custom property on the parcel object
+        // The parent (page.tsx) will handle the multi-select logic
+        if (match && isShiftHeld) {
+          // Create a modified parcel object with shift-click metadata
+          const parcelWithMeta = { ...match, __shiftClick: true } as ParcelFeature & { __shiftClick?: boolean };
+          onParcelClick([e.lngLat.lng, e.lngLat.lat], parcelWithMeta, isShiftHeld);
+        } else {
+          onParcelClick([e.lngLat.lng, e.lngLat.lat], match ?? null, isShiftHeld);
+        }
       } else {
-        // Clear highlight when clicking empty space
-        setHighlightedParcel(null);
+        // Clear highlight when clicking empty space (only if shift not held)
+        if (!isShiftHeld) {
+          setHighlightedParcel(null);
+        }
         if (onParcelClick) {
-          onParcelClick([e.lngLat.lng, e.lngLat.lat], null);
+          onParcelClick([e.lngLat.lng, e.lngLat.lat], null, isShiftHeld);
         }
       }
     }

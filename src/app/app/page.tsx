@@ -2,23 +2,15 @@
 
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowLeft, Download, Loader2, Map as MapIcon } from 'lucide-react';
 import area from '@turf/area';
-import PropertyDetailsTab from '@/components/sidebar/PropertyDetailsTab';
-import PlanningConstraintsTab, {
-  describeOverlayCode,
-  type PlanningOverlay,
-} from '@/components/sidebar/PlanningConstraintsTab';
-import DevelopmentPotentialTab from '@/components/sidebar/DevelopmentPotentialTab';
-import FeasibilityTab from '@/components/sidebar/FeasibilityTab';
 import StorefrontDrawer from '@/components/sidebar/StorefrontDrawer';
 import SuccessModal from '@/components/sidebar/SuccessModal';
 import ComprehensiveReport from '@/components/report/ComprehensiveReport';
-import ComplianceStatus from '@/components/dashboard/ComplianceStatus';
-import PropertyInspector from '@/components/dashboard/PropertyInspector';
 import { MapPreview } from '@/components/MapPreview';
 import MapControlsToolbar from '@/components/MapControlsToolbar';
+import InsightPanel from '@/components/dashboard/InsightPanel';
+import { describeOverlayCode, type PlanningOverlay } from '@/components/dashboard/PlanningCard';
 import {
   fetchVicParcelForPoint,
   fetchVicPlanForPoint,
@@ -31,6 +23,7 @@ import { reverseGeocodeNearest } from '@/lib/geocoding';
 import { calculateYield, emptyYield, type YieldData } from '@/lib/yieldEngine';
 import { mergeParcelGeometries } from '@/lib/spatialAnalysis';
 import { useProjectState } from '@/hooks/useProjectState';
+import { fetchMarketData, type MarketDataResult } from '@/lib/marketData';
 
 const MELBOURNE_FALLBACK = { lat: -37.8136, lon: 144.9631 };
 const VICMAP_TIMEOUT_MS = 15000;
@@ -67,26 +60,11 @@ export type AIInsightData = {
 };
 
 type Lang = 'en' | 'zh';
-type TabId = 'property' | 'planning' | 'potential' | 'feasibility';
-
-const TAB_LABELS: Record<TabId, Record<Lang, string>> = {
-  property: { en: 'Property', zh: '详情' },
-  planning: { en: 'Planning', zh: '规划' },
-  potential: { en: 'Potential', zh: '潜力' },
-  feasibility: { en: 'Feasibility', zh: '可行性' },
-};
 
 const STOREFRONT_CTA: Record<Lang, string> = {
   en: 'Download Reports & Title',
   zh: '下载报告与产权文件',
 };
-
-const TABS: { id: TabId; disabled?: boolean }[] = [
-  { id: 'property' },
-  { id: 'planning' },
-  { id: 'potential' },
-  { id: 'feasibility' },
-];
 
 function AppCanvas() {
   const params = useSearchParams();
@@ -112,7 +90,6 @@ function AppCanvas() {
   const [parcelMessage, setParcelMessage] = useState<string | null>(null);
   const [planData, setPlanData] = useState<VicPlanData | null>(null);
   const [liveCouncil, setLiveCouncil] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<TabId>('property');
   const [isStorefrontOpen, setIsStorefrontOpen] = useState(false);
   const [language, setLanguage] = useState<Lang>('en');
   const [isNavigating, setIsNavigating] = useState(false);
@@ -126,7 +103,13 @@ function AppCanvas() {
   // window on first render where the timer could fire with a null insight.
   const [hasAttemptedAI, setHasAttemptedAI] = useState(false);
   const [showReportPreview, setShowReportPreview] = useState(false);
-  const [reportLanguage, setReportLanguage] = useState<'English' | 'Chinese'>('English');
+
+  // Market data state — property attributes from Domain API (beds/baths/cars/etc)
+  const [marketData, setMarketData] = useState<MarketDataResult | null>(null);
+  const [isLoadingMarket, setIsLoadingMarket] = useState(false);
+
+  // Derive report language from UI language state - unified language control
+  const reportLanguage = language === 'en' ? 'English' : 'Chinese';
 
   // Multi-parcel selection state for MapControlsToolbar — restored from localStorage on mount
   const [selectedParcels, setSelectedParcels] = useState<ParcelFeature[]>([]);
@@ -371,6 +354,40 @@ function AppCanvas() {
     };
   }, [address, reportLanguage]);
 
+  // Market data fetch — property attributes from Domain API (beds/baths/cars/year built/last sold)
+  useEffect(() => {
+    if (!address || !hasCoords) {
+      setMarketData(null);
+      setIsLoadingMarket(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingMarket(true);
+    setMarketData(null);
+
+    fetchMarketData(address)
+      .then((data: MarketDataResult) => {
+        if (!cancelled) {
+          setMarketData(data);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          console.error('[AppCanvas] Market data fetch failed', err);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingMarket(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [address, lat, lon, hasCoords]);
+
   // Auto-save to localStorage when key state changes (debounced)
   useEffect(() => {
     if (!hasHydrated) return; // Don't save on initial hydration
@@ -562,157 +579,25 @@ function AppCanvas() {
         </section>
 
         <aside className="flex-1 md:h-full flex flex-col overflow-hidden relative bg-[#241F21]">
-          <nav className="flex items-center gap-1 px-6 pt-6 pb-3 border-b border-white/10 bg-[#241F21] sticky top-0 z-10">
-            {TABS.map((tab) => {
-              const active = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => !tab.disabled && setActiveTab(tab.id)}
-                  disabled={tab.disabled}
-                  aria-pressed={active}
-                  className={`relative px-3 py-2 text-xs font-bold uppercase tracking-widest transition-colors ${
-                    tab.disabled
-                      ? 'text-zinc-600 cursor-not-allowed'
-                      : active
-                        ? 'text-[#E9E778]'
-                        : 'text-zinc-400 hover:text-white'
-                  }`}
-                >
-                  {TAB_LABELS[tab.id][language]}
-                  {active && (
-                    <span className="absolute left-3 right-3 -bottom-[13px] h-0.5 bg-[#E9E778] rounded-full" />
-                  )}
-                </button>
-              );
-            })}
-
-            <div
-              role="group"
-              aria-label="Language toggle"
-              className="ml-auto flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest"
-            >
-              <button
-                type="button"
-                onClick={() => setLanguage('en')}
-                aria-pressed={language === 'en'}
-                className={
-                  language === 'en'
-                    ? 'text-[#E9E778]'
-                    : 'text-zinc-500 hover:text-zinc-200 transition-colors'
-                }
-              >
-                EN
-              </button>
-              <span className="text-zinc-700">|</span>
-              <button
-                type="button"
-                onClick={() => setLanguage('zh')}
-                aria-pressed={language === 'zh'}
-                className={
-                  language === 'zh'
-                    ? 'text-[#E9E778]'
-                    : 'text-zinc-500 hover:text-zinc-200 transition-colors'
-                }
-              >
-                中文
-              </button>
-            </div>
-          </nav>
-          <div className="p-6 overflow-y-auto flex-1">
-            {/* Deemed-to-Comply Status Block */}
-            <ComplianceStatus
+          <div className="overflow-y-auto flex-1">
+            <InsightPanel
+              address={address}
+              language={language}
+              setLanguage={setLanguage}
               landSizeM2={landSizeM2}
-              zoneCode={planData?.zoneCode ?? null}
-              overlays={overlays?.map((o) => o.code) ?? []}
-              frontageM={
-                aiInsight?.estimatedFrontage
-                  ? parseFloat(aiInsight.estimatedFrontage.replace(/[^\d.]/g, '')) || null
-                  : null
-              }
-              isVacantLand={aiInsight?.isVacantLand ?? false}
-              isLoadingData={isLoadingAI || parcelLoading}
-              lang={language}
-            />
-
-            {/* Property Inspector Accordion */}
-            <PropertyInspector
+              lotPlan={spi}
+              liveCouncil={liveCouncil}
+              lat={lat}
+              lon={lon}
               aiInsight={aiInsight}
               isLoadingAI={isLoadingAI}
-              lang={language}
-              onSaveToProject={handleSaveToProject}
-              onPurchaseTitleSearch={handlePurchaseTitleSearch}
-              address={address}
+              marketData={marketData}
+              isLoadingMarket={isLoadingMarket}
+              planData={planData}
+              overlays={overlays}
+              yieldData={yieldData}
+              effectiveLandSizeM2={effectiveLandSizeM2}
             />
-
-            {/* Report Language Toggle */}
-            <div className="mb-6">
-              <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-2">
-                Report Language
-              </div>
-              <div className="flex bg-zinc-800 p-1 rounded-md w-fit border border-zinc-700">
-                <button
-                  onClick={() => setReportLanguage('English')}
-                  className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
-                    reportLanguage === 'English'
-                      ? 'bg-zinc-600 text-white shadow-sm'
-                      : 'text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  EN
-                </button>
-                <button
-                  onClick={() => setReportLanguage('Chinese')}
-                  className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
-                    reportLanguage === 'Chinese'
-                      ? 'bg-zinc-600 text-white shadow-sm'
-                      : 'text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  中文
-                </button>
-              </div>
-            </div>
-
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={activeTab}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.18, ease: 'easeOut' }}
-              >
-                {activeTab === 'property' && (
-                  <PropertyDetailsTab
-                    address={address}
-                    lat={lat}
-                    lon={lon}
-                    landSizeM2={landSizeM2}
-                    lotPlan={spi}
-                    lang={language}
-                    aiInsight={aiInsight}
-                    liveCouncil={liveCouncil}
-                  />
-                )}
-                {activeTab === 'planning' && (
-                  <PlanningConstraintsTab
-                    zoneCode={planData?.zoneCode ?? null}
-                    zoneDescription={planData?.zoneDescription ?? null}
-                    overlays={overlays}
-                    aiInsight={aiInsight}
-                    effectiveLandSizeM2={effectiveLandSizeM2}
-                    address={address}
-                    lang={language}
-                  />
-                )}
-                {activeTab === 'potential' && (
-                  <DevelopmentPotentialTab yieldData={yieldData} />
-                )}
-                {activeTab === 'feasibility' && (
-                  <FeasibilityTab yieldData={yieldData} />
-                )}
-              </motion.div>
-            </AnimatePresence>
           </div>
 
           <div className="border-t border-white/10 bg-[#241F21] p-4">

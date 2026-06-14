@@ -4,12 +4,15 @@ import React, { useState } from 'react';
 import * as Accordion from '@radix-ui/react-accordion';
 import { ChevronDown, Bed, Bath, Car, Calendar, Home, Save, FileText, Check } from 'lucide-react';
 import type { AIInsightData } from '@/app/app/page';
+import type { MarketDataResult } from '@/lib/marketData';
 
 type Lang = 'en' | 'zh';
 
 type PropertyInspectorProps = {
   aiInsight: AIInsightData | null;
   isLoadingAI: boolean;
+  marketData: MarketDataResult | null;
+  isLoadingMarket: boolean;
   lang: Lang;
   address: string | null;
   onSaveToProject: () => void;
@@ -38,6 +41,8 @@ const LABELS = {
 export default function PropertyInspector({
   aiInsight,
   isLoadingAI,
+  marketData,
+  isLoadingMarket,
   lang,
   onSaveToProject,
   onPurchaseTitleSearch,
@@ -55,11 +60,20 @@ export default function PropertyInspector({
     }, 300);
   };
 
-  if (isLoadingAI || !aiInsight) {
+  // Prioritize market data over AI insight for property attributes
+  const bedrooms = marketData?.bedrooms ?? aiInsight?.bedrooms ?? null;
+  const bathrooms = marketData?.bathrooms ?? aiInsight?.bathrooms ?? null;
+  const carspaces = marketData?.carspaces ?? aiInsight?.carspaces ?? null;
+  const lastSoldPrice = marketData?.lastSoldPrice ?? aiInsight?.estimatedLastSoldPrice ?? null;
+  const yearBuilt = marketData?.yearBuilt ?? null;
+
+  const isLoading = isLoadingAI || isLoadingMarket;
+
+  if (isLoading && !aiInsight && !marketData) {
     return (
       <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4">
         <div className="text-xs text-zinc-500">
-          {isLoadingAI ? 'Loading property data…' : 'No property data available'}
+          Loading property data…
         </div>
       </div>
     );
@@ -94,7 +108,7 @@ export default function PropertyInspector({
                   {LABELS.bedrooms[lang]}
                 </div>
                 <div className="text-sm font-bold text-white">
-                  {aiInsight.bedrooms ?? '—'}
+                  {marketData?.bedrooms ?? (aiInsight?.bedrooms && aiInsight.bedrooms > 0 ? aiInsight.bedrooms : '—')}
                 </div>
               </div>
             </div>
@@ -107,7 +121,7 @@ export default function PropertyInspector({
                   {LABELS.bathrooms[lang]}
                 </div>
                 <div className="text-sm font-bold text-white">
-                  {aiInsight.bathrooms ?? '—'}
+                  {marketData?.bathrooms ?? (aiInsight?.bathrooms && aiInsight.bathrooms > 0 ? aiInsight.bathrooms : '—')}
                 </div>
               </div>
             </div>
@@ -120,7 +134,7 @@ export default function PropertyInspector({
                   {LABELS.carspaces[lang]}
                 </div>
                 <div className="text-sm font-bold text-white">
-                  {aiInsight.carspaces ?? '—'}
+                  {marketData?.carspaces ?? (aiInsight?.carspaces && aiInsight.carspaces > 0 ? aiInsight.carspaces : '—')}
                 </div>
               </div>
             </div>
@@ -133,33 +147,41 @@ export default function PropertyInspector({
                   {LABELS.lastSold[lang]}
                 </div>
                 <div className="text-sm font-bold text-white">
-                  {aiInsight.estimatedLastSoldPrice ?? '—'}
+                  {marketData?.lastSoldPrice ?? aiInsight?.estimatedLastSoldPrice ?? '—'}
                 </div>
               </div>
             </div>
 
-            {/* Year Built - Premium placeholder */}
-            <div className="flex items-center gap-2 rounded-md border border-zinc-600 bg-zinc-600/20 px-3 py-2">
-              <Home className="w-4 h-4 text-zinc-500" />
+            {/* Year Built */}
+            <div className={`flex items-center gap-2 rounded-md border px-3 py-2 ${
+              marketData?.yearBuilt
+                ? 'border-zinc-700 bg-zinc-900/40'
+                : 'border-zinc-600 bg-zinc-600/20'
+            }`}>
+              <Home className={`w-4 h-4 ${marketData?.yearBuilt ? 'text-zinc-400' : 'text-zinc-500'}`} />
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-zinc-500">
                   {LABELS.yearBuilt[lang]}
                 </div>
-                <div className="text-xs font-medium text-zinc-500">
-                  {LABELS.premium[lang]}
+                <div className={`text-sm font-bold ${marketData?.yearBuilt ? 'text-white' : 'text-zinc-500'}`}>
+                  {marketData?.yearBuilt ?? '—'}
                 </div>
               </div>
             </div>
 
-            {/* Floor Area - Premium placeholder */}
-            <div className="flex items-center gap-2 rounded-md border border-zinc-600 bg-zinc-600/20 px-3 py-2">
-              <Home className="w-4 h-4 text-zinc-500" />
+            {/* Floor Area */}
+            <div className={`flex items-center gap-2 rounded-md border px-3 py-2 ${
+              marketData?.floorAreaM2
+                ? 'border-zinc-700 bg-zinc-900/40'
+                : 'border-zinc-600 bg-zinc-600/20'
+            }`}>
+              <Home className={`w-4 h-4 ${marketData?.floorAreaM2 ? 'text-zinc-400' : 'text-zinc-500'}`} />
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-zinc-500">
                   {LABELS.floorArea[lang]}
                 </div>
-                <div className="text-xs font-medium text-zinc-500">
-                  {LABELS.premium[lang]}
+                <div className={`text-sm font-bold ${marketData?.floorAreaM2 ? 'text-white' : 'text-zinc-500'}`}>
+                  {marketData?.floorAreaM2 ? `${marketData.floorAreaM2} m²` : '—'}
                 </div>
               </div>
             </div>
@@ -187,7 +209,7 @@ export default function PropertyInspector({
               <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-2">
                 {LABELS.overlays[lang]}
               </div>
-              {aiInsight.overlays.length > 0 ? (
+              {aiInsight?.overlays && aiInsight.overlays.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                   {aiInsight.overlays.map((overlay, idx) => {
                     const code = overlay.code.toUpperCase();
@@ -221,7 +243,7 @@ export default function PropertyInspector({
               <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-2">
                 {LABELS.hazards[lang]}
               </div>
-              {aiInsight.hazards.length > 0 ? (
+              {aiInsight?.hazards && aiInsight.hazards.length > 0 ? (
                 <ul className="space-y-1">
                   {aiInsight.hazards.map((hazard, idx) => (
                     <li key={idx} className="text-xs text-zinc-300 leading-relaxed flex gap-2">
