@@ -2,7 +2,7 @@
 
 import React, { Suspense, useEffect, useMemo, useRef, useState, memo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Download, Loader2, Map as MapIcon, FileText } from 'lucide-react';
+import { ArrowLeft, Download, Loader2, Map as MapIcon, FileText, FileDown } from 'lucide-react';
 import { UserButton } from '@clerk/nextjs';
 import GlobalControls from '@/components/GlobalControls';
 import area from '@turf/area';
@@ -128,6 +128,63 @@ function AppCanvas() {
   const [liveCouncil, setLiveCouncil] = useState<string | null>(null);
   const [isStorefrontOpen, setIsStorefrontOpen] = useState(false);
   const [language, setLanguage] = useState<Lang>('en');
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+
+  // Handler for PDF export
+  const handleExportPdf = async () => {
+    if (!address || !planData || isGeneratingPdf) return;
+
+    setIsGeneratingPdf(true);
+    try {
+      // Capture map snapshot
+      const mapSnapshot = await mapPreviewRef.current?.getSnapshot();
+
+      // Gather payload
+      const payload = {
+        address,
+        zoneCode: planData.zoneCode,
+        lotSize: landSizeM2 || 0,
+        frontage: null, // TODO: Calculate from geometry
+        overlays: planData.overlayRaw || [],
+        auditResult: {
+          isFastTrackEligible:
+            (landSizeM2 || 0) >= 300 &&
+            ['GRZ', 'NRZ', 'RGZ', 'MUZ', 'TZ'].some(zone => planData.zoneCode?.toUpperCase().startsWith(zone)) &&
+            !planData.overlayRaw?.some(o => ['HO', 'BMO', 'LSIO', 'SBO', 'BFO'].some(prefix => o.toUpperCase().startsWith(prefix))),
+          tier: yieldData?.isFeasible ? 'Standard' : 'Complex',
+          noThirdPartyAppeals: false,
+          developerSummary: '',
+          maxDeemedDwellings: yieldData?.scenarios?.townhouse?.maxYield || 0,
+        },
+        financialProforma: {
+          tdc: 0,
+          grv: 0,
+          profit: 0,
+          profitMarginPercent: 0,
+        },
+        language: language === 'zh' ? 'zh' : 'en',
+      };
+
+      // Call API
+      const response = await fetch('/api/generate-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) throw new Error('PDF generation failed');
+
+      const data = await response.json();
+
+      // TODO: Download PDF blob
+      console.log('[PDF Export] Report generated:', data);
+
+    } catch (error) {
+      console.error('[PDF Export] Error:', error);
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
   const [isNavigating, setIsNavigating] = useState(false);
   const [aiInsight, setAiInsight] = useState<AIInsightData | null>(null);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
@@ -915,6 +972,25 @@ function AppCanvas() {
                   Processing compliance data...
                 </div>
               )}
+
+              {/* Export PDF Button */}
+              <button
+                onClick={handleExportPdf}
+                disabled={!address || isGeneratingPdf}
+                className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#E9E778] text-[#05060E] font-bold text-xs uppercase tracking-wider rounded-lg hover:bg-[#d4d262] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isGeneratingPdf ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Generating Report...
+                  </>
+                ) : (
+                  <>
+                    <FileDown className="w-4 h-4" />
+                    Export PDF Report
+                  </>
+                )}
+              </button>
             </div>
 
           </div>
