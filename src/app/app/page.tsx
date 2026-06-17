@@ -11,6 +11,7 @@ import SuccessModal from '@/components/sidebar/SuccessModal';
 import { MarketBarChart } from '@/components/charts/MarketBarChart';
 import { SpatialPieChart } from '@/components/charts/SpatialPieChart';
 import { RegulatoryRadarChart } from '@/components/charts/RegulatoryRadarChart';
+import { SsdBadge } from '@/components/ui/SsdBadge';
 import ComprehensiveReport from '@/components/report/ComprehensiveReport';
 import { MapPreview } from '@/components/MapPreview';
 import MapControlsToolbar from '@/components/MapControlsToolbar';
