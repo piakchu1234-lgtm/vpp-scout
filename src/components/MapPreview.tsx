@@ -757,16 +757,20 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
           type: 'fill',
           source: 'property-boundary',
           paint: {
-            'fill-color': vppAuditResult?.isFastTrackEligible
-              ? '#10B981'  // Emerald green for fast-track
-              : '#64748B', // Slate for standard review
-            'fill-opacity': 0.08,
+            'fill-color': '#E9E778', // Yellow glassmorphism accent
+            'fill-opacity': 0.15,     // Translucent fill
           },
         });
         m.addLayer({
           id: 'property-boundary-line',
           type: 'line',
           source: 'property-boundary',
+          paint: {
+            'line-color': '#E9E778',  // Crisp yellow stroke
+            'line-width': 2.5,        // 2.5px solid stroke
+            'line-opacity': 0.9,
+          },
+        });
           paint: {
             'line-color': vppAuditResult?.isFastTrackEligible
               ? '#10B981'  // Emerald green for fast-track
