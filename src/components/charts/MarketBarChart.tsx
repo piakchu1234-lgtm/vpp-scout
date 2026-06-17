@@ -16,7 +16,8 @@ export function MarketBarChart({ bedrooms, bathrooms, carspaces }: MarketBarChar
   ];
 
   return (
-    <ResponsiveContainer width="100%" height={180}>
+    <div style={{ width: '100%', height: '180px' }}>
+      <ResponsiveContainer width="100%" height="100%">
       <BarChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#27272a" opacity={0.3} />
         <XAxis
@@ -45,5 +46,6 @@ export function MarketBarChart({ bedrooms, bathrooms, carspaces }: MarketBarChar
         </Bar>
       </BarChart>
     </ResponsiveContainer>
+    </div>
   );
 }
