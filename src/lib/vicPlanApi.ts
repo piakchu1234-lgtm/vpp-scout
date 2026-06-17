@@ -153,7 +153,13 @@ type ArcgisPolygonResponse = {
  * the parcel point query for downstream report consumers.
  */
 type ArcgisAttributedParcelFeature = {
-  attributes?: { parcel_spi?: string | null };
+  attributes?: {
+    parcel_spi?: string | null;
+    parcel_pfi?: string | null;
+    parcel_status?: string | null;
+    parcel_type?: string | null;
+    is_primary?: boolean | null;
+  };
   geometry?: { rings?: number[][][] };
 };
 
@@ -174,6 +180,12 @@ export type ParcelPointResult = {
  * outer-ring-first ordering, same nesting depth. SPI is read from
  * the parcel attributes when present; null when the field is empty
  * (some Crown / unsurveyed lots carry no SPI).
+ *
+ * PRIMARY POLYGON RESOLUTION: When multiple parcels intersect the point
+ * (e.g., subdivided blocks with overlapping boundaries), this function
+ * automatically selects the PRIMARY polygon — the largest by calculated area.
+ * This prevents the system from grabbing secondary sub-lots or strata plans
+ * and ensures we return the master cadastral boundary.
  */
 export async function fetchVicParcelForPoint(
   lon: number,
@@ -189,7 +201,8 @@ export async function fetchVicParcelForPoint(
     distance: 20,
     units: 'esriSRUnit_Meter',
     returnGeometry: true,
-    outFields: 'parcel_spi',
+    // Request all parcel metadata fields to enable smart filtering
+    outFields: 'parcel_spi,parcel_pfi,parcel_status,parcel_type,is_primary',
     f: 'json',
   };
 
@@ -202,11 +215,92 @@ export async function fetchVicParcelForPoint(
     throw new Error(`ArcGIS error: ${data.error.message}`);
   }
 
-  const feature = data.features?.[0];
-  const rings = feature?.geometry?.rings;
+  const features = data.features ?? [];
+  if (features.length === 0) return null;
+
+  // PRIMARY POLYGON FILTER: Multi-stage selection strategy to ensure we get
+  // the master cadastral boundary, not a sub-lot, strata plan, or easement.
+  //
+  // STAGE 1: Check for explicit 'is_primary' flag (if Vicmap provides it)
+  // STAGE 2: Prefer parcels with 'APPROVED' or 'REGISTERED' status over 'PROPOSED'
+  // STAGE 3: Filter out easements and secondary parcel types
+  // STAGE 4: Select the largest polygon by calculated area (master lot boundary)
+
+  let candidates = features;
+
+  // STAGE 1: Explicit primary flag (may not exist in all Vicmap versions)
+  const explicitPrimary = candidates.find(
+    (f) => f.attributes && f.attributes.is_primary === true
+  );
+  if (explicitPrimary && explicitPrimary.geometry?.rings?.length) {
+    console.log('[vicPlanApi] Selected parcel with explicit is_primary flag');
+    const rings = explicitPrimary.geometry.rings;
+    const rawSpi = explicitPrimary.attributes?.parcel_spi;
+    const spi =
+      typeof rawSpi === 'string' && rawSpi.trim().length > 0 ? rawSpi.trim() : null;
+    return {
+      polygon: { type: 'Polygon', coordinates: rings },
+      spi,
+    };
+  }
+
+  // STAGE 2 & 3: Status and type filtering
+  const validStatuses = ['APPROVED', 'REGISTERED', 'CURRENT'];
+  const excludedTypes = ['EASEMENT', 'RESTRICTION', 'COVENANT'];
+
+  const filtered = candidates.filter((f) => {
+    const status = f.attributes?.parcel_status;
+    const type = f.attributes?.parcel_type;
+
+    // Prefer approved/registered parcels
+    const hasValidStatus = !status || validStatuses.some(
+      (s) => String(status).toUpperCase().includes(s)
+    );
+
+    // Exclude easements and restrictions
+    const isNotExcluded = !type || !excludedTypes.some(
+      (e) => String(type).toUpperCase().includes(e)
+    );
+
+    return hasValidStatus && isNotExcluded && f.geometry?.rings?.length;
+  });
+
+  candidates = filtered.length > 0 ? filtered : candidates;
+
+  // STAGE 4: Area-based selection (largest polygon wins)
+  let primaryFeature = candidates[0];
+  let maxArea = 0;
+
+  if (candidates.length > 1) {
+    console.log(`[vicPlanApi] Multiple parcels found (${candidates.length}), selecting largest...`);
+
+    // Dynamically import @turf/area to avoid bundling it in the main chunk
+    const { default: calculateArea } = await import('@turf/area');
+
+    for (const feature of candidates) {
+      const rings = feature?.geometry?.rings;
+      if (!rings || rings.length === 0) continue;
+
+      try {
+        const polygon = { type: 'Polygon' as const, coordinates: rings };
+        const areaM2 = calculateArea({ type: 'Feature', properties: {}, geometry: polygon });
+
+        if (areaM2 > maxArea) {
+          maxArea = areaM2;
+          primaryFeature = feature;
+        }
+      } catch (error) {
+        console.warn('[vicPlanApi] Area calculation failed for feature:', error);
+      }
+    }
+
+    console.log(`[vicPlanApi] Selected primary parcel with area: ${maxArea.toFixed(2)} m²`);
+  }
+
+  const rings = primaryFeature?.geometry?.rings;
   if (!rings || rings.length === 0) return null;
 
-  const rawSpi = feature?.attributes?.parcel_spi;
+  const rawSpi = primaryFeature?.attributes?.parcel_spi;
   const spi =
     typeof rawSpi === 'string' && rawSpi.trim().length > 0 ? rawSpi.trim() : null;
 
@@ -382,6 +476,8 @@ export type ParcelFeature = {
     LOT_NUMBER: string | null;
     PLAN_NUMBER: string | null;
     PARCEL_PFI: string | null;
+    ZONE_CODE?: string | null;
+    ZONE?: string | null;
   };
   geometry: ParcelPolygon;
 };

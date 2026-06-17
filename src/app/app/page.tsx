@@ -1,8 +1,10 @@
 'use client';
 
-import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useRef, useState, memo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Download, Loader2, Map as MapIcon } from 'lucide-react';
+import { UserButton } from '@clerk/nextjs';
+import GlobalControls from '@/components/GlobalControls';
 import area from '@turf/area';
 import StorefrontDrawer from '@/components/sidebar/StorefrontDrawer';
 import SuccessModal from '@/components/sidebar/SuccessModal';
@@ -10,7 +12,10 @@ import ComprehensiveReport from '@/components/report/ComprehensiveReport';
 import { MapPreview } from '@/components/MapPreview';
 import MapControlsToolbar from '@/components/MapControlsToolbar';
 import InsightPanel from '@/components/dashboard/InsightPanel';
+import DocumentConfigurator from '@/components/dashboard/DocumentConfigurator';
 import { describeOverlayCode, type PlanningOverlay } from '@/components/dashboard/PlanningCard';
+import CollapsibleSidebar from '@/components/dashboard/CollapsibleSidebar';
+import { usePropertyData } from '@/hooks/usePropertyData';
 import {
   fetchVicParcelForPoint,
   fetchVicPlanForPoint,
@@ -22,8 +27,11 @@ import { fetchLgaForPoint } from '@/lib/lgaApi';
 import { reverseGeocodeNearest } from '@/lib/geocoding';
 import { calculateYield, emptyYield, type YieldData } from '@/lib/yieldEngine';
 import { mergeParcelGeometries } from '@/lib/spatialAnalysis';
+import { snapToNearestParcel } from '@/lib/spatialSnapping';
+import { auditVPPCompliance } from '@/lib/vppAuditor';
 import { useProjectState } from '@/hooks/useProjectState';
 import { fetchMarketData, type MarketDataResult } from '@/lib/marketData';
+import { generatePropertyPDF, type DocumentConfig } from '@/lib/pdfGenerator';
 
 const MELBOURNE_FALLBACK = { lat: -37.8136, lon: 144.9631 };
 const VICMAP_TIMEOUT_MS = 15000;
@@ -35,6 +43,7 @@ export type AINearbySchool = { name: string; distance: string };
 export type AIInsightData = {
   insightSummary: string;
   executiveSummary: string;
+  targetDemographicPitch?: string;
   ssdFeasibility: {
     isEligible: boolean;
     reasoning: string;
@@ -65,6 +74,29 @@ const STOREFRONT_CTA: Record<Lang, string> = {
   en: 'Download Reports & Title',
   zh: '下载报告与产权文件',
 };
+
+// Memoized MapPreview to prevent re-renders from theme/language changes
+const MapPreviewMemoized = memo(
+  MapPreview,
+  (prevProps, nextProps) => {
+    // Only re-render if these critical props change
+    // Explicitly exclude theme, language, and other global state
+    return (
+      prevProps.lat === nextProps.lat &&
+      prevProps.lon === nextProps.lon &&
+      prevProps.polygon === nextProps.polygon &&
+      prevProps.selectedParcels === nextProps.selectedParcels &&
+      prevProps.viewMode === nextProps.viewMode &&
+      prevProps.is3D === nextProps.is3D &&
+      prevProps.drawMode === nextProps.drawMode &&
+      prevProps.drawnArea === nextProps.drawnArea &&
+      prevProps.zoneCode === nextProps.zoneCode &&
+      prevProps.overlayCodes === nextProps.overlayCodes &&
+      prevProps.vppAuditResult === nextProps.vppAuditResult
+    );
+  }
+);
+MapPreviewMemoized.displayName = 'MapPreviewMemoized';
 
 function AppCanvas() {
   const params = useSearchParams();
@@ -108,11 +140,30 @@ function AppCanvas() {
   const [marketData, setMarketData] = useState<MarketDataResult | null>(null);
   const [isLoadingMarket, setIsLoadingMarket] = useState(false);
 
+  // PDF generation state
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [showDocumentConfigurator, setShowDocumentConfigurator] = useState(false);
+
   // Derive report language from UI language state - unified language control
   const reportLanguage = language === 'en' ? 'English' : 'Chinese';
 
   // Multi-parcel selection state for MapControlsToolbar — restored from localStorage on mount
   const [selectedParcels, setSelectedParcels] = useState<ParcelFeature[]>([]);
+
+  // NEW: Backend orchestrator integration for cached property intelligence
+  const [selectedProperty, setSelectedProperty] = useState<{
+    pfi: string | null;
+    lng: number | null;
+    lat: number | null;
+  }>({ pfi: null, lng: null, lat: null });
+
+  // Connect to backend orchestrator (30-day cache, full agent swarm)
+  const orchestratorData = usePropertyData(
+    selectedProperty.pfi,
+    selectedProperty.lng,
+    selectedProperty.lat,
+    selectedProperty.pfi !== null || (selectedProperty.lng !== null && selectedProperty.lat !== null)
+  );
 
   // Initialize state from localStorage on mount (client-side only to avoid hydration mismatch)
   // Session persistence hook
@@ -122,6 +173,12 @@ function AppCanvas() {
   type ViewMode = 'plan' | 'satellite' | 'hybrid';
   const [viewMode, setViewMode] = useState<ViewMode>('plan');
   const [is3D, setIs3D] = useState(false);
+
+  // Drawing mode state for MapControlsToolbar and MapPreview
+  type DrawMode = 'draw_polygon' | 'draw_line_string' | null;
+  const [drawMode, setDrawMode] = useState<DrawMode>(null);
+  const [drawnArea, setDrawnArea] = useState<number | null>(null);
+  const mapPreviewRef = useRef<any>(null);
 
   // Hydrate state from localStorage on mount (client-side only to avoid SSR mismatch)
   const [hasHydrated, setHasHydrated] = useState(false);
@@ -208,12 +265,45 @@ function AppCanvas() {
 
     let stale = false;
 
+    // SPATIAL SNAPPING PIPELINE:
+    // 1. Try direct intersection at coordinates
+    // 2. If no parcel found, attempt 15m buffer snap
+    // 3. Update coordinates if snapped successfully
     fetchVicParcelForPoint(lon, lat, VICMAP_TIMEOUT_MS)
-      .then((result) => {
+      .then(async (result) => {
         if (stale) return;
-        setPolygon(result?.polygon ?? null);
-        setSpi(result?.spi ?? null);
-        if (!result) setParcelMessage('No parcel found at this point');
+
+        // Direct hit - use as-is
+        if (result) {
+          setPolygon(result.polygon);
+          setSpi(result.spi);
+          return;
+        }
+
+        // MISSED TARGET: Attempt spatial snapping
+        console.log('[AppCanvas] No direct parcel intersection, attempting spatial snap...');
+        setParcelMessage('Snapping to nearest property...');
+
+        try {
+          const snapResult = await snapToNearestParcel(lon, lat, null);
+
+          if (snapResult && !stale) {
+            console.log(`[AppCanvas] Snapped to parcel ${snapResult.distanceM.toFixed(1)}m away (${snapResult.method})`);
+
+            // Update polygon from snapped parcel
+            setPolygon(snapResult.parcel.geometry);
+            setSpi(snapResult.parcel.properties.PARCEL_PFI || null);
+
+            // Note: Coordinates remain at original search location for map display
+            // The polygon is correctly snapped to the nearest parcel
+            setParcelMessage(`Snapped to nearest property (${snapResult.distanceM.toFixed(0)}m)`);
+          } else {
+            setParcelMessage('No parcel found at this point');
+          }
+        } catch (error) {
+          console.warn('[AppCanvas] Spatial snap failed:', error);
+          setParcelMessage('No parcel found at this point');
+        }
       })
       .catch((err: unknown) => {
         if (stale) return;
@@ -329,6 +419,8 @@ function AppCanvas() {
           lotAreaM2: landSizeM2,
           overlayCodes,
           parcelCount: selectedParcels.length || 1,
+          lat,
+          lon,
         },
       }),
     })
@@ -451,8 +543,35 @@ function AppCanvas() {
         'Awaiting Vicmap parcel geometry — yield model will populate once the lot resolves.',
       );
     }
-    return calculateYield(landSizeM2, planData?.zoneCode ?? '');
-  }, [landSizeM2, planData?.zoneCode]);
+    return calculateYield(
+      landSizeM2,
+      planData?.zoneCode ?? '',
+      planData?.overlayRaw ?? [],
+    );
+  }, [landSizeM2, planData?.zoneCode, planData?.overlayRaw]);
+
+  // VPP Audit calculation for map boundary coloring
+  const vppAuditResult = useMemo(() => {
+    if (!planData?.zoneCode || !landSizeM2 || landSizeM2 <= 0) return null;
+
+    // Parse frontage to number
+    const frontage = aiInsight?.estimatedFrontage
+      ? parseFloat(aiInsight.estimatedFrontage.replace(/[^0-9.]/g, ''))
+      : null;
+
+    const audit = auditVPPCompliance(
+      planData.zoneCode,
+      landSizeM2,
+      frontage,
+      planData.overlayRaw || []
+    );
+
+    return {
+      isFastTrackEligible: audit.isFastTrackEligible,
+      tier: audit.tier,
+      noThirdPartyAppeals: audit.noThirdPartyAppeals,
+    };
+  }, [planData?.zoneCode, planData?.overlayRaw, landSizeM2, aiInsight?.estimatedFrontage]);
 
   // SaaS CTA handlers
   const handleSaveToProject = () => {
@@ -486,6 +605,13 @@ function AppCanvas() {
       return;
     }
 
+    // NEW: Update orchestrator state for backend property intelligence
+    setSelectedProperty({
+      pfi: clickedParcel.properties.PARCEL_PFI || null,
+      lng: lonLat[0],
+      lat: lonLat[1],
+    });
+
     // Standard click (no Shift): replace selection with single parcel
     if (!shiftKey) {
       setSelectedParcels([clickedParcel]);
@@ -507,38 +633,143 @@ function AppCanvas() {
     });
   }
 
+  // Map control handlers for zoom, bearing, and drawing tools
+  const handleZoomIn = () => {
+    const map = mapPreviewRef.current?.getMap?.();
+    if (!map) return;
+    map.zoomIn({ duration: 300 });
+  };
+
+  const handleZoomOut = () => {
+    const map = mapPreviewRef.current?.getMap?.();
+    if (!map) return;
+    map.zoomOut({ duration: 300 });
+  };
+
+  const handleResetBearing = () => {
+    const map = mapPreviewRef.current?.getMap?.();
+    if (!map) return;
+    map.easeTo({
+      bearing: 0,
+      pitch: is3D ? 60 : 0,
+      duration: 500,
+    });
+  };
+
+  const handleDrawModeChange = (mode: DrawMode) => {
+    setDrawMode(mode);
+  };
+
+  const handleClearDrawing = () => {
+    // Clear drawing via MapPreview's internal draw control
+    setDrawMode(null);
+    setDrawnArea(null);
+  };
+
+  // PDF generation handler with DocumentConfigurator
+  const handleOpenDocumentConfigurator = () => {
+    setShowDocumentConfigurator(true);
+  };
+
+  const handleGeneratePDF = async (config: DocumentConfig) => {
+    if (!address) return;
+
+    // Close configurator
+    setShowDocumentConfigurator(false);
+
+    setIsGeneratingPDF(true);
+    try {
+      // Capture map snapshot
+      const mapSnapshot = await mapPreviewRef.current?.getSnapshot();
+      if (!mapSnapshot) {
+        console.error('Failed to capture map snapshot');
+        return;
+      }
+
+      // Extract frontage from AI insight
+      const frontageM = aiInsight?.estimatedFrontage
+        ? parseFloat(aiInsight.estimatedFrontage.replace(/[^\d.]/g, '')) || null
+        : null;
+
+      // Format split-zone data if enabled
+      const splitZoneData = config.includeSplitZoningGrid && planData?.zoneCode
+        ? `Primary Zone: ${planData.zoneCode} (100% of parcel area)`
+        : null;
+
+      // Generate PDF with configuration options
+      await generatePropertyPDF({
+        address,
+        mapSnapshotBase64: mapSnapshot,
+        landSizeM2,
+        zoneCode: planData?.zoneCode ?? null,
+        frontageM,
+        orientation: null, // TODO: Add orientation to AI insight
+        bedrooms: marketData?.bedrooms ?? aiInsight?.bedrooms ?? null,
+        bathrooms: marketData?.bathrooms ?? aiInsight?.bathrooms ?? null,
+        carspaces: marketData?.carspaces ?? aiInsight?.carspaces ?? null,
+        lastSold: marketData?.lastSoldPrice ?? aiInsight?.estimatedLastSoldPrice ?? null,
+        aiSummary: aiInsight?.insightSummary ?? 'No AI analysis available',
+        overlays: planData?.overlayRaw ?? [],
+        language,
+        config,
+        splitZoneData,
+      });
+    } catch (error) {
+      console.error('PDF generation failed:', error);
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
 
   return (
-    <div className="relative min-h-screen w-full bg-[#241F21] text-white font-sans selection:bg-[#E9E778] selection:text-[#241F21]">
-      <header className="sticky top-0 z-30 flex items-center justify-between px-6 py-4 border-b border-white/10 bg-[#241F21]/90 backdrop-blur-md">
-        <div className="flex items-center gap-3 min-w-0">
-          <button
-            onClick={() => router.push('/')}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm text-zinc-300 hover:text-[#E9E778] hover:bg-white/5 transition-colors"
-            aria-label="Back to search"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back
-          </button>
-          <div className="h-5 w-px bg-white/10" />
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-[#E9E778] rounded-sm flex items-center justify-center">
-              <MapIcon className="text-[#241F21] w-4 h-4" />
+    <div className="relative w-screen h-screen overflow-hidden bg-[#05060E]">
+      {/* Glassmorphism Top Header - Floats Over Map */}
+      <header className="fixed top-0 w-full z-50 bg-[#05060E]/60 backdrop-blur-md border-b border-white/5">
+        <div className="flex items-center justify-between px-6 h-16">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              onClick={() => router.push('/')}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm text-zinc-300 hover:text-[#E9E778] hover:bg-white/5 transition-colors"
+              aria-label="Back to search"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back
+            </button>
+            <div className="h-5 w-px bg-white/10" />
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 bg-[#E9E778] rounded-sm flex items-center justify-center">
+                <MapIcon className="text-[#05060E] w-4 h-4" />
+              </div>
+              <span className="text-base font-bold tracking-tight text-white">SimplySite</span>
             </div>
-            <span className="text-base font-bold tracking-tight">SimplySite</span>
+            <div className="h-5 w-px bg-white/10" />
+            <div className="text-xs text-zinc-400 font-mono truncate max-w-[60ch]">
+              {address ?? 'No address selected'}
+            </div>
           </div>
-          <div className="h-5 w-px bg-white/10" />
-          <div className="text-xs text-zinc-400 font-mono truncate max-w-[60ch]">
-            {address ?? 'No address selected'}
+
+          {/* Right: Global Controls + User Button */}
+          <div className="flex items-center gap-3">
+            <GlobalControls />
+            <div className="h-6 w-px bg-zinc-700" />
+            <UserButton
+              appearance={{
+                elements: {
+                  avatarBox: "w-9 h-9 rounded-lg border border-zinc-700 hover:border-[#E9E778] transition-colors"
+                }
+              }}
+            />
           </div>
         </div>
       </header>
 
-      <div className="flex flex-col md:grid md:grid-cols-[1fr_500px] h-[100dvh] overflow-hidden">
-        <section className="h-[40vh] md:h-full relative bg-[#241F21] overflow-hidden">
-          {hasCoords ? (
-            <>
-              <MapPreview
+      {/* Full-Bleed Map Canvas */}
+      <div className="absolute inset-0 w-full h-full">
+        {hasCoords ? (
+          <>
+              <MapPreviewMemoized
+                ref={mapPreviewRef}
                 lat={lat}
                 lon={lon}
                 polygon={activeSiteGeometry}
@@ -547,7 +778,18 @@ function AppCanvas() {
                 setViewMode={setViewMode}
                 is3D={is3D}
                 setIs3D={setIs3D}
+                drawMode={drawMode}
+                onDrawModeChange={handleDrawModeChange}
+                onZoomIn={handleZoomIn}
+                onZoomOut={handleZoomOut}
+                onResetBearing={handleResetBearing}
+                onClearDrawing={handleClearDrawing}
+                drawnArea={drawnArea}
+                onDrawnAreaChange={setDrawnArea}
                 onParcelClick={handleMapParcelClick}
+                zoneCode={planData?.zoneCode}
+                overlayCodes={planData?.overlayRaw}
+                vppAuditResult={vppAuditResult}
                 className="h-full w-full"
               />
               <MapControlsToolbar
@@ -558,6 +800,13 @@ function AppCanvas() {
                 is3D={is3D}
                 setIs3D={setIs3D}
                 lang={language}
+                onZoomIn={handleZoomIn}
+                onZoomOut={handleZoomOut}
+                onResetBearing={handleResetBearing}
+                drawMode={drawMode}
+                onDrawModeChange={handleDrawModeChange}
+                onClearDrawing={handleClearDrawing}
+                drawnArea={drawnArea}
               />
               {(parcelLoading || parcelMessage || isNavigating) && (
                 <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/10 bg-black/60 backdrop-blur-md text-xs font-medium tracking-wide pointer-events-none">
@@ -570,11 +819,25 @@ function AppCanvas() {
                   {!isNavigating && parcelLoading && (
                     <>
                       <Loader2 className="w-3.5 h-3.5 text-[#E9E778] animate-spin" />
-                      <span className="text-zinc-200">Resolving parcel…</span>
+                      <span className="text-zinc-200">Analyzing Clause 55/57 Compliance…</span>
                     </>
                   )}
                   {!isNavigating && !parcelLoading && parcelMessage && (
-                    <span className="text-zinc-400">{parcelMessage}</span>
+                    <>
+                      {parcelMessage.includes('Snapped') ? (
+                        <>
+                          <span className="text-[#00FF66]">✓</span>
+                          <span className="text-zinc-200">{parcelMessage}</span>
+                        </>
+                      ) : parcelMessage.includes('No parcel found') ? (
+                        <div className="flex flex-col items-center gap-1 py-1">
+                          <span className="text-[#E9E778]">👆 Click any highlighted parcel on the map</span>
+                          <span className="text-zinc-400 text-[10px]">Point outside property boundary</span>
+                        </div>
+                      ) : (
+                        <span className="text-zinc-400">{parcelMessage}</span>
+                      )}
+                    </>
                   )}
                 </div>
               )}
@@ -584,11 +847,11 @@ function AppCanvas() {
               Invalid coordinates
             </div>
           )}
-        </section>
+      </div>
 
-        <aside className="flex-1 md:h-full flex flex-col overflow-hidden relative bg-[#241F21]">
-          <div className="overflow-y-auto flex-1">
-            <InsightPanel
+      {/* Floating Glass Widget - Property Inspector */}
+      <div className="absolute top-20 right-4 w-[400px] z-40 max-h-[calc(100vh-6rem)] overflow-y-auto bg-[#05060E]/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl transition-all duration-300 hover:shadow-[0_0_40px_rgba(233,231,120,0.15)] hover:border-white/20 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent">
+        <InsightPanel
               address={address}
               language={language}
               setLanguage={setLanguage}
@@ -605,13 +868,13 @@ function AppCanvas() {
               overlays={overlays}
               yieldData={yieldData}
               effectiveLandSizeM2={effectiveLandSizeM2}
+              onViewReport={handleOpenDocumentConfigurator}
             />
-          </div>
 
-          <div className="border-t border-white/10 bg-[#241F21] p-4">
+          <div className="border-t border-white/10 p-4">
             <button
               onClick={() => setIsStorefrontOpen(true)}
-              className="flex w-full items-center justify-center gap-2 rounded-full bg-[#E9E778] py-3 text-sm font-bold uppercase tracking-wider text-[#241F21] transition-colors hover:bg-[#d4d262]"
+              className="flex w-full items-center justify-center gap-2 rounded-full bg-[#E9E778] py-3 text-sm font-bold uppercase tracking-wider text-[#05060E] transition-colors hover:bg-[#d4d262]"
             >
               <Download className="h-4 w-4" />
               {STOREFRONT_CTA[language]}
@@ -626,8 +889,16 @@ function AppCanvas() {
             lat={lat}
             lon={lon}
           />
-        </aside>
       </div>
+
+      {/* Document Configurator Modal */}
+      {showDocumentConfigurator && (
+        <DocumentConfigurator
+          lang={language}
+          onGenerate={handleGeneratePDF}
+          onCancel={() => setShowDocumentConfigurator(false)}
+        />
+      )}
 
       <SuccessModal
         isOpen={isSuccessModalOpen}

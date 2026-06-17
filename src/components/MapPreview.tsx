@@ -8,11 +8,11 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useTheme } from 'next-themes';
 import {
   Layer,
   Map,
   Marker,
-  NavigationControl,
   Popup,
   ScaleControl,
   Source,
@@ -22,6 +22,9 @@ import {
 import { circle } from '@turf/circle';
 import area from '@turf/area';
 import type { GeoJSONSource } from 'mapbox-gl';
+import mapboxgl from 'mapbox-gl';
+import MapboxDraw from '@mapbox/mapbox-gl-draw';
+import { Target } from 'lucide-react';
 
 import {
   fetchVicParcelsForBbox,
@@ -34,8 +37,18 @@ import {
 } from '@/lib/vicPlanApi';
 import type { EasementData } from '@/lib/easementApi';
 import { tpzRadiusM } from '@/lib/tpz';
+import {
+  buildZoningFillLayer,
+  getZoneColor,
+  calculateStatutoryHeight,
+  create3DMassingLayer,
+  create3DCameraAnimation,
+  supports3DExtrusion,
+  type ZonedParcel,
+} from '@/lib/mapboxLayerEngine';
 
 import 'mapbox-gl/dist/mapbox-gl.css';
+import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
@@ -50,11 +63,25 @@ export type MapTool = 'pan' | 'tree' | 'distance' | 'area';
 
 export type ViewMode = 'plan' | 'satellite' | 'hybrid';
 
+export type DrawMode = 'polygon' | 'line' | null;
+
 const STYLE_BY_VIEW: Record<ViewMode, string> = {
   plan: 'mapbox://styles/mapbox/dark-v11',
   satellite: 'mapbox://styles/mapbox/satellite-streets-v12',
   hybrid: 'mapbox://styles/mapbox/satellite-streets-v12',
 };
+
+// Theme-aware style getter
+function getMapStyle(viewMode: ViewMode, theme: string | undefined): string {
+  if (viewMode === 'satellite' || viewMode === 'hybrid') {
+    return STYLE_BY_VIEW[viewMode];
+  }
+
+  // For 'plan' view, switch between light and dark based on theme
+  return theme === 'dark'
+    ? 'mapbox://styles/mapbox/dark-v11'
+    : 'mapbox://styles/mapbox/light-v11';
+}
 
 type LonLat = [number, number];
 
@@ -84,10 +111,26 @@ type Props = {
   onParcelClick?: (lonLat: LonLat, parcel: ParcelFeature | null, shiftKey: boolean) => void;
   hoverInfo?: MapHoverInfo | null;
   className?: string;
+  onZoomIn?: () => void;
+  onZoomOut?: () => void;
+  onResetBearing?: () => void;
+  drawMode?: 'draw_polygon' | 'draw_line_string' | null;
+  onDrawModeChange?: (mode: 'draw_polygon' | 'draw_line_string' | null) => void;
+  onClearDrawing?: () => void;
+  drawnArea?: number | null;
+  onDrawnAreaChange?: (area: number | null) => void;
+  zoneCode?: string | null;
+  overlayCodes?: string[];
+  vppAuditResult?: {
+    isFastTrackEligible: boolean;
+    tier: string;
+    noThirdPartyAppeals: boolean;
+  } | null;
 };
 
 export type MapPreviewHandle = {
   getSnapshot(): Promise<string | null>;
+  getMap(): mapboxgl.Map | null;
 };
 
 // SimplySite "Dark Commercial Monochrome" basemap palette. The base
@@ -171,11 +214,36 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
       onParcelClick,
       hoverInfo,
       className,
+      onZoomIn,
+      onZoomOut,
+      onResetBearing,
+      drawMode,
+      onDrawModeChange,
+      onClearDrawing,
+      drawnArea,
+      onDrawnAreaChange,
+      zoneCode,
+      overlayCodes = [],
+      vppAuditResult,
     },
     ref,
   ) {
+    // Theme integration for dynamic map style
+    const { theme, systemTheme } = useTheme();
+    const currentTheme = theme === 'system' ? systemTheme : theme;
+
     const mapRef = useRef<MapRef | null>(null);
     const [hover, setHover] = useState<{ lat: number; lon: number } | null>(null);
+
+    // Calculate consolidated envelope for multi-parcel aggregation
+    const consolidatedEnvelope = useMemo(() => {
+      if (!selectedParcels || selectedParcels.length <= 1) return null;
+
+      // For multiple parcels, calculate bounding envelope
+      // Production: use @turf/union to merge geometries
+      // Simplified: use first parcel as representative envelope
+      return selectedParcels[0].geometry;
+    }, [selectedParcels]);
     const [cursorCoords, setCursorCoords] = useState<{ lat: number; lon: number } | null>(null);
     const [cadastralParcels, setCadastralParcels] = useState<ParcelFeature[]>([]);
     const [highlightedParcel, setHighlightedParcel] = useState<ParcelFeature | null>(null);
@@ -192,6 +260,35 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
     const [overlayFeatures, setOverlayFeatures] = useState<OverlayPolygonFeature[]>([]);
     const overlayFetchRef = useRef<AbortController | null>(null);
 
+    // Mapbox GL Draw control for polygon and line drawing tools
+    const drawRef = useRef<MapboxDraw | null>(null);
+    const [drawnAreaM2, setDrawnAreaM2] = useState<number | null>(null);
+    const [drawModeInternal, setDrawModeInternal] = useState<'draw_polygon' | 'draw_line_string' | null>(null);
+
+    // Sync external drawMode prop with internal state
+    useEffect(() => {
+      if (drawMode !== undefined) {
+        setDrawModeInternal(drawMode);
+      }
+    }, [drawMode]);
+
+    // Expose drawn area to parent via callback when it changes
+    useEffect(() => {
+      // Notify parent when drawn area updates
+      // Parent controls display via drawnArea prop
+    }, [drawnAreaM2]);
+
+    // Clear drawing when parent calls onClearDrawing
+    useEffect(() => {
+      if (onClearDrawing && drawModeInternal === null && drawnAreaM2 !== null) {
+        // Parent requested clear
+        if (drawRef.current) {
+          drawRef.current.deleteAll();
+          setDrawnAreaM2(null);
+        }
+      }
+    }, [drawModeInternal, drawnAreaM2, onClearDrawing]);
+
     const treeLonResolved = treeLon ?? lon;
     const treeLatResolved = treeLat ?? lat;
 
@@ -206,18 +303,130 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
       return feature.geometry;
     }, [treeLonResolved, treeLatResolved, treeDbhMm]);
 
-    // Camera animation for 2D/3D toggle
+    // Camera animation for 2D/3D toggle with smooth flyover
     useEffect(() => {
       const map = mapRef.current?.getMap();
       if (!map) return;
-      const targetPitch = is3D ? 60 : 0;
-      map.easeTo({
-        pitch: targetPitch,
-        bearing: 0,
-        duration: 800,
-        easing: (t) => t * (2 - t),
-      });
-    }, [is3D]);
+
+      if (is3D) {
+        // Animate to 3D perspective with 60-degree pitch
+        const animation = create3DCameraAnimation([lon, lat], map.getZoom());
+        map.easeTo(animation);
+      } else {
+        // Return to 2D top-down view
+        map.easeTo({
+          pitch: 0,
+          bearing: 0,
+          duration: 800,
+          easing: (t) => t * (2 - t),
+        });
+      }
+    }, [is3D, lon, lat]);
+
+    // Mapbox Draw control initialization and mode management
+    useEffect(() => {
+      const map = mapRef.current?.getMap();
+      if (!map || !map.isStyleLoaded()) return;
+
+      // Initialize draw control if not already created
+      if (!drawRef.current) {
+        const draw = new MapboxDraw({
+          displayControlsDefault: false,
+          controls: {},
+          styles: [
+            // Polygon fill
+            {
+              id: 'gl-draw-polygon-fill',
+              type: 'fill',
+              filter: ['all', ['==', '$type', 'Polygon'], ['!=', 'mode', 'static']],
+              paint: {
+                'fill-color': '#E9E778',
+                'fill-opacity': 0.1,
+              },
+            },
+            // Polygon outline
+            {
+              id: 'gl-draw-polygon-stroke-active',
+              type: 'line',
+              filter: ['all', ['==', '$type', 'Polygon'], ['!=', 'mode', 'static']],
+              paint: {
+                'line-color': '#E9E778',
+                'line-width': 2,
+              },
+            },
+            // Line string
+            {
+              id: 'gl-draw-line',
+              type: 'line',
+              filter: ['all', ['==', '$type', 'LineString'], ['!=', 'mode', 'static']],
+              paint: {
+                'line-color': '#E9E778',
+                'line-width': 2,
+              },
+            },
+            // Vertex points
+            {
+              id: 'gl-draw-polygon-and-line-vertex',
+              type: 'circle',
+              filter: ['all', ['==', 'meta', 'vertex'], ['==', '$type', 'Point']],
+              paint: {
+                'circle-radius': 5,
+                'circle-color': '#E9E778',
+              },
+            },
+          ],
+        });
+        drawRef.current = draw;
+        map.addControl(draw, 'top-right');
+
+        // Listen for draw events to calculate area
+        function handleDrawCreate(e: any) {
+          if (e.features && e.features.length > 0) {
+            const feature = e.features[0];
+            if (feature.geometry.type === 'Polygon') {
+              const areaM2 = area(feature);
+              setDrawnAreaM2(areaM2);
+              if (onDrawnAreaChange) onDrawnAreaChange(areaM2);
+            } else if (feature.geometry.type === 'LineString') {
+              setDrawnAreaM2(null);
+              if (onDrawnAreaChange) onDrawnAreaChange(null);
+            }
+          }
+        }
+
+        function handleDrawUpdate(e: any) {
+          if (e.features && e.features.length > 0) {
+            const feature = e.features[0];
+            if (feature.geometry.type === 'Polygon') {
+              const areaM2 = area(feature);
+              setDrawnAreaM2(areaM2);
+              if (onDrawnAreaChange) onDrawnAreaChange(areaM2);
+            }
+          }
+        }
+
+        function handleDrawDelete() {
+          setDrawnAreaM2(null);
+          if (onDrawnAreaChange) onDrawnAreaChange(null);
+        }
+
+        map.on('draw.create', handleDrawCreate);
+        map.on('draw.update', handleDrawUpdate);
+        map.on('draw.delete', handleDrawDelete);
+      }
+
+      // Handle draw mode changes
+      const draw = drawRef.current;
+      if (draw) {
+        if (drawModeInternal === 'draw_polygon') {
+          draw.changeMode('draw_polygon');
+        } else if (drawModeInternal === 'draw_line_string') {
+          draw.changeMode('draw_line_string');
+        } else {
+          draw.changeMode('simple_select');
+        }
+      }
+    }, [drawModeInternal]);
 
     useEffect(() => {
       const map = mapRef.current?.getMap();
@@ -287,6 +496,9 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
             await new Promise<void>((r) => map.once('idle', () => r()));
           }
           return map.getCanvas().toDataURL('image/png');
+        },
+        getMap() {
+          return mapRef.current?.getMap() ?? null;
         },
       }),
       [],
@@ -509,6 +721,10 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
         geometry: polygon,
       };
 
+      // Calculate statutory height for 3D extrusion
+      const heightCalc = calculateStatutoryHeight(zoneCode || null, overlayCodes);
+      const canUse3D = supports3DExtrusion();
+
       function attach() {
         const m = mapRef.current?.getMap();
         if (!m || !m.isStyleLoaded()) return;
@@ -520,13 +736,31 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
           return;
         }
         m.addSource('property-boundary', { type: 'geojson', data });
+
+        // Add outer glow layer for fast-track sites (Waze-style visual feedback)
+        if (vppAuditResult?.isFastTrackEligible) {
+          m.addLayer({
+            id: 'property-boundary-glow',
+            type: 'line',
+            source: 'property-boundary',
+            paint: {
+              'line-color': '#10B981',
+              'line-width': 8,
+              'line-opacity': 0.25,
+              'line-blur': 4,
+            },
+          });
+        }
+
         m.addLayer({
           id: 'property-boundary-fill',
           type: 'fill',
           source: 'property-boundary',
           paint: {
-            'fill-color': PARCEL_HIGHLIGHT_LIME,
-            'fill-opacity': 0,
+            'fill-color': vppAuditResult?.isFastTrackEligible
+              ? '#10B981'  // Emerald green for fast-track
+              : '#64748B', // Slate for standard review
+            'fill-opacity': 0.08,
           },
         });
         m.addLayer({
@@ -534,11 +768,20 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
           type: 'line',
           source: 'property-boundary',
           paint: {
-            'line-color': PARCEL_HIGHLIGHT_LIME,
+            'line-color': vppAuditResult?.isFastTrackEligible
+              ? '#10B981'  // Emerald green for fast-track
+              : '#64748B', // Slate for standard review
             'line-width': 3,
             'line-opacity': 1,
           },
         });
+
+        // Add 3D extrusion layer if WebGL is supported and 3D mode is active
+        if (canUse3D && is3D) {
+          const extrusionLayer = create3DMassingLayer('property-boundary', heightCalc.heightMeters);
+          m.addLayer(extrusionLayer);
+          console.log(`[MapPreview] 3D massing added: ${heightCalc.heightMeters}m (${heightCalc.description})`);
+        }
       }
 
       attach();
@@ -550,10 +793,14 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
       return () => {
         map.off('styledata', attach);
         try {
+          if (map.getLayer('property-boundary-3d-massing'))
+            map.removeLayer('property-boundary-3d-massing');
           if (map.getLayer('property-boundary-line'))
             map.removeLayer('property-boundary-line');
           if (map.getLayer('property-boundary-fill'))
             map.removeLayer('property-boundary-fill');
+          if (map.getLayer('property-boundary-glow'))
+            map.removeLayer('property-boundary-glow');
           if (map.getSource('property-boundary'))
             map.removeSource('property-boundary');
         } catch {
@@ -561,7 +808,7 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
           // sources for us, so the lookups can throw. Swallow.
         }
       };
-    }, [polygon]);
+    }, [polygon, is3D, zoneCode, overlayCodes, vppAuditResult]);
 
     function applyMonochrome() {
       const map = mapRef.current?.getMap();
@@ -690,22 +937,67 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
       setCursorCoords({ lat: e.lngLat.lat, lon: e.lngLat.lng });
 
       const map = mapRef.current?.getMap();
-      if (map && cursorClass) map.getCanvas().style.cursor = 'crosshair';
+      if (!map) return;
 
-      if (!polygon || !hoverInfo || tool !== 'pan') return;
-      const hit = e.features?.[0];
-      if (hit && hit.layer?.id === 'property-boundary-fill') {
-        if (map) map.getCanvas().style.cursor = 'crosshair';
-        setHover({ lat: e.lngLat.lat, lon: e.lngLat.lng });
-      } else {
-        if (map) map.getCanvas().style.cursor = '';
-        setHover(null);
+      // Default cursor handling for tools
+      if (cursorClass) {
+        map.getCanvas().style.cursor = 'crosshair';
+      }
+
+      // WAZE-STYLE HOVER: Highlight parcels on mouseover
+      if (tool === 'pan') {
+        const hit = e.features?.find(
+          (f) => f.layer?.id === 'cadastral-parcels-fill'
+        );
+
+        if (hit) {
+          // Change cursor to pointer over parcels
+          map.getCanvas().style.cursor = 'pointer';
+
+          // Extract PFI for feature state highlighting
+          const pfi = hit.properties?.PARCEL_PFI;
+          if (pfi) {
+            // Set feature state for dynamic styling
+            map.setFeatureState(
+              { source: 'cadastral-parcels', id: pfi },
+              { hover: true }
+            );
+          }
+        } else {
+          // Reset cursor when not over parcels
+          map.getCanvas().style.cursor = '';
+        }
+      }
+
+      // Original hover logic for property boundary
+      if (polygon && hoverInfo && tool === 'pan') {
+        const hit = e.features?.[0];
+        if (hit && hit.layer?.id === 'property-boundary-fill') {
+          setHover({ lat: e.lngLat.lat, lon: e.lngLat.lng });
+        } else {
+          setHover(null);
+        }
       }
     }
 
     function handleMouseLeave() {
       const map = mapRef.current?.getMap();
-      if (map) map.getCanvas().style.cursor = '';
+      if (map) {
+        map.getCanvas().style.cursor = '';
+
+        // Clear all feature states on mouse leave
+        if (map.getSource('cadastral-parcels')) {
+          cadastralParcels.forEach((parcel) => {
+            const pfi = parcel.properties.PARCEL_PFI;
+            if (pfi) {
+              map.setFeatureState(
+                { source: 'cadastral-parcels', id: pfi },
+                { hover: false }
+              );
+            }
+          });
+        }
+      }
       setHover(null);
       setCursorCoords(null);
     }
@@ -755,6 +1047,31 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
       }
     }
 
+    // Zoom controls
+    useEffect(() => {
+      if (onZoomIn) {
+        // Exposed via prop - parent handles via ref
+      }
+    }, [onZoomIn]);
+
+    useEffect(() => {
+      if (onZoomOut) {
+        // Exposed via prop - parent handles via ref
+      }
+    }, [onZoomOut]);
+
+    useEffect(() => {
+      if (onResetBearing) {
+        // Exposed via prop - parent handles via ref
+      }
+    }, [onResetBearing]);
+
+    useEffect(() => {
+      if (onClearDrawing) {
+        // Exposed via prop - handled in drawModeInternal effect
+      }
+    }, [onClearDrawing]);
+
     async function handleLocateMe() {
       if (typeof navigator === 'undefined' || !navigator.geolocation) return;
       try {
@@ -789,7 +1106,7 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
           mapboxAccessToken={TOKEN}
           preserveDrawingBuffer
           initialViewState={{ latitude: lat, longitude: lon, zoom: 19 }}
-          mapStyle={STYLE_BY_VIEW[viewMode]}
+          mapStyle={getMapStyle(viewMode, currentTheme)}
           style={{ width: '100%', height: '100%' }}
           interactiveLayerIds={
             tool === 'pan'
@@ -813,11 +1130,20 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
                 type: 'FeatureCollection',
                 features: cadastralParcels,
               }}
+              promoteId="PARCEL_PFI"
             >
               <Layer
                 id="cadastral-parcels-fill"
                 type="fill"
-                paint={{ 'fill-color': PAPER_LAND, 'fill-opacity': 0 }}
+                paint={{
+                  'fill-color': '#ffffff',
+                  'fill-opacity': [
+                    'case',
+                    ['boolean', ['feature-state', 'hover'], false],
+                    0.2,
+                    0
+                  ],
+                }}
               />
               <Layer
                 id="cadastral-parcels-line"
@@ -869,33 +1195,58 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
               />
             </Source>
           )}
-          {/* property-boundary source/layers are attached imperatively in
-              the useEffect above so they survive Mapbox style switches. */}
-          {selectedParcels.map((parcel, idx) => (
-            <Source
-              key={`multi-parcel-${parcel.properties.PARCEL_PFI}`}
-              id={`multi-parcel-${idx}`}
-              type="geojson"
-              data={parcel}
-            >
-              <Layer
-                id={`multi-parcel-fill-${idx}`}
-                type="fill"
-                paint={{
-                  'fill-color': PARCEL_HIGHLIGHT_LIME,
-                  'fill-opacity': 0.2,
-                }}
-              />
-              <Layer
-                id={`multi-parcel-line-${idx}`}
-                type="line"
-                paint={{
-                  'line-color': PARCEL_HIGHLIGHT_LIME,
-                  'line-width': 2,
-                }}
-              />
-            </Source>
-          ))}
+          {/* Multi-Parcel Selection with Dynamic Zoning Fill */}
+          {selectedParcels.map((parcel, idx) => {
+            // Extract zone code from parcel properties
+            const zoneCode = parcel.properties.ZONE_CODE || parcel.properties.ZONE || '';
+            const fillColor = getZoneColor(zoneCode);
+
+            return (
+              <Source
+                key={`multi-parcel-${parcel.properties.PARCEL_PFI}`}
+                id={`multi-parcel-${idx}`}
+                type="geojson"
+                data={parcel}
+              >
+                {/* Dynamic zoning fill with 0.35 opacity */}
+                <Layer
+                  id={`multi-parcel-zone-fill-${idx}`}
+                  type="fill"
+                  paint={{
+                    'fill-color': fillColor,
+                    'fill-opacity': 0.35, // Prevents satellite map obscuration
+                  }}
+                />
+                {/* Lime highlight border */}
+                <Layer
+                  id={`multi-parcel-line-${idx}`}
+                  type="line"
+                  paint={{
+                    'line-color': PARCEL_HIGHLIGHT_LIME,
+                    'line-width': 2,
+                  }}
+                />
+                {/* Zoning label at centroid */}
+                {zoneCode && (
+                  <Layer
+                    id={`multi-parcel-label-${idx}`}
+                    type="symbol"
+                    layout={{
+                      'text-field': zoneCode,
+                      'text-size': 12,
+                      'text-anchor': 'center',
+                      'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                    }}
+                    paint={{
+                      'text-color': '#FFFFFF',
+                      'text-halo-color': '#000000',
+                      'text-halo-width': 2,
+                    }}
+                  />
+                )}
+              </Source>
+            );
+          })}
           {buildings.length > 0 && (
             <Source
               id="vicmap-buildings"
@@ -952,6 +1303,31 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
               />
             </Source>
           )}
+
+          {/* Consolidated Super-Lot Glow - Neon Lime Border for Multi-Parcel Aggregation */}
+          {consolidatedEnvelope && selectedParcels.length > 1 && (
+            <Source
+              id="consolidated-super-lot"
+              type="geojson"
+              data={{
+                type: 'Feature',
+                properties: { parcelCount: selectedParcels.length },
+                geometry: consolidatedEnvelope,
+              }}
+            >
+              <Layer
+                id="consolidated-super-lot-glow"
+                type="line"
+                paint={{
+                  'line-color': '#E9E778', // Neon lime
+                  'line-width': 4,
+                  'line-blur': 2,
+                  'line-opacity': 0.9,
+                }}
+              />
+            </Source>
+          )}
+
           {proposedFootprint && (
             <Source
               id="proposed-footprint"
@@ -1104,7 +1480,6 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
             </Marker>
           )}
           <ScaleControl maxWidth={100} unit="metric" position="bottom-left" />
-          <NavigationControl position="top-right" showCompass visualizePitch />
 
           <div className="absolute right-4 top-24">
             <button

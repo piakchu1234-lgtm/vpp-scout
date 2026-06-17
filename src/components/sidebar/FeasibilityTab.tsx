@@ -1,18 +1,35 @@
 'use client';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Calculator, DollarSign, Hammer, Percent, TrendingUp, AlertTriangle, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Calculator, DollarSign, Hammer, Percent, TrendingUp, AlertTriangle, AlertCircle, CheckCircle2, Sparkles, Loader2 } from 'lucide-react';
 import type { YieldData } from '@/lib/yieldEngine';
+
+type AIAnalystData = {
+  investmentThesis: string;
+  highestBestUse: string;
+  keyConstraints: string[];
+  estimatedROI: string;
+};
 
 type Props = {
   yieldData?: YieldData | null;
+  zones?: string[];
+  overlays?: string[];
+  landSize?: number | null;
+  suburb?: string;
+  council?: string;
 };
 
-export default function FeasibilityTab({ yieldData }: Props = {}) {
+export default function FeasibilityTab({ yieldData, zones, overlays, landSize, suburb, council }: Props = {}) {
   // --- 1. State: Editable Acquisition & Development Inputs ---
   const [purchasePrice, setPurchasePrice] = useState<number>(710000);
   const [dwellings, setDwellings] = useState<number>(1);
   const [buildCost, setBuildCost] = useState<number>(350000);
   const [salePrice, setSalePrice] = useState<number>(850000);
+
+  // --- AI Analyst State ---
+  const [aiAnalyst, setAiAnalyst] = useState<AIAnalystData | null>(null);
+  const [isLoadingAI, setIsLoadingAI] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   // Sync the slider to the AI's highest feasible yield whenever a new
   // parcel resolves. Deps are intentionally just `yieldData` — never
@@ -25,6 +42,59 @@ export default function FeasibilityTab({ yieldData }: Props = {}) {
       .reduce((acc, r) => Math.max(acc, r.estimate), 0);
     setDwellings(maxFeasible > 0 ? maxFeasible : 1);
   }, [yieldData]);
+
+  // --- AI Analyst Effect: Trigger when property data resolves ---
+  useEffect(() => {
+    // Only trigger if we have all required data
+    if (!zones || zones.length === 0 || !landSize || !suburb) {
+      setAiAnalyst(null);
+      setIsLoadingAI(false);
+      setAiError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingAI(true);
+    setAiError(null);
+    setAiAnalyst(null);
+
+    fetch('/api/ai-analyst', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        zones,
+        overlays: overlays || [],
+        landSize,
+        suburb,
+        council,
+      }),
+    })
+      .then((res) => res.json())
+      .then((response) => {
+        if (!cancelled) {
+          if (response.error) {
+            setAiError(response.error);
+          } else if (response.data) {
+            setAiAnalyst(response.data);
+          }
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error('[FeasibilityTab] AI analyst fetch failed', err);
+          setAiError('Failed to generate AI analysis');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingAI(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [zones, overlays, landSize, suburb, council]);
 
   // --- 2. Engine: Automated Pro-Forma Calculations ---
   const metrics = useMemo(() => {
@@ -53,6 +123,91 @@ export default function FeasibilityTab({ yieldData }: Props = {}) {
 
   return (
     <div className="flex flex-col gap-6 text-zinc-200 animate-in fade-in duration-300 pb-10">
+
+      {/* --- AI SITE ANALYST CARD --- */}
+      <div className="relative bg-gradient-to-br from-[#E9E778]/10 via-[#E9E778]/5 to-transparent border border-[#E9E778]/30 p-6 rounded-2xl backdrop-blur-md overflow-hidden">
+        {/* Animated background shimmer */}
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-shimmer pointer-events-none" />
+
+        <div className="relative z-10">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 bg-[#E9E778]/20 rounded-lg">
+              <Sparkles className="w-5 h-5 text-[#E9E778]" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-white">✨ AI Site Analyst</h2>
+              <p className="text-xs text-zinc-400">Powered by Claude Sonnet 4</p>
+            </div>
+          </div>
+
+          {/* Loading State */}
+          {isLoadingAI && (
+            <div className="flex flex-col items-center justify-center py-8 gap-3">
+              <Loader2 className="w-8 h-8 text-[#E9E778] animate-spin" />
+              <div className="text-center space-y-1">
+                <p className="text-sm text-zinc-300 font-medium">Scraping VPP guidelines...</p>
+                <p className="text-xs text-zinc-500">Synthesizing architectural yield...</p>
+              </div>
+            </div>
+          )}
+
+          {/* Error State */}
+          {aiError && !isLoadingAI && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+              <p className="text-sm text-red-400">{aiError}</p>
+            </div>
+          )}
+
+          {/* Success State */}
+          {aiAnalyst && !isLoadingAI && (
+            <div className="space-y-4">
+              {/* Investment Thesis - Serif font for executive report feel */}
+              <div className="bg-black/30 border border-white/10 rounded-lg p-4">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-[#E9E778] mb-3">Investment Thesis</h3>
+                <p className="text-sm leading-relaxed text-zinc-200 font-serif">
+                  {aiAnalyst.investmentThesis}
+                </p>
+              </div>
+
+              {/* Highest & Best Use */}
+              <div className="bg-[#E9E778]/10 border border-[#E9E778]/30 rounded-lg p-4">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-[#E9E778] mb-2">Highest & Best Use</h3>
+                <p className="text-base font-bold text-white">
+                  {aiAnalyst.highestBestUse}
+                </p>
+              </div>
+
+              {/* Key Constraints */}
+              {aiAnalyst.keyConstraints && aiAnalyst.keyConstraints.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Critical Constraints</h3>
+                  <ul className="space-y-2">
+                    {aiAnalyst.keyConstraints.map((constraint, idx) => (
+                      <li key={idx} className="flex items-start gap-2 text-sm text-zinc-300">
+                        <AlertCircle className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
+                        <span>{constraint}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Estimated ROI Badge */}
+              <div className="flex items-center justify-between bg-black/40 border border-white/10 rounded-lg p-3">
+                <span className="text-xs font-bold uppercase tracking-widest text-zinc-400">Est. Developer Margin</span>
+                <span className="text-lg font-black text-[#E9E778]">{aiAnalyst.estimatedROI}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Empty State */}
+          {!isLoadingAI && !aiAnalyst && !aiError && (
+            <div className="text-center py-6">
+              <p className="text-sm text-zinc-400">Select a property to analyze</p>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* --- HEADER --- */}
       <div className="flex items-center gap-3 bg-[#E9E778]/10 border border-[#E9E778]/20 p-4 rounded-xl">

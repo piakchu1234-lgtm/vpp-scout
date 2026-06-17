@@ -2,6 +2,8 @@
 import React, { useState } from 'react';
 import { ShieldAlert, BookOpen, AlertCircle, AlertTriangle, CheckCircle2, Loader2, ChevronDown } from 'lucide-react';
 import SSDFeasibilityWidget from '../sidebar/SSDFeasibilityWidget';
+import { OverlayInterpretation } from './OverlayInterpretation';
+import { VPPAgentDefinition } from './VPPAgentDefinition';
 import type { AIInsightData } from '@/app/app/page';
 import { getZoneDefinitionWithLanguage } from '@/lib/zoningDictionary';
 
@@ -218,9 +220,7 @@ export default function PlanningCard({
                   <p className="text-xs text-zinc-400 leading-relaxed">{zoneDefinition.purpose}</p>
                 </div>
               ) : (
-                <p className="text-xs text-zinc-400 leading-relaxed italic">
-                  {t.legalDefinitionPending}
-                </p>
+                <VPPAgentDefinition code={zone.code} language={lang} trigger="immediate" />
               );
             })()}
           </div>
@@ -265,16 +265,14 @@ export default function PlanningCard({
                   {isOpen && (
                     <div className="px-3 pb-3 pt-1 border-t border-white/5">
                       {overlay.description && (
-                        <p className="text-xs text-zinc-400 leading-relaxed mb-2">
+                        <p className="text-xs text-zinc-400 leading-relaxed mb-3">
                           {overlay.description}
                         </p>
                       )}
-                      <p className="text-[10px] font-bold tracking-widest text-[#E9E778] uppercase mb-1">
+                      <p className="text-[10px] font-bold tracking-widest text-[#E9E778] uppercase mb-2">
                         {t.legalDefinition}
                       </p>
-                      <p className="text-xs text-zinc-400 leading-relaxed italic">
-                        {t.legalDefinitionPending}
-                      </p>
+                      <OverlayInterpretation code={overlay.code} language={lang} />
                     </div>
                   )}
                 </div>

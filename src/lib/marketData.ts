@@ -17,7 +17,9 @@ export type MarketDataResult = {
   lastSoldPrice: string | null;
   lastSoldDate: string | null;
   propertyType: string | null; // "House", "Unit", "Townhouse", etc.
-  source: 'domain' | 'mock' | 'cache';
+  roofMaterial: string | null; // "Tile", "Metal", "Colorbond", etc.
+  wallMaterial: string | null; // "Brick", "Weatherboard", "Render", etc.
+  source: 'domain' | 'realestate' | 'scraper' | 'fallback' | 'mock' | 'cache';
 };
 
 /**
@@ -32,6 +34,10 @@ async function fetchMarketDataMock(address: string): Promise<MarketDataResult> {
   const hash = address.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
   const seed = hash % 100;
 
+  // Victorian-typical construction materials
+  const roofMaterials = ['Tile', 'Colorbond', 'Metal', 'Slate'];
+  const wallMaterials = ['Brick', 'Weatherboard', 'Render', 'Double Brick'];
+
   return {
     bedrooms: 2 + (seed % 4), // 2-5 bedrooms
     bathrooms: 1 + Math.floor(seed / 25), // 1-4 bathrooms
@@ -41,6 +47,8 @@ async function fetchMarketDataMock(address: string): Promise<MarketDataResult> {
     lastSoldPrice: seed > 50 ? `$${(500 + seed * 10) * 1000}` : null,
     lastSoldDate: seed > 50 ? `${2020 + (seed % 5)}-${String(1 + (seed % 12)).padStart(2, '0')}-15` : null,
     propertyType: seed % 3 === 0 ? 'House' : seed % 3 === 1 ? 'Unit' : 'Townhouse',
+    roofMaterial: roofMaterials[seed % roofMaterials.length],
+    wallMaterial: wallMaterials[seed % wallMaterials.length],
     source: 'mock',
   };
 }
@@ -133,6 +141,8 @@ async function fetchMarketDataLive(address: string): Promise<MarketDataResult> {
         : null,
       lastSoldDate: details.lastSoldDate ?? null,
       propertyType: details.propertyType ?? null,
+      roofMaterial: null, // Domain API doesn't provide material data
+      wallMaterial: null, // Domain API doesn't provide material data
       source: 'domain',
     };
   } catch (error) {
@@ -142,7 +152,47 @@ async function fetchMarketDataLive(address: string): Promise<MarketDataResult> {
 }
 
 /**
- * Main export - switch between mock and live by changing this line.
- * Set to `fetchMarketDataLive` once Domain credentials are configured.
+ * Scraper implementation - calls our internal /api/market-data scraper.
+ * Uses cheerio to extract property data from public sources (Domain, RealEstate).
+ * This is the active implementation that bypasses the need for PropTrack/Domain API licenses.
  */
-export const fetchMarketData = fetchMarketDataMock;
+async function fetchMarketDataScraper(address: string): Promise<MarketDataResult> {
+  try {
+    const response = await fetch('/api/market-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Scraper API returned ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    return {
+      bedrooms: data.bedrooms ?? null,
+      bathrooms: data.bathrooms ?? null,
+      carspaces: data.carspaces ?? null,
+      yearBuilt: data.yearBuilt ?? null,
+      floorAreaM2: null, // Scraper doesn't capture floor area yet
+      lastSoldPrice: data.lastSoldPrice ?? null,
+      lastSoldDate: data.lastSoldDate ?? null,
+      propertyType: null, // Scraper doesn't capture property type yet
+      roofMaterial: data.roofMaterial ?? null,
+      wallMaterial: data.wallMaterial ?? null,
+      source: data.source || 'scraper',
+    };
+  } catch (error) {
+    console.error('[marketData] Scraper failed, falling back to mock:', error);
+    return fetchMarketDataMock(address);
+  }
+}
+
+/**
+ * Main export - switch between implementations:
+ * - fetchMarketDataScraper: Active scraper (bypasses PropTrack/Domain API license)
+ * - fetchMarketDataLive: Domain API (requires credentials)
+ * - fetchMarketDataMock: Deterministic mock data
+ */
+export const fetchMarketData = fetchMarketDataScraper;

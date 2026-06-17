@@ -124,6 +124,7 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
 
     return (
       <div
+        id="site-feasibility-report-root"
         ref={ref}
         // A4 page with strict padding wrapper acting as physical margin.
         // Explicit light colors so dashboard dark-mode classes can never bleed in.

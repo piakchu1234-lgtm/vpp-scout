@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { fetchAmenities, formatAmenitiesForAI } from '@/lib/amenityEngine';
 
 // Node runtime: required because `pg` (used by the Prisma driver adapter)
 // reaches into node:net / node:tls / node:util/types. Next.js's edge runtime
@@ -88,6 +89,19 @@ export async function POST(req: Request) {
     const lotAreaM2 = metrics?.lotAreaM2 ?? null;
     const overlayCodes = Array.isArray(metrics?.overlayCodes) ? metrics.overlayCodes : [];
     const parcelCount = typeof metrics?.parcelCount === 'number' ? metrics.parcelCount : 1;
+    const lat = typeof metrics?.lat === 'number' ? metrics.lat : null;
+    const lon = typeof metrics?.lon === 'number' ? metrics.lon : null;
+
+    // Fetch amenity data for 15-Minute City analysis
+    let amenityContext = '';
+    if (lat !== null && lon !== null) {
+      try {
+        const amenities = await fetchAmenities(lat, lon);
+        amenityContext = formatAmenitiesForAI(amenities);
+      } catch (error) {
+        console.warn('Failed to fetch amenities:', error);
+      }
+    }
 
     const cacheKey = normaliseAddress(address, language);
     if (!cacheKey) {
@@ -96,22 +110,26 @@ export async function POST(req: Request) {
 
     // Cache check — best-effort. A DB outage must not break the user-facing
     // request, so we swallow lookup errors and fall through to Gemini.
-    const cache = await prisma.propertyCache
-      .findUnique({ where: { address: cacheKey } })
-      .catch((err) => {
-        console.error('[insight] cache lookup failed', err);
-        return null;
-      });
+    // NOTE: Deprecated - migrating to new Property model
+    // const cache = await prisma.propertyCache
+    //   .findUnique({ where: { address: cacheKey } })
+    //   .catch((err: unknown) => {
+    //     console.error('[insight] cache lookup failed', err);
+    //     return null;
+    //   });
+
+    const cache = null; // Temporarily disabled during schema migration
 
     if (cache) {
-      const ageMs = Date.now() - cache.updatedAt.getTime();
-      if (ageMs < SEVEN_DAYS_MS) {
-        console.log(`[insight] CACHE HIT ⚡ "${cacheKey}" (age ${Math.round(ageMs / 3600000)}h)`);
-        return NextResponse.json({ data: cache.aiData, cached: true });
-      }
-      console.log(
-        `[insight] cache stale (age ${Math.round(ageMs / 86400000)}d) — refreshing "${cacheKey}"`,
-      );
+      // Legacy cache logic - disabled during migration
+      // const ageMs = Date.now() - cache.updatedAt.getTime();
+      // if (ageMs < SEVEN_DAYS_MS) {
+      //   console.log(`[insight] CACHE HIT ⚡ "${cacheKey}" (age ${Math.round(ageMs / 3600000)}h)`);
+      //   return NextResponse.json({ data: cache.aiData, cached: true });
+      // }
+      // console.log(
+      //   `[insight] cache stale (age ${Math.round(ageMs / 86400000)}d) — refreshing "${cacheKey}"`,
+      // );
     }
 
     console.log(`[insight] CACHE MISS 🤖 (Calling Claude Sonnet 4.6) "${cacheKey}" [Language: ${language}]`);
@@ -172,10 +190,36 @@ You MUST use the web_search tool to look up, in priority order:
 - VicPlan hazard layers, council bushfire/flood mapping — natural hazards affecting the parcel (e.g. "Bushfire Prone Area (BPA)", "Flood Risk — Melbourne Water referral required")
 - findaschool.vic.gov.au, Google Maps, school websites, realestate.com.au school panel — the **two closest schools** to the property by walking/driving distance. Prefer one primary and one secondary where reasonable. Return each school's official name and approximate distance from the property as a short string (e.g. "1.2 km", "650 m"). Do NOT invent schools — if the search cannot confirm two, return as many as you can verify (1 or 0).
 
+${amenityContext ? `\n**15-Minute City Amenity Context:**\n${amenityContext}\n` : ''}
+
+**CRITICAL: Aggressive Developer-Focused Feasibility Analysis**
+Your 'targetDemographicPitch' MUST be a hyper-realistic, tactical developer pitch. Think like a Commercial Property Developer evaluating maximum commercial yield:
+
+**INVESTMENT THESIS REQUIREMENT**: You have been provided with the 'estimatedLastSoldPrice' (land cost). In your 2-sentence pitch, you MUST briefly comment on the land cost versus the potential Gross Realization Value (GRV) of the highest-and-best-use development you recommend. Make it sound like an aggressive, high-level investment thesis with realistic return metrics.
+
+Example format:
+- "Land-in at $680K positions this for a 2-lot subdivision delivering $1.45M GRV (2x $725K townhouses), achieving 35% gross margin and 18-month exit."
+- "At $850K land cost, a 3-level mixed-use development (ground retail + 6 apartments) generates $3.2M GRV with 28% developer margin after $2.1M construction and holding costs."
+
+1. **SSD Opportunity Analysis**: If lot size > 300m² and zone is GRZ/NRZ/MUZ/TRZ, explicitly state SSD viability and calculate potential rental income from the second dwelling (e.g., "Add a 60m² SSD generating $450/week passive income while retaining the existing house").
+
+2. **Commercial Yield Maximization**: For commercial zones (C1Z, C2Z, MUZ), recommend the highest-value use case (e.g., "Ground-floor retail ($800/m²/year) with 3 levels of premium apartments above, maximizing the 12.79m frontage for street activation").
+
+3. **Lot Size Constraints**: If lot is undersized (<300m²) or oversized (>1000m²), explicitly state how this impacts development potential (e.g., "Undersized lot restricts to single dwelling only - no subdivision or SSD pathway" OR "Oversized 1200m² site: subdivide into two 600m² lots, develop dual occupancy on each for 4-dwelling yield").
+
+4. **Overlay Restrictions**: If Heritage (HO), Bushfire (BMO), or Flood (LSIO/FO) overlays apply, state the specific commercial impact (e.g., "Heritage controls add $80K-$120K to development costs via mandatory facade retention and heritage architect fees").
+
+5. **Target Buyer Psychology**: Be brutally specific about end-buyer profile based on location + amenities (e.g., "Wealthy downsizers seeking low-maintenance luxury near Chadstone - 3-bed townhouses with double garage, stone benchtops, $1.2M price point" OR "Young professionals near Caufield station - 2-bed apartments with study nook, $650K-$750K").
+
+**Target Demographic Pitch Format:**
+Sentence 1: Investment thesis - Land cost vs GRV with realistic margin/timeline
+Sentence 2: Define exact buyer demographic + recommended dwelling type with specific features + realistic price point
+
 After searching, return ONLY a valid JSON object matching this exact schema (no markdown fences, no prose):
 {
   "insightSummary": "3 short bullet points covering neighborhood context and development potential. No markdown, no asterisks.",
   "executiveSummary": "A highly analytical, 2-sentence executive summary of the site's development potential based on its zoning. Do not quote raw VPP legislation.",
+  "targetDemographicPitch": "A 2-sentence tactical pitch defining the ideal end-buyer demographic and most profitable dwelling type for this site based on zoning, size, and amenities.",
   "ssdFeasibility": {
     "isEligible": true,
     "reasoning": "Lot size is 650 m² (exceeds 300 m² threshold) and zoning is GRZ1 (General Residential Zone), which permits Small Second Dwellings under the 2026 SSD reforms."
@@ -348,7 +392,26 @@ Rules:
 
     // Strip markdown fences if the model returned any
     const cleaned = finalText.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
-    const data = JSON.parse(cleaned);
+
+    // Try to extract JSON from response (model may return text before/after JSON)
+    let data;
+    try {
+      data = JSON.parse(cleaned);
+    } catch (parseError) {
+      // Try to find JSON object in the response
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          data = JSON.parse(jsonMatch[0]);
+        } catch {
+          console.error('[insight] JSON extraction failed. Response:', cleaned.substring(0, 200));
+          throw new Error('AI model did not return valid JSON. Please try again.');
+        }
+      } else {
+        console.error('[insight] No JSON found in response:', cleaned.substring(0, 200));
+        throw new Error('AI model did not return JSON format. Please try again.');
+      }
+    }
 
     // Defensive coercion: nearbySchools is a new field; older cached prompts
     // or partial model output may omit it. Normalise to a clean array of
@@ -369,15 +432,16 @@ Rules:
     // Persist to cache. Best-effort: failure to write must not fail the
     // user-facing request — they already paid the latency cost of a cold
     // Gemini call, so we still return the data even if the upsert errors.
-    await prisma.propertyCache
-      .upsert({
-        where: { address: cacheKey },
-        create: { address: cacheKey, aiData: data },
-        update: { aiData: data },
-      })
-      .catch((err) => {
-        console.error('[insight] cache write failed', err);
-      });
+    // NOTE: Deprecated - migrating to new Property model
+    // await prisma.propertyCache
+    //   .upsert({
+    //     where: { address: cacheKey },
+    //     create: { address: cacheKey, aiData: data },
+    //     update: { aiData: data },
+    //   })
+    //   .catch((err: unknown) => {
+    //     console.error('[insight] cache write failed', err);
+    //   });
 
     return NextResponse.json({ data, cached: false });
   } catch (error: unknown) {

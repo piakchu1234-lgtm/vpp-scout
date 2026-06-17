@@ -1,11 +1,25 @@
 'use client';
 
-import React from 'react';
-import { Layers, Trash2, Satellite, Globe, Box } from 'lucide-react';
+import React, { useState } from 'react';
+import {
+  Layers,
+  Trash2,
+  Satellite,
+  Globe,
+  Box,
+  Plus,
+  Minus,
+  Compass,
+  Pentagon,
+  Minus as LineIcon,
+  Settings,
+  ChevronUp,
+} from 'lucide-react';
 import type { ParcelFeature } from '@/lib/vicPlanApi';
 
 type Lang = 'en' | 'zh';
 type ViewMode = 'plan' | 'satellite' | 'hybrid';
+type DrawMode = 'draw_polygon' | 'draw_line_string' | null;
 
 type MapControlsToolbarProps = {
   selectedParcels: ParcelFeature[];
@@ -15,16 +29,28 @@ type MapControlsToolbarProps = {
   is3D: boolean;
   setIs3D: (is3D: boolean) => void;
   lang: Lang;
+  onZoomIn?: () => void;
+  onZoomOut?: () => void;
+  onResetBearing?: () => void;
+  drawMode: DrawMode;
+  onDrawModeChange: (mode: DrawMode) => void;
+  onClearDrawing?: () => void;
+  drawnArea?: number | null;
 };
 
 const LABELS = {
   clearSelection: { en: 'Clear', zh: '清除' },
-  selectedCount: { en: 'Selected', zh: '已选' },
-  darkPlan: { en: 'Dark Plan', zh: '平面图' },
-  satellite: { en: 'Satellite', zh: '卫星图' },
-  hybrid: { en: 'Hybrid', zh: '混合图' },
-  view2D: { en: '2D View', zh: '2D 视图' },
-  view3D: { en: '3D View', zh: '3D 视图' },
+  selectedCount: { en: 'selected', zh: '已选' },
+  darkPlan: { en: 'Dark Plan', zh: '暗色平面' },
+  aerialSatellite: { en: 'Aerial Satellite', zh: '卫星影像' },
+  hybridGlobe: { en: 'Hybrid Globe', zh: '混合地球' },
+  toggle3D: { en: 'Toggle 3D', zh: '切换3D' },
+  zoomIn: { en: 'Zoom In', zh: '放大' },
+  zoomOut: { en: 'Zoom Out', zh: '缩小' },
+  resetBearing: { en: 'Reset North', zh: '重置方向' },
+  drawPolygon: { en: 'Draw Polygon', zh: '绘制多边形' },
+  measureDistance: { en: 'Measure Distance', zh: '测量距离' },
+  clearDrawing: { en: 'Clear Drawing', zh: '清除绘图' },
 };
 
 export default function MapControlsToolbar({
@@ -35,13 +61,23 @@ export default function MapControlsToolbar({
   is3D,
   setIs3D,
   lang,
+  onZoomIn,
+  onZoomOut,
+  onResetBearing,
+  drawMode,
+  onDrawModeChange,
+  onClearDrawing,
+  drawnArea,
 }: MapControlsToolbarProps) {
+  // Waze-style expandable state
+  const [isExpanded, setIsExpanded] = useState(false);
+
   return (
-    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2">
-      {/* Multi-Parcel Selection Display */}
-      {selectedParcels.length > 0 && (
-        <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/40 backdrop-blur-md px-3 py-2 shadow-lg">
-          <div className="flex items-center gap-2 text-xs font-medium text-white">
+    <div className="absolute bottom-4 right-4 z-20 flex flex-col items-end gap-3">
+      {/* Multi-Parcel Selection Badge */}
+      {selectedParcels.length > 1 && (
+        <div className="flex items-center gap-2 rounded-lg border border-[#E9E778]/30 bg-black/80 backdrop-blur-md px-3 py-2 shadow-xl">
+          <div className="flex items-center gap-2 text-xs font-medium text-[#E9E778]">
             <Layers className="w-3.5 h-3.5 text-[#E9E778]" />
             <span>
               {selectedParcels.length} {LABELS.selectedCount[lang]}
@@ -59,75 +95,166 @@ export default function MapControlsToolbar({
         </div>
       )}
 
-      {/* View Mode Group + Camera Control */}
-      <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-zinc-900/80 backdrop-blur-md p-1.5 shadow-xl">
-        {/* View Mode Group */}
-        <div className="flex items-center gap-1">
-          {/* Dark Plan Button */}
-          <button
-            type="button"
-            onClick={() => setViewMode('plan')}
-            className={`w-10 h-10 flex items-center justify-center rounded-md border transition-all ${
-              viewMode === 'plan'
-                ? 'bg-[#E9E778] text-[#241F21] border-transparent shadow-md'
-                : 'text-zinc-300 border-transparent hover:bg-white/10 hover:border-white/20'
-            }`}
-            aria-label={LABELS.darkPlan[lang]}
-            aria-pressed={viewMode === 'plan'}
-          >
-            <Layers className="w-4 h-4" />
-          </button>
+      {/* Waze-Style Expandable Toolbar */}
+      <div className="flex flex-col items-end gap-2">
+        {/* Expanded Controls */}
+        {isExpanded && (
+          <div className="flex flex-col gap-2 rounded-lg border border-slate-200/50 bg-slate-900/90 backdrop-blur-md shadow-xl p-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
+            {/* View Mode */}
+            <div className="flex gap-1">
+              <button
+                type="button"
+                onClick={() => setViewMode('plan')}
+                className={`w-10 h-10 flex items-center justify-center rounded-md transition-all ${
+                  viewMode === 'plan'
+                    ? 'bg-[#E9E778] text-[#241F21] shadow-md'
+                    : 'text-zinc-300 hover:bg-white/10'
+                }`}
+                title={LABELS.darkPlan[lang]}
+              >
+                <Layers className="w-4 h-4" />
+              </button>
 
-          {/* Satellite Button */}
-          <button
-            type="button"
-            onClick={() => setViewMode('satellite')}
-            className={`w-10 h-10 flex items-center justify-center rounded-md border transition-all ${
-              viewMode === 'satellite'
-                ? 'bg-[#E9E778] text-[#241F21] border-transparent shadow-md'
-                : 'text-zinc-300 border-transparent hover:bg-white/10 hover:border-white/20'
-            }`}
-            aria-label={LABELS.satellite[lang]}
-            aria-pressed={viewMode === 'satellite'}
-          >
-            <Satellite className="w-4 h-4" />
-          </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('satellite')}
+                className={`w-10 h-10 flex items-center justify-center rounded-md transition-all ${
+                  viewMode === 'satellite'
+                    ? 'bg-[#E9E778] text-[#241F21] shadow-md'
+                    : 'text-zinc-300 hover:bg-white/10'
+                }`}
+                title={LABELS.aerialSatellite[lang]}
+              >
+                <Satellite className="w-4 h-4" />
+              </button>
 
-          {/* Hybrid Button */}
-          <button
-            type="button"
-            onClick={() => setViewMode('hybrid')}
-            className={`w-10 h-10 flex items-center justify-center rounded-md border transition-all ${
-              viewMode === 'hybrid'
-                ? 'bg-[#E9E778] text-[#241F21] border-transparent shadow-md'
-                : 'text-zinc-300 border-transparent hover:bg-white/10 hover:border-white/20'
-            }`}
-            aria-label={LABELS.hybrid[lang]}
-            aria-pressed={viewMode === 'hybrid'}
-          >
-            <Globe className="w-4 h-4" />
-          </button>
-        </div>
+              <button
+                type="button"
+                onClick={() => setViewMode('hybrid')}
+                className={`w-10 h-10 flex items-center justify-center rounded-md transition-all ${
+                  viewMode === 'hybrid'
+                    ? 'bg-[#E9E778] text-[#241F21] shadow-md'
+                    : 'text-zinc-300 hover:bg-white/10'
+                }`}
+                title={LABELS.hybridGlobe[lang]}
+              >
+                <Globe className="w-4 h-4" />
+              </button>
+            </div>
 
-        {/* Divider */}
-        <div className="h-8 w-px bg-white/10 mx-1" />
+            {/* 3D Toggle */}
+            <button
+              type="button"
+              onClick={() => setIs3D(!is3D)}
+              className={`w-full h-10 flex items-center justify-center gap-2 rounded-md transition-all ${
+                is3D
+                  ? 'bg-[#E9E778] text-[#241F21] shadow-md'
+                  : 'text-zinc-300 hover:bg-white/10'
+              }`}
+              title={LABELS.toggle3D[lang]}
+            >
+              <Box className="w-4 h-4" />
+              <span className="text-xs font-medium">3D</span>
+            </button>
 
-        {/* 2D/3D Camera Toggle */}
+            {/* Zoom Controls */}
+            <div className="flex gap-1">
+              <button
+                type="button"
+                onClick={onZoomIn}
+                className="flex-1 h-10 flex items-center justify-center rounded-md text-zinc-300 hover:bg-white/10"
+                title={LABELS.zoomIn[lang]}
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={onZoomOut}
+                className="flex-1 h-10 flex items-center justify-center rounded-md text-zinc-300 hover:bg-white/10"
+                title={LABELS.zoomOut[lang]}
+              >
+                <Minus className="w-4 h-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={onResetBearing}
+                className="flex-1 h-10 flex items-center justify-center rounded-md text-zinc-300 hover:bg-white/10"
+                title={LABELS.resetBearing[lang]}
+              >
+                <Compass className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Drawing Tools */}
+            <div className="flex gap-1">
+              <button
+                type="button"
+                onClick={() =>
+                  onDrawModeChange(
+                    drawMode === 'draw_polygon' ? null : 'draw_polygon'
+                  )
+                }
+                className={`flex-1 h-10 flex items-center justify-center rounded-md transition-all ${
+                  drawMode === 'draw_polygon'
+                    ? 'bg-[#E9E778] text-[#241F21] shadow-md'
+                    : 'text-zinc-300 hover:bg-white/10'
+                }`}
+                title={LABELS.drawPolygon[lang]}
+              >
+                <Pentagon className="w-4 h-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  onDrawModeChange(
+                    drawMode === 'draw_line_string' ? null : 'draw_line_string'
+                  )
+                }
+                className={`flex-1 h-10 flex items-center justify-center rounded-md transition-all ${
+                  drawMode === 'draw_line_string'
+                    ? 'bg-[#E9E778] text-[#241F21] shadow-md'
+                    : 'text-zinc-300 hover:bg-white/10'
+                }`}
+                title={LABELS.measureDistance[lang]}
+              >
+                <LineIcon className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Clear Drawing */}
+            {(drawMode || drawnArea) && onClearDrawing && (
+              <button
+                type="button"
+                onClick={onClearDrawing}
+                className="w-full h-10 flex items-center justify-center gap-2 rounded-md bg-red-500/10 text-red-300 hover:bg-red-500/20 transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span className="text-xs font-medium">{LABELS.clearDrawing[lang]}</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Main Toggle Button (Waze-style) */}
         <button
           type="button"
-          onClick={() => setIs3D(!is3D)}
-          className={`w-10 h-10 flex items-center justify-center rounded-md border transition-all ${
-            is3D
-              ? 'bg-[#E9E778] text-[#241F21] border-transparent shadow-md'
-              : 'text-zinc-300 border-transparent hover:bg-white/10 hover:border-white/20'
+          onClick={() => setIsExpanded(!isExpanded)}
+          className={`w-12 h-12 flex items-center justify-center rounded-full border border-slate-200/50 backdrop-blur-md shadow-xl transition-all ${
+            isExpanded
+              ? 'bg-[#E9E778] text-[#241F21]'
+              : 'bg-slate-900/90 text-zinc-300 hover:bg-slate-800/90'
           }`}
-          aria-label={is3D ? LABELS.view3D[lang] : LABELS.view2D[lang]}
-          aria-pressed={is3D}
-          title={is3D ? LABELS.view3D[lang] : LABELS.view2D[lang]}
+          aria-label="Map Settings"
+          aria-expanded={isExpanded}
         >
-          <Box
-            className={`w-4 h-4 transition-transform ${is3D ? 'rotate-12' : ''}`}
-          />
+          {isExpanded ? (
+            <ChevronUp className="w-5 h-5" />
+          ) : (
+            <Settings className="w-5 h-5" />
+          )}
         </button>
       </div>
     </div>

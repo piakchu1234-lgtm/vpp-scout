@@ -26,6 +26,26 @@ export type ComplianceResult = {
   blockingFactors: string[];
   /** Conditions that would trigger a planning permit requirement */
   permitTriggers: string[];
+  /** Title covenant warnings */
+  covenantWarnings: string[];
+  /** 2026 regulatory override notices */
+  regulatoryNotices: string[];
+};
+
+/**
+ * Title covenant check result
+ */
+export type CovenantCheck = {
+  hasRestrictions: boolean;
+  warnings: string[];
+};
+
+/**
+ * Commercial use regulatory override result
+ */
+export type CommercialUseOverride = {
+  applies: boolean;
+  notice: string;
 };
 
 /**
@@ -37,6 +57,8 @@ export type ComplianceInput = {
   overlays: string[];
   frontageM: number | null;
   isVacantLand: boolean;
+  titleNotes?: string | null;
+  isCommercialUse?: boolean;
 };
 
 // ---------- Constants ----------
@@ -53,8 +75,9 @@ const ELIGIBLE_ZONES = ['GRZ', 'NRZ', 'RGZ', 'MUZ', 'TZ'];
  * - BMO: Bushfire Management Overlay
  * - LSIO: Land Subject to Inundation Overlay (legacy code for FO)
  * - SBO: Special Building Overlay
+ * - BFO: Built Form Overlay
  */
-const RESTRICTIVE_OVERLAY_PREFIXES = ['HO', 'BMO', 'LSIO', 'SBO'];
+const RESTRICTIVE_OVERLAY_PREFIXES = ['HO', 'BMO', 'LSIO', 'SBO', 'BFO'];
 
 /**
  * Minimum frontage requirement for lots with existing dwellings (metres).
@@ -121,7 +144,94 @@ function describeOverlay(code: string): string {
   if (upper.startsWith('BMO')) return `Bushfire Management Overlay (${code})`;
   if (upper.startsWith('LSIO')) return `Land Subject to Inundation Overlay (${code})`;
   if (upper.startsWith('SBO')) return `Special Building Overlay (${code})`;
+  if (upper.startsWith('BFO')) return `Built Form Overlay (${code})`;
   return code;
+}
+
+// ---------- Title Covenant Parser ----------
+
+/**
+ * Check for common title covenant restrictions that may limit development
+ *
+ * Historic property restrictions often mandate:
+ * - Traditional brick veneer construction
+ * - Restrictions on modern external rendered foam elements
+ * - Minimum setback requirements beyond planning scheme
+ * - Architectural style controls
+ *
+ * @param titleNotes - Optional title notes or covenant text
+ * @returns CovenantCheck with warnings
+ */
+export function checkTitleCovenants(titleNotes?: string | null): CovenantCheck {
+  const warnings: string[] = [];
+
+  if (!titleNotes) {
+    // No title data available - alert user to manual check
+    warnings.push(
+      'Title covenant data unavailable. Recommend ordering a Section 32 Vendor Statement to check for historic property restrictions that may mandate traditional brick veneer construction or regulate modern external rendered foam elements.'
+    );
+    return { hasRestrictions: false, warnings };
+  }
+
+  const lowerNotes = titleNotes.toLowerCase();
+
+  // Check for common covenant keywords
+  if (lowerNotes.includes('brick') || lowerNotes.includes('veneer')) {
+    warnings.push(
+      'Title may contain brick veneer construction mandate. Modern rendered foam cladding systems may be restricted.'
+    );
+  }
+
+  if (lowerNotes.includes('covenant') || lowerNotes.includes('restriction')) {
+    warnings.push(
+      'Title contains registered covenant or restriction. Review Section 32 statement for full details before commencing design work.'
+    );
+  }
+
+  if (lowerNotes.includes('setback') || lowerNotes.includes('building line')) {
+    warnings.push(
+      'Title may specify setback requirements beyond planning scheme controls. Verify covenant setbacks do not exceed ResCode minimums.'
+    );
+  }
+
+  if (lowerNotes.includes('architectural') || lowerNotes.includes('design')) {
+    warnings.push(
+      'Title may contain architectural design controls. External finishes and built form may be subject to covenant approval.'
+    );
+  }
+
+  return {
+    hasRestrictions: warnings.length > 0,
+    warnings,
+  };
+}
+
+// ---------- Clause 52.27 Exemption Intercept ----------
+
+/**
+ * Check if commercial use layout triggers Clause 52.27 override
+ *
+ * Statutory Reform Rule: Clause 52.27 (Licensed Premises) has been formally
+ * repealed from all Victorian Planning Schemes. Commercial hospitality venue
+ * changes of use no longer require town planning permits for liquor consumption
+ * boundaries.
+ *
+ * @param isCommercialUse - Whether the development includes commercial use
+ * @returns CommercialUseOverride with notice text
+ */
+export function checkClause5227Override(isCommercialUse: boolean): CommercialUseOverride {
+  if (!isCommercialUse) {
+    return {
+      applies: false,
+      notice: '',
+    };
+  }
+
+  return {
+    applies: true,
+    notice:
+      'Statutory Reform Rule: Clause 52.27 (Licensed Premises) has been formally repealed from all Victorian Planning Schemes. Commercial hospitality venue changes of use no longer require town planning permits for liquor consumption boundaries.',
+  };
 }
 
 // ---------- Main Function ----------
@@ -129,14 +239,18 @@ function describeOverlay(code: string): string {
 /**
  * Evaluate whether a property qualifies for the VPP VC282 SSD deemed-to-comply pathway.
  *
+ * Includes title covenant parser and 2026 regulatory overrides.
+ *
  * @param input - Property characteristics and planning constraints
  * @returns ComplianceResult with status, reasoning, and detailed factors
  */
 export function evaluateFastTrack(input: ComplianceInput): ComplianceResult {
-  const { landSizeM2, zoneCode, overlays, frontageM, isVacantLand } = input;
+  const { landSizeM2, zoneCode, overlays, frontageM, isVacantLand, titleNotes, isCommercialUse } = input;
 
   const blockingFactors: string[] = [];
   const permitTriggers: string[] = [];
+  const covenantWarnings: string[] = [];
+  const regulatoryNotices: string[] = [];
 
   // Step 1: Check zone eligibility
   const baseZone = extractBaseZone(zoneCode);
@@ -182,14 +296,28 @@ export function evaluateFastTrack(input: ComplianceInput): ComplianceResult {
     }
   }
 
-  // Step 5: Determine overall status
+  // Step 5: Title Covenant Parser (2026 regulatory override)
+  const covenantCheck = checkTitleCovenants(titleNotes);
+  if (covenantCheck.hasRestrictions) {
+    covenantWarnings.push(...covenantCheck.warnings);
+  }
+
+  // Step 6: Clause 52.27 Exemption Intercept (2026 regulatory override)
+  if (isCommercialUse) {
+    const commercialOverride = checkClause5227Override(isCommercialUse);
+    if (commercialOverride.applies) {
+      regulatoryNotices.push(commercialOverride.notice);
+    }
+  }
+
+  // Step 7: Determine overall status
   const hasHardBlockers = blockingFactors.length > 0;
   const hasSoftTriggers = permitTriggers.length > 0;
 
   const status: 'eligible' | 'permit-required' =
     hasHardBlockers || hasSoftTriggers ? 'permit-required' : 'eligible';
 
-  // Step 6: Generate reasoning
+  // Step 8: Generate reasoning
   let reasoning: string;
   if (status === 'eligible') {
     reasoning = `Property qualifies for the deemed-to-comply pathway under VC282: ${describeZone(baseZone)}, lot size ${landSizeM2 ? Math.round(landSizeM2) : '—'}m², no restrictive overlays detected.`;
@@ -204,5 +332,7 @@ export function evaluateFastTrack(input: ComplianceInput): ComplianceResult {
     reasoning,
     blockingFactors,
     permitTriggers,
+    covenantWarnings,
+    regulatoryNotices,
   };
 }

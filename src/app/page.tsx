@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Search, Map as MapIcon } from 'lucide-react';
 import { Show, SignInButton, UserButton } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
+import GlobalControls from '@/components/GlobalControls';
 
 import {
   geocodeSuggestions,
@@ -16,12 +17,31 @@ import {
 
 
 
-const FLOATING_ELEMENTS = [
-  { id: 1, label: 'GRZ1', top: '20%', left: '15%', delay: 0 },
-  { id: 2, label: '711m²', top: '60%', left: '10%', delay: 1.5 },
-  { id: 3, label: 'No Overlays', top: '30%', left: '80%', delay: 0.5 },
-  { id: 4, label: '3 Townhouses', top: '70%', left: '75%', delay: 2 },
-  { id: 5, label: 'Clause 55', top: '15%', left: '60%', delay: 1 },
+const FEATURE_CARDS = [
+  {
+    id: 1,
+    title: 'Multi-Lot Consolidation',
+    description: 'Interactive Super-Lot Builder. Shift-click to consolidate sites and dynamically compute real-time site parameters.',
+    icon: '🏘️',
+  },
+  {
+    id: 2,
+    title: 'Split-Zoning Engine',
+    description: 'Multi-Title Geometry Analysis. Automatically isolate distinct spatial zones across complex property boundaries.',
+    icon: '🗺️',
+  },
+  {
+    id: 3,
+    title: 'Overlay Auditing Engine',
+    description: 'Instant Environmental Clearances. Real-time scanning for Heritage (HO), Bushfire (BMO), and Land Inundation (LSIO) protections.',
+    icon: '🛡️',
+  },
+  {
+    id: 4,
+    title: 'One-Click Bilingual Exports',
+    description: 'Client-Ready PDF Engine. High-fidelity English and Mandarin reports formatted automatically for developers.',
+    icon: '📄',
+  },
 ];
 
 const DEBOUNCE_MS = 350;
@@ -120,18 +140,24 @@ export default function LandingPage() {
   }
 
   function handleExplore() {
-    if (suggestions.length > 0) {
-      const pick = suggestions[highlight >= 0 ? highlight : 0];
+    // STRICT: Only proceed if we have a valid highlight or explicit selection
+    if (suggestions.length > 0 && highlight >= 0) {
+      const pick = suggestions[highlight];
       selectSuggestion(pick);
       navigateToApp(pick);
       return;
     }
-    if (selected) navigateToApp(selected);
+    // Only use selected if user previously chose an item
+    if (selected) {
+      navigateToApp(selected);
+    }
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'Enter' && open && suggestions.length > 0) {
       e.preventDefault();
+      // STRICT: Only select if arrow navigation occurred (highlight >= 0)
+      // Do NOT default to first item if user just pressed Enter without arrows
       const pick = suggestions[highlight >= 0 ? highlight : 0];
       if (pick) {
         selectSuggestion(pick);
@@ -162,18 +188,8 @@ export default function LandingPage() {
   return (
     <div className="relative min-h-screen w-full bg-[#241F21] text-white overflow-hidden font-sans selection:bg-[#E9E778] selection:text-[#241F21]">
 
-      {FLOATING_ELEMENTS.map((el) => (
-        <motion.div
-          key={el.id}
-          initial={{ y: 0 }}
-          animate={{ y: [0, -20, 0] }}
-          transition={{ duration: 6, repeat: Infinity, ease: "easeInOut", delay: el.delay }}
-          className="absolute z-0 px-4 py-2 bg-white/5 border border-white/10 rounded-md text-sm text-zinc-400 backdrop-blur-sm pointer-events-none"
-          style={{ top: el.top, left: el.left }}
-        >
-          {el.label}
-        </motion.div>
-      ))}
+      <div className="absolute inset-0 bg-gradient-to-b from-[#E9E778]/5 via-transparent to-transparent pointer-events-none" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#E9E778]/10 via-transparent to-transparent pointer-events-none" />
 
       <header className="relative z-20 flex items-center justify-between px-8 py-6 max-w-7xl mx-auto">
         <div className="flex items-center gap-2">
@@ -213,108 +229,152 @@ export default function LandingPage() {
           </Show>
 
           <Show when="signed-in">
-            <div className="ml-4">
+            <div className="ml-4 flex items-center gap-3">
+              <GlobalControls />
+              <div className="h-6 w-px bg-zinc-700" />
               <UserButton appearance={{ elements: { avatarBox: 'h-9 w-9 ring-2 ring-[#E9E778]/40' } }} />
             </div>
           </Show>
         </nav>
       </header>
 
-      <main className="relative z-10 flex flex-col items-center justify-center min-h-[75vh] px-4 text-center">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, ease: "easeOut" }} className="max-w-4xl">
-          <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 leading-tight">
-            Unlock any site&apos;s potential. <br />
-            <span className="text-zinc-500">Made instantly.</span>
+      <main className="relative z-10 flex flex-col items-center justify-center px-4 pt-12 pb-20">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, ease: "easeOut" }} className="max-w-5xl w-full text-center">
+          <div className="mb-4 inline-flex items-center gap-2 px-4 py-1.5 bg-[#E9E778]/10 border border-[#E9E778]/20 rounded-full text-xs font-medium text-[#E9E778] tracking-wide">
+            <span className="inline-block w-1.5 h-1.5 bg-[#E9E778] rounded-full animate-pulse" />
+            SSD 2026 REFORMS COMPLIANT
+          </div>
+
+          <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight mb-4 leading-[1.1]">
+            Automated ResCode Feasibility <br />
+            <span className="text-zinc-400">for Victorian Architects</span>
           </h1>
 
-          <p className="text-lg md:text-xl text-zinc-400 mb-12 max-w-2xl mx-auto">
-            Type any Victorian address to instantly generate spatial yields, statutory limits, and commercial feasibilities.
+          <p className="text-base md:text-lg text-zinc-400 mb-10 max-w-3xl mx-auto leading-relaxed">
+            Instantly analyze multi-title parcel yields, planning overlays, and compliance constraints against 2026 Victorian statutory frameworks.
           </p>
 
-          <div ref={wrapperRef} className="relative max-w-2xl mx-auto group">
-            <div className="absolute inset-0 bg-[#E9E778]/20 blur-xl rounded-full opacity-0 group-focus-within:opacity-100 transition-opacity duration-500" />
-            <div className="relative flex items-center bg-white/10 border border-white/20 backdrop-blur-md rounded-full p-2 pl-6 shadow-2xl transition-all group-focus-within:border-[#E9E778]/50 group-focus-within:bg-white/15">
-              <Search className="w-6 h-6 text-zinc-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  if (selected) setSelected(null);
-                }}
-                onFocus={() => suggestions.length > 0 && setOpen(true)}
-                onKeyDown={handleKeyDown}
-                placeholder="Search any address (e.g. 62 Chandler Road, Noble Park)"
-                aria-label="Address search"
-                aria-autocomplete="list"
-                aria-expanded={showDropdown}
-                aria-controls="address-suggestions"
-                aria-haspopup="listbox"
-                role="combobox"
-                autoComplete="off"
-                spellCheck={false}
-                autoFocus
-                aria-busy={loading ? true : undefined}
-                className="w-full bg-transparent border-none text-white text-lg placeholder:text-zinc-500 focus:outline-none focus:ring-0 px-4 py-4"
-              />
-              <button
-                onClick={handleExplore}
-                className="px-8 py-4 bg-[#E9E778] text-[#241F21] font-bold text-lg rounded-full hover:bg-[#d4d262] transition-colors flex-shrink-0"
-              >
-                Explore
-              </button>
+          <div ref={wrapperRef} className="relative max-w-3xl w-full mx-auto mb-16">
+            <div className="bg-slate-950/40 backdrop-blur-md border border-slate-800 p-2 rounded-2xl shadow-2xl">
+              <div className="relative flex items-center bg-white/5 border border-white/10 rounded-xl px-4 py-1 transition-all focus-within:border-[#E9E778]/50 focus-within:bg-white/10">
+                <Search className="w-5 h-5 text-zinc-400 flex-shrink-0" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    if (selected) setSelected(null);
+                  }}
+                  onFocus={() => suggestions.length > 0 && setOpen(true)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Enter Victorian Address (e.g., 62 Chandler Road, Noble Park)"
+                  aria-label="Address search"
+                  aria-autocomplete="list"
+                  aria-expanded={showDropdown}
+                  aria-controls="address-suggestions"
+                  aria-haspopup="listbox"
+                  role="combobox"
+                  autoComplete="off"
+                  spellCheck={false}
+                  autoFocus
+                  aria-busy={loading ? true : undefined}
+                  className="flex-1 bg-transparent border-none text-white text-base placeholder:text-zinc-500 focus:outline-none focus:ring-0 px-3 py-3"
+                />
+                <button
+                  onClick={handleExplore}
+                  disabled={!selected && suggestions.length === 0}
+                  className="px-6 py-2.5 bg-[#E9E778] text-[#241F21] font-bold text-sm rounded-lg hover:bg-[#d4d262] transition-colors flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Run Analysis
+                </button>
+              </div>
+
+              {showDropdown && (
+                <div className="relative mt-2">
+                  <ul
+                    id="address-suggestions"
+                    role="listbox"
+                    className="max-h-64 overflow-auto rounded-xl border border-white/10 bg-[#1a1517]/95 backdrop-blur-sm shadow-xl"
+                  >
+                    {showFallbackNote && (
+                      <li
+                        role="presentation"
+                        className="border-b border-white/10 bg-white/5 px-4 py-2 text-[10px] font-medium uppercase tracking-wider text-zinc-400"
+                      >
+                        Connecting to Vicmap Property API Data Engine...
+                      </li>
+                    )}
+                    {suggestions.map((s, i) => {
+                      const active = highlight === i;
+                      return (
+                        <li
+                          key={s.placeId}
+                          id={`address-suggestion-${i}`}
+                          role="option"
+                          aria-selected={active}
+                        >
+                          <button
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              selectSuggestion(s);
+                            }}
+                            onMouseEnter={() => setHighlight(i)}
+                            className={`block w-full px-4 py-2.5 text-left text-sm leading-snug transition-colors ${
+                              active
+                                ? 'bg-[#E9E778]/10 text-[#E9E778]'
+                                : 'text-zinc-200 hover:bg-white/5'
+                            }`}
+                          >
+                            {s.displayName}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
             </div>
 
-            {showDropdown && (
-              <ul
-                id="address-suggestions"
-                role="listbox"
-                className="absolute left-6 right-6 top-full z-50 mt-3 max-h-80 overflow-auto rounded-2xl border border-white/15 bg-[#1a1517]/95 backdrop-blur-md shadow-2xl text-left"
+            {loading && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-3 text-xs text-zinc-500 text-center space-y-1"
               >
-                {showFallbackNote && (
-                  <li
-                    role="presentation"
-                    className="border-b border-white/10 bg-white/5 px-5 py-2 text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-400"
-                  >
-                    Using standard search (Vicmap is slow)
-                  </li>
-                )}
-                {suggestions.map((s, i) => {
-                  const active = highlight === i;
-                  return (
-                    <li
-                      key={s.placeId}
-                      id={`address-suggestion-${i}`}
-                      role="option"
-                      aria-selected={active}
-                    >
-                      <button
-                        type="button"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          selectSuggestion(s);
-                        }}
-                        onMouseEnter={() => setHighlight(i)}
-                        className={`block w-full px-5 py-3 text-left text-sm leading-snug transition-colors ${
-                          active
-                            ? 'bg-[#E9E778]/10 text-[#E9E778]'
-                            : 'text-zinc-200 hover:bg-white/5'
-                        }`}
-                      >
-                        {s.displayName}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
+                <p className="flex items-center justify-center gap-2">
+                  <span className="inline-block w-1 h-1 bg-[#E9E778] rounded-full animate-pulse" />
+                  Evaluating Spatial Overlays and Local Schedules...
+                </p>
+              </motion.div>
+            )}
+
+            {selected && !loading && (
+              <p className="mt-3 text-xs text-zinc-500 text-center">
+                Selected: <span className="text-[#E9E778] font-medium">{selected.displayName}</span>
+              </p>
             )}
           </div>
 
-          {selected && (
-            <p className="mt-6 text-sm text-zinc-500">
-              Selected: <span className="text-[#E9E778]">{selected.displayName}</span>
-            </p>
-          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-5xl mx-auto">
+            {FEATURE_CARDS.map((card, idx) => (
+              <motion.div
+                key={card.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.1 + idx * 0.1 }}
+                className="group relative bg-slate-950/40 backdrop-blur-sm border border-slate-800 rounded-2xl p-6 hover:border-[#E9E778]/30 transition-all hover:bg-slate-950/60"
+              >
+                <div className="text-3xl mb-3">{card.icon}</div>
+                <h3 className="text-lg font-bold mb-2 text-white group-hover:text-[#E9E778] transition-colors">
+                  {card.title}
+                </h3>
+                <p className="text-sm text-zinc-400 leading-relaxed">
+                  {card.description}
+                </p>
+              </motion.div>
+            ))}
+          </div>
         </motion.div>
       </main>
     </div>

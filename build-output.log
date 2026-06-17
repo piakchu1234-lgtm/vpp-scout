@@ -1,0 +1,50 @@
+
+> vpp-scout@0.1.0 build
+> next build
+
+▲ Next.js 16.2.6 (Turbopack)
+- Environments: .env.local
+- Experiments (use with caution):
+  ✓ memoryBasedWorkersCount
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+✓ Compiled successfully in 7.6s
+  Running TypeScript ...
+  Finished TypeScript in 4.3s ...
+  Collecting page data using 22 workers ...
+⚠ Using edge runtime on a page currently disables static generation for that page
+  Generating static pages using 22 workers (0/17) ...
+  Generating static pages using 22 workers (4/17) 
+  Generating static pages using 22 workers (8/17) 
+  Generating static pages using 22 workers (12/17) 
+✓ Generating static pages using 22 workers (17/17) in 679ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ○ /admin/crawler
+├ ○ /admin/login
+├ ƒ /api/admin/crawler
+├ ƒ /api/ai-analyst
+├ ƒ /api/assess-ssd
+├ ƒ /api/auth/[...nextauth]
+├ ƒ /api/checkout
+├ ƒ /api/generate-report
+├ ƒ /api/insight
+├ ƒ /api/interpret-overlay
+├ ƒ /api/market-data
+├ ƒ /api/property/[id]
+├ ƒ /api/report
+├ ƒ /api/vpp-agent
+├ ƒ /api/webhook/stripe
+├ ○ /app
+└ ƒ /settings
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

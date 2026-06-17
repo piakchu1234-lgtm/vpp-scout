@@ -56,6 +56,15 @@ input[type="number"] {
   100% { transform: translateX(400%); }
 }
 
+@keyframes shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.animate-shimmer {
+  animation: shimmer 3s ease-in-out infinite;
+}
+
 /* Native window overlay print isolation — hide the dashboard during print
    execution and ensure only the report container is visible. */
 @media print {

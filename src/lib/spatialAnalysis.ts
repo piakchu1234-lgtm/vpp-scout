@@ -6,14 +6,23 @@
 
 import union from '@turf/union';
 import area from '@turf/area';
+import centroid from '@turf/centroid';
 import type { Feature, Polygon, MultiPolygon } from 'geojson';
 import type { ParcelFeature } from './vicPlanApi';
+import { fetchVicPlanForPoint, type VicPlanData } from './vicPlanApi';
 
 export type UnifiedSiteGeometry = {
   /** Merged polygon (may be MultiPolygon if parcels are non-contiguous). */
   geometry: Polygon | MultiPolygon;
   /** Total site area in square meters. */
   areaM2: number;
+};
+
+export type AggregatedOverlayData = {
+  /** Deduplicated array of all overlay codes affecting the multi-parcel site. */
+  overlayCodes: string[];
+  /** Deduplicated raw scheme codes from all parcels. */
+  overlayRaw: string[];
 };
 
 /**
@@ -93,4 +102,64 @@ export function mergeParcelGeometries(
     console.error('[spatialAnalysis] Parcel union failed:', error);
     return null;
   }
+}
+
+/**
+ * Aggregate planning overlays from multiple parcels by querying each parcel's
+ * centroid against Vicmap Planning layers. Returns deduplicated overlay codes.
+ *
+ * For multi-parcel acquisitions, each lot may have different overlays (e.g.,
+ * Lot A has HO, Lot B has SBO). This function fires concurrent queries to
+ * VicPlan for each parcel's centroid and merges the results into a single
+ * unique overlay array for compliance evaluation.
+ *
+ * @param parcels - Array of cadastral parcel features from Vicmap
+ * @param timeoutMs - Query timeout per parcel (default 15s)
+ * @returns Deduplicated array of overlay codes affecting the site
+ *
+ * @example
+ * ```ts
+ * const parcels = [parcel1, parcel2];
+ * const overlays = await aggregateOverlaysFromParcels(parcels);
+ * // overlays = ['HO', 'SBO'] (deduplicated)
+ * ```
+ */
+export async function aggregateOverlaysFromParcels(
+  parcels: ParcelFeature[],
+  timeoutMs = 15000,
+): Promise<string[]> {
+  if (parcels.length === 0) return [];
+
+  // Dynamically import to avoid circular dependency issues
+  const { fetchVicPlanForPoint } = await import('./vicPlanApi');
+  const centroid = (await import('@turf/centroid')).default;
+
+  // Calculate centroid for each parcel and fetch overlays concurrently
+  const overlayPromises = parcels.map(async (parcel) => {
+    try {
+      // Calculate parcel centroid (Turf.js returns [lon, lat])
+      const centroidFeature = centroid({
+        type: 'Feature',
+        properties: {},
+        geometry: parcel.geometry,
+      });
+      const [lon, lat] = centroidFeature.geometry.coordinates;
+
+      // Query Vicmap Planning layers for this centroid
+      const planData = await fetchVicPlanForPoint(lon, lat, timeoutMs);
+      return planData.overlayRaw;
+    } catch (error) {
+      console.warn('[spatialAnalysis] Overlay fetch failed for parcel', parcel.properties.PARCEL_PFI, error);
+      return [];
+    }
+  });
+
+  // Wait for all queries to complete
+  const results = await Promise.all(overlayPromises);
+
+  // Flatten array of arrays and deduplicate using Set
+  const allOverlays = results.flat();
+  const uniqueOverlays = Array.from(new Set(allOverlays));
+
+  return uniqueOverlays;
 }

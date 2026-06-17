@@ -1,5 +1,5 @@
-const API_KEY = 'sk-T3GhQRRgZfyhS8yVN8QFIUbC1eCIuXwFUqC9z0R43LMszD6C';
-const BASE_URL = 'http://newclaudeapi.icu';
+const API_KEY = 'sk-N3SCF5ufcLpQMz5HrPHyCLlvY1rOoqpD6DeIS6w4DkvIkgok';
+const BASE_URL = 'https://www.bubblematrix.cn';
 
 async function testWithTools() {
   console.log('Testing WITH tools parameter...\n');

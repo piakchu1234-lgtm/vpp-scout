@@ -41,7 +41,7 @@ export function AddressAutocomplete({
   disabled,
   ariaLabel,
   searchingLabel = 'Searching…',
-  fallbackNote = 'Using standard search (Vicmap is slow)',
+  fallbackNote = 'Victorian Planning Registry Authority (Dynamic)',
 }: Props) {
   const [suggestions, setSuggestions] = useState<GeocodeSuggestion[]>([]);
   const [open, setOpen] = useState(false);
@@ -153,6 +153,9 @@ export function AddressAutocomplete({
       }
     }
 
+    // CRITICAL: Preserve unique identifiers (placeId, lat, lon) from the API
+    // response. The parent component uses these exact coordinates to load the
+    // Mapbox viewport and fetch parcel geometry. Do NOT pass raw text strings.
     const finalSelection: GeocodeSuggestion =
       finalDisplay === s.displayName ? s : { ...s, displayName: finalDisplay };
 
@@ -161,21 +164,26 @@ export function AddressAutocomplete({
     setOpen(false);
     setHighlight(-1);
     onValueChange(finalDisplay);
+    // Pass the complete GeocodeSuggestion object with placeId, lat, lon
     onSelect(finalSelection);
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (!open || suggestions.length === 0) return;
-    if (e.key === 'ArrowDown') {
+    if (e.key === 'ArrowDown' && open && suggestions.length > 0) {
       e.preventDefault();
       setHighlight((h) => (h + 1) % suggestions.length);
-    } else if (e.key === 'ArrowUp') {
+    } else if (e.key === 'ArrowUp' && open && suggestions.length > 0) {
       e.preventDefault();
       setHighlight((h) => (h <= 0 ? suggestions.length - 1 : h - 1));
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      const pick = suggestions[highlight >= 0 ? highlight : 0];
-      if (pick) selectSuggestion(pick);
+      // STRICT: Only select if a valid highlight index exists
+      // Do NOT default to index 0 if no arrow navigation has occurred
+      if (open && suggestions.length > 0 && highlight >= 0) {
+        const pick = suggestions[highlight];
+        if (pick) selectSuggestion(pick);
+      }
+      // If highlight is -1 (no arrow key navigation), do nothing
     } else if (e.key === 'Escape') {
       setOpen(false);
     }

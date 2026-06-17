@@ -7,6 +7,11 @@ import PlanningCard from '@/components/dashboard/PlanningCard';
 import YieldCard from '@/components/dashboard/YieldCard';
 import FeasibilityCard from '@/components/dashboard/FeasibilityCard';
 import DocumentStorefront from '@/components/dashboard/DocumentStorefront';
+import ScenarioComparison from '@/components/dashboard/ScenarioComparison';
+import DemographicPanel from '@/components/dashboard/DemographicPanel';
+import { Skeleton, SkeletonAttribute } from '@/components/ui/Skeleton';
+import { useUserPlan } from '@/contexts/UserPlanContext';
+import { FileText } from 'lucide-react';
 import type { AIInsightData } from '@/app/app/page';
 import type { MarketDataResult } from '@/lib/marketData';
 import type { VicPlanData } from '@/lib/vicPlanApi';
@@ -32,13 +37,36 @@ type InsightPanelProps = {
   overlays: PlanningOverlay[] | null;
   yieldData: YieldData;
   effectiveLandSizeM2: number | null;
+  onViewReport?: () => void;
 };
 
 const LABELS = {
   noAddress: { en: 'No address selected', zh: '未选择地址' },
-  quickStats: { en: 'Quick Stats', zh: '快速统计' },
-  aiIntelligence: { en: 'AI Intelligence', zh: 'AI 洞察' },
-  loadingAI: { en: 'Loading AI analysis...', zh: '正在加载 AI 分析...' },
+  saveProject: { en: 'Save to Project', zh: '保存到项目' },
+  viewReport: { en: 'View Report', zh: '查看报告' },
+  consolidate: { en: 'Consolidate Sites', zh: '合并地块' },
+  propertyDetails: { en: 'Property Details', zh: '物业详情' },
+  landSize: { en: 'Land Size', zh: '地块面积' },
+  planningZone: { en: 'Planning Zone', zh: '规划分区' },
+  frontage: { en: 'Frontage', zh: '临街面宽' },
+  orientation: { en: 'Orientation', zh: '朝向' },
+  lotPlan: { en: 'Lot/Plan', zh: '地块/地籍号' },
+  localContext: { en: 'Local Context', zh: '本地环境' },
+  council: { en: 'Council', zh: '地方议会' },
+  schoolCatchments: { en: 'School Catchments', zh: '学区范围' },
+  nearbySchools: { en: 'Nearby Schools', zh: '附近学校' },
+  marketAttributes: { en: 'Market Attributes', zh: '市场属性' },
+  bedsBathsCars: { en: 'Beds/Baths/Cars', zh: '卧室/浴室/车位' },
+  lastSold: { en: 'Last Sold', zh: '最近成交' },
+  planningHazards: { en: 'Planning & Hazards', zh: '规划与灾害' },
+  vppOverlays: { en: 'VPP Overlays', zh: 'VPP 覆盖区' },
+  lppOverlays: { en: 'LPP Overlays', zh: 'LPP 覆盖区' },
+  hazardStatus: { en: 'Hazard Status', zh: '灾害状况' },
+  floodUnaffected: { en: 'Flood Unaffected', zh: '无洪水影响' },
+  bushfireUnaffected: { en: 'Bushfire Unaffected', zh: '无山火影响' },
+  landslideUnaffected: { en: 'Landslide Unaffected', zh: '无滑坡影响' },
+  aiFeasibility: { en: 'AI Feasibility Intelligence', zh: 'AI 可行性分析' },
+  loadingAI: { en: 'Analyzing site potential...', zh: '正在分析地块潜力...' },
   vacantLand: { en: 'Vacant Land', zh: '空置土地' },
   property: { en: 'Property', zh: '物业' },
   planning: { en: 'Planning', zh: '规划' },
@@ -64,9 +92,28 @@ export default function InsightPanel({
   overlays,
   yieldData,
   effectiveLandSizeM2,
+  onViewReport,
 }: InsightPanelProps) {
   // Tab state for advanced analysis sections
   const [activeTab, setActiveTab] = useState<TabId>('property');
+
+  // User plan context for debug tier switcher
+  const { plan, setPlan, remainingQuota, resetQuota } = useUserPlan();
+
+  // Debug panel state (hidden by default, toggle with Ctrl+Shift+D)
+  const [showDebug, setShowDebug] = useState(false);
+
+  // Keyboard shortcut to toggle debug panel
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+        setShowDebug(prev => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Prioritize market data over AI insight for property attributes
   const bedrooms = marketData?.bedrooms ?? aiInsight?.bedrooms ?? null;
@@ -76,140 +123,271 @@ export default function InsightPanel({
   // Detect vacant land: explicit flag from AI OR all property metrics are 0/null
   const isVacantLand = aiInsight?.isVacantLand || (bedrooms === 0 && bathrooms === 0 && carspaces === 0);
 
+  // Check if ANY market data exists
+  const hasAnyMarketData =
+    (bedrooms !== null && bedrooms > 0) ||
+    (marketData?.lastSoldPrice || aiInsight?.estimatedLastSoldPrice) ||
+    marketData?.yearBuilt ||
+    marketData?.roofMaterial ||
+    marketData?.wallMaterial;
+
   const formatLandSize = (m2: number | null) => {
     if (!m2 || !Number.isFinite(m2) || m2 <= 0) return '—';
     return `${Math.round(m2)} m²`;
   };
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      {/* 1. HEADER: Address + Language Toggle */}
+    <div className="flex flex-col gap-4 p-6">
+      {/* 1. ACTION HEADER: Premium button layout */}
+      <div className="flex flex-col gap-2">
+        {/* Primary CTA: View Report */}
+        <button
+          type="button"
+          onClick={onViewReport}
+          className="w-full px-4 py-3 text-sm font-bold uppercase tracking-wider rounded-lg bg-[#E9E778] text-[#241F21] hover:bg-[#E9E778]/90 transition-colors shadow-lg"
+        >
+          <FileText className="inline-block w-4 h-4 mr-2" />
+          {LABELS.viewReport[language]}
+        </button>
+
+        {/* Secondary Actions: Icon-first ghost buttons */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="flex-1 px-3 py-2 text-xs font-medium rounded-lg bg-white/[0.02] text-zinc-400 hover:bg-white/[0.05] hover:text-zinc-300 transition-colors border border-white/5"
+          >
+            {LABELS.saveProject[language]}
+          </button>
+          <button
+            type="button"
+            className="flex-1 px-3 py-2 text-xs font-medium rounded-lg bg-white/[0.02] text-zinc-400 hover:bg-white/[0.05] hover:text-zinc-300 transition-colors border border-white/5"
+          >
+            {LABELS.consolidate[language]}
+          </button>
+        </div>
+      </div>
+
+      {/* 2. ADDRESS HEADER + Language Toggle */}
       <div className="flex items-start justify-between gap-4">
-        <h2 className="text-2xl font-bold text-white leading-tight flex-1 min-w-0 break-words">
+        <h2 className="text-xl font-bold text-white leading-tight flex-1 min-w-0 break-words">
           {address || LABELS.noAddress[language]}
         </h2>
-        <div
-          role="group"
-          aria-label="Language toggle"
-          className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest shrink-0"
-        >
-          <button
-            type="button"
-            onClick={() => setLanguage('en')}
-            aria-pressed={language === 'en'}
-            className={
-              language === 'en'
-                ? 'text-[#E9E778]'
-                : 'text-zinc-500 hover:text-zinc-200 transition-colors'
-            }
-          >
-            EN
-          </button>
-          <span className="text-zinc-700">|</span>
-          <button
-            type="button"
-            onClick={() => setLanguage('zh')}
-            aria-pressed={language === 'zh'}
-            className={
-              language === 'zh'
-                ? 'text-[#E9E778]'
-                : 'text-zinc-500 hover:text-zinc-200 transition-colors'
-            }
-          >
-            中文
-          </button>
-        </div>
       </div>
 
-      {/* 2. QUICK STATS: Horizontal pill row */}
-      <div className="flex flex-wrap items-center gap-3">
-        {isVacantLand ? (
-          /* Single "Vacant Land" badge when property has no improvements */
-          <div className="flex items-center gap-2 rounded-full border border-amber-600 bg-amber-900/30 px-4 py-1.5">
-            <Landmark className="w-4 h-4 text-amber-400" />
-            <span className="text-sm font-bold text-amber-200">
-              {LABELS.vacantLand[language]}
+      {/* DEBUG: Hidden Tier Switcher (Ctrl+Shift+D to toggle) */}
+      {process.env.NODE_ENV === 'development' && showDebug && (
+        <div className="rounded-lg border border-amber-600/50 bg-amber-900/20 p-3">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-amber-400 mb-2">
+            🛠️ Debug: Tier Switcher (Ctrl+Shift+D to hide)
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setPlan('free');
+                resetQuota();
+              }}
+              className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded transition-colors ${
+                plan === 'free'
+                  ? 'bg-[#E9E778] text-[#241F21]'
+                  : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+              }`}
+            >
+              Free
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setPlan('premium');
+                resetQuota();
+              }}
+              className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded transition-colors ${
+                plan === 'premium'
+                  ? 'bg-[#E9E778] text-[#241F21]'
+                  : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+              }`}
+            >
+              Premium
+            </button>
+            <span className="text-xs text-zinc-400 ml-2">
+              Quota: {plan === 'premium' ? '∞' : `${remainingQuota}/5`}
             </span>
           </div>
-        ) : (
-          /* Individual property metrics for improved sites */
-          <>
-            {/* Bedrooms */}
-            <div className="flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-800/50 px-3 py-1.5">
-              <Bed className="w-4 h-4 text-zinc-400" />
-              <span className="text-sm font-bold text-white">
-                {bedrooms && bedrooms > 0 ? bedrooms : '—'}
-              </span>
-            </div>
+        </div>
+      )}
 
-            {/* Bathrooms */}
-            <div className="flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-800/50 px-3 py-1.5">
-              <Bath className="w-4 h-4 text-zinc-400" />
-              <span className="text-sm font-bold text-white">
-                {bathrooms && bathrooms > 0 ? bathrooms : '—'}
-              </span>
+      {/* 3. PROPERTY DETAILS: Borderless data grid with skeleton loading */}
+      <div className="bg-white/[0.02] rounded-lg p-4">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-4">
+          {LABELS.propertyDetails[language]}
+        </h3>
+        <div className="divide-y divide-white/10">
+          <div className="grid grid-cols-2 gap-x-6 py-3">
+            <div>
+              <div className="text-xs uppercase tracking-wider text-zinc-500 mb-1">{LABELS.landSize[language]}</div>
+              {isLoadingAI && !effectiveLandSizeM2 ? (
+                <Skeleton className="h-5 w-24" />
+              ) : (
+                <div className="text-white font-medium transition-opacity duration-300">
+                  {formatLandSize(effectiveLandSizeM2)}
+                </div>
+              )}
             </div>
-
-            {/* Carspaces */}
-            <div className="flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-800/50 px-3 py-1.5">
-              <Car className="w-4 h-4 text-zinc-400" />
-              <span className="text-sm font-bold text-white">
-                {carspaces && carspaces > 0 ? carspaces : '—'}
-              </span>
+            <div>
+              <div className="text-xs uppercase tracking-wider text-zinc-500 mb-1">{LABELS.planningZone[language]}</div>
+              {isLoadingAI && !planData?.zoneCode && !aiInsight?.zoning ? (
+                <Skeleton className="h-5 w-32" />
+              ) : (
+                <div className="text-white font-medium transition-opacity duration-300">
+                  {planData?.zoneCode ? (
+                    <span>
+                      {planData.zoneCode}
+                      {planData.zoneDescription && (
+                        <span className="text-zinc-400 font-normal text-xs ml-1">
+                          - {planData.zoneDescription}
+                        </span>
+                      )}
+                    </span>
+                  ) : (
+                    aiInsight?.zoning || '—'
+                  )}
+                </div>
+              )}
             </div>
-          </>
-        )}
+          </div>
 
-        {/* Land Size - CRITICAL: Use effectiveLandSizeM2 for multi-parcel consolidation */}
-        <div className="flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-800/50 px-3 py-1.5">
-          <MapPin className="w-4 h-4 text-zinc-400" />
-          <span className="text-sm font-bold text-white">
-            {formatLandSize(effectiveLandSizeM2)}
-          </span>
+          {(isLoadingAI || aiInsight?.estimatedFrontage) && (
+            <div className="grid grid-cols-2 gap-x-6 py-3">
+              <div>
+                <div className="text-xs uppercase tracking-wider text-zinc-500 mb-1">{LABELS.frontage[language]}</div>
+                {isLoadingAI && !aiInsight?.estimatedFrontage ? (
+                  <Skeleton className="h-5 w-20" />
+                ) : (
+                  <div className="text-white font-medium transition-opacity duration-300">
+                    {aiInsight?.estimatedFrontage}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {(isLoadingAI || lotPlan || aiInsight?.lotPlanNumber) && (
+            <div className="py-3">
+              <div className="text-xs uppercase tracking-wider text-zinc-500 mb-1">{LABELS.lotPlan[language]}</div>
+              {isLoadingAI && !lotPlan && !aiInsight?.lotPlanNumber ? (
+                <Skeleton className="h-5 w-40" />
+              ) : (
+                <div className="text-white font-medium transition-opacity duration-300">
+                  {lotPlan || aiInsight?.lotPlanNumber}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* 3. COMPLIANCE CARD */}
-      <ComplianceStatus
-        landSizeM2={landSizeM2}
-        zoneCode={planData?.zoneCode ?? null}
-        overlays={overlays?.map((o) => o.code) ?? []}
-        frontageM={
-          aiInsight?.estimatedFrontage
-            ? parseFloat(aiInsight.estimatedFrontage.replace(/[^\d.]/g, '')) || null
-            : null
-        }
-        isVacantLand={aiInsight?.isVacantLand ?? false}
-        isLoadingData={isLoadingAI}
-        lang={language}
-      />
-
-      {/* 4. AI INTELLIGENCE */}
-      <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-5">
-        <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-3 flex items-center gap-2">
-          <span>🤖</span>
-          {LABELS.aiIntelligence[language]}
+      {/* 3.6. LOCAL CONTEXT: Council & Schools */}
+      <div className="bg-white/[0.02] rounded-lg p-4">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-4 flex items-center gap-2">
+          <Landmark className="w-3.5 h-3.5" />
+          {LABELS.localContext[language]}
         </h3>
-        {isLoadingAI ? (
-          <div className="flex items-center gap-3">
-            <Loader2 className="w-4 h-4 text-[#E9E778] animate-spin" />
-            <p className="text-sm text-zinc-400">{LABELS.loadingAI[language]}</p>
+        <div className="divide-y divide-white/10">
+          {/* Council / LGA */}
+          {(liveCouncil || aiInsight?.localCouncil) && (
+            <div className="py-3">
+              <div className="text-xs uppercase tracking-wider text-zinc-500 mb-1">{LABELS.council[language]}</div>
+              <div className="text-white font-medium transition-opacity duration-300">
+                {liveCouncil || aiInsight?.localCouncil}
+              </div>
+            </div>
+          )}
+
+          {/* School Catchments - Placeholder UI */}
+          <div className="py-3">
+            <div className="text-xs uppercase tracking-wider text-zinc-500 mb-1">{LABELS.nearbySchools[language]}</div>
+            <div className="text-sm text-zinc-500 italic">
+              {language === 'en' ? 'Coming soon - School zone data' : '即将推出 - 学区数据'}
+            </div>
           </div>
-        ) : aiInsight?.insightSummary ? (
-          <p className="text-sm text-zinc-300 leading-relaxed">
-            {aiInsight.insightSummary}
-          </p>
-        ) : (
-          <p className="text-sm text-zinc-500 italic">
-            {language === 'en'
-              ? 'AI analysis will appear once address data loads.'
-              : 'AI 分析将在地址数据加载完成后显示。'}
-          </p>
-        )}
+        </div>
       </div>
 
-      {/* 5. ADVANCED ANALYSIS TABS */}
-      <div className="border-t border-white/10 pt-6">
+      {/* 3.7. MARKET ATTRIBUTES: Borderless data grid with skeleton loading */}
+      {!isVacantLand && (isLoadingMarket || hasAnyMarketData) && (
+        <div className="bg-white/[0.02] rounded-lg p-4">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-4 flex items-center justify-between">
+            {LABELS.marketAttributes[language]}
+            {isLoadingMarket && (
+              <Loader2 className="w-3.5 h-3.5 text-zinc-500 animate-spin" />
+            )}
+          </h3>
+          <div className="divide-y divide-white/10">
+            {/* Beds/Baths/Cars - Show skeleton or data */}
+            {(isLoadingMarket || (bedrooms !== null && bedrooms > 0)) && (
+              <div className="py-3">
+                <div className="text-xs uppercase tracking-wider text-zinc-500 mb-1">{LABELS.bedsBathsCars[language]}</div>
+                {isLoadingMarket && bedrooms === null ? (
+                  <Skeleton className="h-5 w-40" />
+                ) : (
+                  <div className="text-white font-medium transition-opacity duration-300">
+                    🛏️ {bedrooms} | 🛁 {bathrooms || 0} | 🚗 {carspaces || 0}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Last Sold Price - Show skeleton or data */}
+            {(isLoadingMarket || marketData?.lastSoldPrice || aiInsight?.estimatedLastSoldPrice) && (
+              <div className="py-3">
+                <div className="text-xs uppercase tracking-wider text-zinc-500 mb-1">{LABELS.lastSold[language]}</div>
+                {isLoadingMarket && !marketData?.lastSoldPrice && !aiInsight?.estimatedLastSoldPrice ? (
+                  <Skeleton className="h-5 w-32" />
+                ) : (
+                  <div className="text-white font-medium transition-opacity duration-300">
+                    {marketData?.lastSoldPrice || aiInsight?.estimatedLastSoldPrice}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Year Built - Show skeleton or data */}
+            {(isLoadingMarket || marketData?.yearBuilt) && (
+              <div className="py-3">
+                <div className="text-xs uppercase tracking-wider text-zinc-500 mb-1">
+                  {language === 'en' ? 'Year Built' : '建造年份'}
+                </div>
+                {isLoadingMarket && !marketData?.yearBuilt ? (
+                  <Skeleton className="h-5 w-20" />
+                ) : marketData?.yearBuilt ? (
+                  <div className="text-white font-medium transition-opacity duration-300">
+                    {marketData.yearBuilt}
+                  </div>
+                ) : null}
+              </div>
+            )}
+
+            {/* Construction Materials - Show skeleton or data */}
+            {(isLoadingMarket || marketData?.roofMaterial || marketData?.wallMaterial) && (
+              <div className="py-3">
+                <div className="text-xs uppercase tracking-wider text-zinc-500 mb-1">
+                  {language === 'en' ? 'Construction' : '建筑材料'}
+                </div>
+                {isLoadingMarket && !marketData?.roofMaterial && !marketData?.wallMaterial ? (
+                  <Skeleton className="h-5 w-48" />
+                ) : (
+                  <div className="text-white font-medium text-xs transition-opacity duration-300">
+                    {[marketData?.wallMaterial, marketData?.roofMaterial].filter(Boolean).join(' / ')}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 4. ADVANCED ANALYSIS TABS */}
+      <div className="border-t border-white/10 pt-4">
         {/* Tab Navigation */}
         <div className="flex gap-2 mb-4" role="tablist">
           <button
@@ -262,37 +440,49 @@ export default function InsightPanel({
           </button>
         </div>
 
-        {/* Tab Panels */}
-        <div className="rounded-lg border border-zinc-700 bg-zinc-800/30 p-5">
-          {activeTab === 'property' && (
-            <div role="tabpanel" id="tab-panel-property" aria-labelledby="tab-property">
-              <PlanningCard
-                zoneCode={planData?.zoneCode}
-                zoneDescription={planData?.zoneDescription}
-                overlays={overlays}
-                aiInsight={aiInsight}
-                effectiveLandSizeM2={effectiveLandSizeM2}
-                address={address}
-                lang={language}
-              />
-            </div>
-          )}
-          {activeTab === 'planning' && (
-            <div role="tabpanel" id="tab-panel-planning" aria-labelledby="tab-planning">
-              <YieldCard yieldData={yieldData} />
-            </div>
-          )}
-          {activeTab === 'feasibility' && (
-            <div role="tabpanel" id="tab-panel-feasibility" aria-labelledby="tab-feasibility">
-              <FeasibilityCard yieldData={yieldData} />
-            </div>
-          )}
-        </div>
-      </div>
+        {/* Tab Panels - STRICT ROUTING */}
+        {activeTab === 'property' && (
+          <div role="tabpanel" id="tab-panel-property" aria-labelledby="tab-property">
+            {/* PROPERTY TAB: Official Property Documents (Landata) */}
+            <DocumentStorefront lotPlan={lotPlan} lang={language} />
+          </div>
+        )}
 
-      {/* 6. DOCUMENT STOREFRONT - Landata Intelligence & Monetization */}
-      <div className="border-t border-white/10 pt-6">
-        <DocumentStorefront lotPlan={lotPlan} lang={language} />
+        {activeTab === 'planning' && (
+          <div role="tabpanel" id="tab-panel-planning" aria-labelledby="tab-planning">
+            {/* PLANNING TAB: Zoning, Overlays, Hazards */}
+            <PlanningCard
+              zoneCode={planData?.zoneCode}
+              zoneDescription={planData?.zoneDescription}
+              overlays={overlays}
+              aiInsight={aiInsight}
+              effectiveLandSizeM2={effectiveLandSizeM2}
+              address={address}
+              lang={language}
+            />
+          </div>
+        )}
+
+        {activeTab === 'feasibility' && (
+          <div role="tabpanel" id="tab-panel-feasibility" aria-labelledby="tab-feasibility">
+            {/* FEASIBILITY TAB: AI Intelligence + SSD Compliance */}
+            <div className="space-y-4">
+              {/* AI FEASIBILITY CARD - New AI Analyst Integration */}
+              <FeasibilityCard
+                yieldData={yieldData}
+                zones={planData?.zoneCode ? [planData.zoneCode] : []}
+                overlays={planData?.overlayRaw || []}
+                landSize={effectiveLandSizeM2}
+                suburb={address?.split(',').pop()?.trim() || ''}
+                council={liveCouncil || aiInsight?.localCouncil || undefined}
+                lastSoldPrice={marketData?.lastSoldPrice || aiInsight?.estimatedLastSoldPrice || null}
+              />
+
+              {/* SCENARIO COMPARISON */}
+              <ScenarioComparison yieldData={yieldData} lang={language} />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
