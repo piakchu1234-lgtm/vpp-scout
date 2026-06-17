@@ -1,7 +1,7 @@
 /**
- * VICMAP SPATIAL AGENT
+ * VICMAP SOURCE - SPATIAL DATA AGGREGATOR
  *
- * Production-grade agent for querying Victorian Government spatial data.
+ * Fetches authoritative Victorian Government spatial cadastre data.
  * Extracts parcel boundaries, zoning, overlays, and cadastral attributes.
  *
  * Data Sources:
@@ -14,11 +14,12 @@
  * - Attribution: "Spatial and cadastral data sourced from Vicmap © State of Victoria"
  * - Data provided 'as is' for feasibility estimation only
  *
- * Architecture:
+ * Architecture: Data Aggregator (not AI-based)
  * - Reuses existing vicPlanApi utilities
- * - Strict TypeScript typing with no 'any'
+ * - Strict TypeScript typing
  * - Comprehensive error handling
- * - Mandatory attribution in all outputs
+ *
+ * @module VicmapSource
  */
 
 import {
@@ -28,12 +29,12 @@ import {
   type ParcelPolygon,
 } from '@/lib/vicPlanApi';
 
-export interface VicmapAgentInput {
+export interface SpatialDataInput {
   longitude: number;
   latitude: number;
 }
 
-export interface VicmapAgentOutput {
+export interface SpatialDataOutput {
   success: boolean;
   // Parcel Identifiers
   pfi: string;
@@ -66,9 +67,9 @@ export interface VicmapAgentOutput {
  * @param input - Longitude/Latitude coordinates
  * @returns Complete spatial and planning data
  */
-export async function executeVicmapAgent(
-  input: VicmapAgentInput
-): Promise<VicmapAgentOutput> {
+export async function fetchSpatialData(
+  input: SpatialDataInput
+): Promise<SpatialDataOutput> {
   const { longitude, latitude } = input;
 
   try {

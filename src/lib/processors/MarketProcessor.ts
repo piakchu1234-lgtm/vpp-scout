@@ -1,52 +1,37 @@
 /**
- * AI PLANNING AGENT - DEEP VPP COMPLIANCE AUDIT
+ * MARKET PROCESSOR - DATA AGGREGATION ENGINE
  *
  * AUTOMATED DESKTOP ASSESSMENT TOOL (NOT PROFESSIONAL ADVICE)
  *
- * Enterprise-grade computational planning synthesis with granular VPP analysis.
- * Analyzes spatial and market data to generate preliminary feasibility vectors.
+ * Aggregates spatial and market data to generate property intelligence reports.
+ * Combines data from multiple sources and applies compliance business logic.
  *
  * Professional Standards:
  * - Desktop Assessment only (no physical site inspection)
- * - Automated computational model (not human expert analysis)
- * - Statistically derived estimates (not guaranteed outcomes)
+ * - Data aggregation model (combines authoritative sources)
  * - Preliminary screening tool (not binding professional advice)
  *
  * Legal Compliance:
  * - NOT a substitute for licensed town planners or architects
  * - NOT formal legal, financial, or professional valuation advice
- * - NOT compliant with API Valuation Standards (no physical inspection)
  * - Users MUST conduct independent due diligence with local council
  *
- * Liability Mitigation (Australian Consumer Law):
- * - All outputs include mandatory professional disclaimer
- * - "Feasibility vectors" not "guaranteed approvals"
- * - "Desktop assessment" not "site inspection"
- * - Clear attribution to automated computational model
+ * Architecture: Data Aggregator (not AI-based)
+ * - Combines VicmapSource spatial data with DomainSource market data
+ * - Applies VPP compliance rules and calculations
+ * - Structured output with validation
+ * - Contextual processing for Australian property development
  *
- * Architecture:
- * - Uses Claude 3.5 Sonnet for Victorian planning expertise
- * - Structured JSON output with strict schema validation
- * - Deep VPP compliance scorecard (site coverage, garden area, height limits)
- * - Contextual prompts optimized for Australian property development
- * - Zero hallucination tolerance with grounded reasoning
- *
- * Output Schema:
- * - highestBestUse: Development strategy for investors/builders
- * - riskFactors: Planning constraints and overlay impacts
- * - tierClassification: Fast-track eligibility assessment
- * - estimatedGRVMultiplier: Gross Realization Value yield factor
- * - complianceScorecard: Itemized VPP requirements (site coverage, garden area, height)
- * - legalDisclaimer: Mandatory professional indemnity disclaimer
+ * @module MarketProcessor
  */
 
 import Anthropic from '@anthropic-ai/sdk';
-import type { VicmapAgentOutput } from './vicmapAgent';
-import type { MarketAgentOutput } from './marketAgent';
+import type { SpatialDataOutput } from '../sources/VicmapSource';
+import type { MarketDataOutput } from '../sources/DomainSource';
 
-export interface PlanningAgentInput {
-  spatial: VicmapAgentOutput;
-  market: MarketAgentOutput;
+export interface PropertyDataInput {
+  spatial: SpatialDataOutput;
+  market: MarketDataOutput;
 }
 
 export interface ComplianceScorecard {
@@ -76,7 +61,7 @@ export interface ComplianceScorecard {
   vppExemptions: string[]; // e.g., ["No third-party notice", "Code assessment only"]
 }
 
-export interface PlanningAgentOutput {
+export interface PropertyDataOutput {
   success: boolean;
   // Strategic Analysis
   highestBestUse: string; // 2-sentence development strategy
@@ -102,9 +87,9 @@ export interface PlanningAgentOutput {
  * @param input - Combined spatial and market data
  * @returns Structured planning insights with compliance scorecard
  */
-export async function executePlanningAgent(
-  input: PlanningAgentInput
-): Promise<PlanningAgentOutput> {
+export async function processPropertyData(
+  input: PropertyDataInput
+): Promise<PropertyDataOutput> {
   try {
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
@@ -371,7 +356,7 @@ For a 450m² GRZ1 lot with no overlays:
 /**
  * Build user prompt with property intelligence
  */
-function buildUserPrompt(input: PlanningAgentInput): string {
+function buildUserPrompt(input: PropertyDataInput): string {
   const { spatial, market } = input;
 
   return `Analyze this Victorian property and provide a comprehensive VPP compliance audit with development insights:

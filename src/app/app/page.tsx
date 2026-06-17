@@ -723,51 +723,57 @@ function AppCanvas() {
 
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-[#05060E]">
-      {/* Glassmorphism Top Header - Floats Over Map */}
-      <header className="fixed top-0 w-full z-50 bg-[#05060E]/60 backdrop-blur-md border-b border-white/5">
-        <div className="flex items-center justify-between px-6 h-16">
-          <div className="flex items-center gap-3 min-w-0">
-            <button
-              onClick={() => router.push('/')}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm text-zinc-300 hover:text-[#E9E778] hover:bg-white/5 transition-colors"
-              aria-label="Back to search"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Back
-            </button>
-            <div className="h-5 w-px bg-white/10" />
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 bg-[#E9E778] rounded-sm flex items-center justify-center">
-                <MapIcon className="text-[#05060E] w-4 h-4" />
-              </div>
-              <span className="text-base font-bold tracking-tight text-white">SimplySite</span>
-            </div>
-            <div className="h-5 w-px bg-white/10" />
-            <div className="text-xs text-zinc-400 font-mono truncate max-w-[60ch]">
-              {address ?? 'No address selected'}
-            </div>
-          </div>
-
-          {/* Right: Global Controls + User Button */}
-          <div className="flex items-center gap-3">
-            <GlobalControls />
-            <div className="h-6 w-px bg-zinc-700" />
-            <UserButton
-              appearance={{
-                elements: {
-                  avatarBox: "w-9 h-9 rounded-lg border border-zinc-700 hover:border-[#E9E778] transition-colors"
-                }
-              }}
-            />
+    <div className="flex h-screen overflow-hidden bg-[#05060E]">
+      {/* Left Control Rail */}
+      <aside className="fixed left-0 top-0 h-full w-20 z-50 bg-[#05060E]/70 backdrop-blur-md border-r border-white/10 flex flex-col items-center py-6">
+        {/* Logo at top */}
+        <div className="mb-8">
+          <div className="w-10 h-10 bg-[#E9E778] rounded-lg flex items-center justify-center">
+            <MapIcon className="text-[#05060E] w-6 h-6" />
           </div>
         </div>
-      </header>
 
-      {/* Full-Bleed Map Canvas */}
-      <div className="absolute inset-0 w-full h-full">
-        {hasCoords ? (
-          <>
+        {/* Primary Navigation Icons - Center */}
+        <nav className="flex-1 flex flex-col items-center gap-6 mt-8">
+          <button
+            onClick={() => router.push('/')}
+            className="w-12 h-12 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors group"
+            aria-label="Back to search"
+            title="Search"
+          >
+            <ArrowLeft className="w-5 h-5 text-zinc-400 group-hover:text-[#E9E778]" />
+          </button>
+
+          <button
+            onClick={() => setShowDocumentConfigurator(true)}
+            className="w-12 h-12 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors group"
+            aria-label="View report"
+            title="Report"
+          >
+            <FileText className="w-5 h-5 text-zinc-400 group-hover:text-[#E9E778]" />
+          </button>
+        </nav>
+
+        {/* Bottom Controls */}
+        <div className="flex flex-col items-center gap-4">
+          <GlobalControls />
+          <div className="h-px w-8 bg-zinc-700" />
+          <UserButton
+            appearance={{
+              elements: {
+                avatarBox: "w-10 h-10 rounded-lg border border-zinc-700 hover:border-[#E9E778] transition-colors"
+              }
+            }}
+          />
+        </div>
+      </aside>
+
+      {/* Main Content - Full-Bleed Map */}
+      <main className="flex-1 ml-20 relative">
+        {/* Map Canvas */}
+        <div className="absolute inset-0 w-full h-full">
+          {hasCoords ? (
+            <>
               <MapPreviewMemoized
                 ref={mapPreviewRef}
                 lat={lat}
@@ -849,49 +855,100 @@ function AppCanvas() {
           )}
       </div>
 
-      {/* Floating Glass Widget - Property Inspector */}
-      <div className="absolute top-20 right-4 w-[400px] z-40 max-h-[calc(100vh-6rem)] overflow-y-auto bg-[#05060E]/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl transition-all duration-300 hover:shadow-[0_0_40px_rgba(233,231,120,0.15)] hover:border-white/20 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent">
-        <InsightPanel
-              address={address}
-              language={language}
-              setLanguage={setLanguage}
-              landSizeM2={landSizeM2}
-              lotPlan={spi}
-              liveCouncil={liveCouncil}
-              lat={lat}
-              lon={lon}
-              aiInsight={aiInsight}
-              isLoadingAI={isLoadingAI}
-              marketData={marketData}
-              isLoadingMarket={isLoadingMarket}
-              planData={planData}
-              overlays={overlays}
-              yieldData={yieldData}
-              effectiveLandSizeM2={effectiveLandSizeM2}
-              onViewReport={handleOpenDocumentConfigurator}
-            />
+        {/* Floating Bottom Dashboard */}
+        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-40 w-full max-w-5xl px-6">
+          <div className="flex flex-row gap-6 flex-wrap md:flex-nowrap justify-center">
 
-          <div className="border-t border-white/10 p-4">
-            <button
-              onClick={() => setIsStorefrontOpen(true)}
-              className="flex w-full items-center justify-center gap-2 rounded-full bg-[#E9E778] py-3 text-sm font-bold uppercase tracking-wider text-[#05060E] transition-colors hover:bg-[#d4d262]"
-            >
-              <Download className="h-4 w-4" />
-              {STOREFRONT_CTA[language]}
-            </button>
+            {/* Card 1: Market Data */}
+            <div className="flex-1 min-w-[280px] max-w-sm bg-white/70 dark:bg-[#05060E]/70 backdrop-blur-xl border border-white/40 dark:border-white/10 shadow-xl rounded-2xl p-5">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-200 mb-3 flex items-center gap-2">
+                <span className="w-2 h-2 bg-[#E9E778] rounded-full"></span>
+                Market Data
+              </h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-zinc-600 dark:text-zinc-400">Bedrooms:</span>
+                  <span className="font-semibold text-zinc-900 dark:text-white">
+                    {marketData?.bedrooms || '—'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-600 dark:text-zinc-400">Bathrooms:</span>
+                  <span className="font-semibold text-zinc-900 dark:text-white">
+                    {marketData?.bathrooms || '—'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-600 dark:text-zinc-400">Last Sold:</span>
+                  <span className="font-semibold text-zinc-900 dark:text-white">
+                    {marketData?.lastSoldPrice ? `$${(marketData.lastSoldPrice / 1000).toFixed(0)}k` : '—'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Card 2: Vicmap Data */}
+            <div className="flex-1 min-w-[280px] max-w-sm bg-white/70 dark:bg-[#05060E]/70 backdrop-blur-xl border border-white/40 dark:border-white/10 shadow-xl rounded-2xl p-5">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-200 mb-3 flex items-center gap-2">
+                <span className="w-2 h-2 bg-[#E9E778] rounded-full"></span>
+                Vicmap Data
+              </h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-zinc-600 dark:text-zinc-400">Land Size:</span>
+                  <span className="font-semibold text-zinc-900 dark:text-white">
+                    {landSizeM2 ? `${landSizeM2.toFixed(1)} m²` : '—'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-600 dark:text-zinc-400">Zoning:</span>
+                  <span className="font-semibold text-zinc-900 dark:text-white">
+                    {planData?.zoneCode || '—'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-600 dark:text-zinc-400">Council:</span>
+                  <span className="font-semibold text-zinc-900 dark:text-white truncate max-w-[120px]">
+                    {liveCouncil || '—'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Card 3: Compliance */}
+            <div className="flex-1 min-w-[280px] max-w-sm bg-white/70 dark:bg-[#05060E]/70 backdrop-blur-xl border border-white/40 dark:border-white/10 shadow-xl rounded-2xl p-5">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-200 mb-3 flex items-center gap-2">
+                <span className="w-2 h-2 bg-[#E9E778] rounded-full"></span>
+                Compliance
+              </h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-zinc-600 dark:text-zinc-400">VPP Tier:</span>
+                  <span className="font-semibold text-zinc-900 dark:text-white">
+                    {yieldData?.fastTrackEligible ? 'Fast-Track' : 'Standard'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-600 dark:text-zinc-400">Est. Units:</span>
+                  <span className="font-semibold text-zinc-900 dark:text-white">
+                    {yieldData?.estimatedDwellings || '—'}
+                  </span>
+                </div>
+                <div className="mt-3">
+                  <button
+                    onClick={() => setShowDocumentConfigurator(true)}
+                    className="w-full px-4 py-2 bg-[#E9E778] text-[#05060E] font-bold text-xs uppercase tracking-wider rounded-lg hover:bg-[#d4d262] transition-colors"
+                  >
+                    Full Report
+                  </button>
+                </div>
+              </div>
+            </div>
+
           </div>
+        </div>
 
-          <StorefrontDrawer
-            isOpen={isStorefrontOpen}
-            onClose={() => setIsStorefrontOpen(false)}
-            address={address}
-            spi={spi}
-            lat={lat}
-            lon={lon}
-          />
-      </div>
-
-      {/* Document Configurator Modal */}
+        {/* Recenter Button - Bottom Right */}
       {showDocumentConfigurator && (
         <DocumentConfigurator
           lang={language}

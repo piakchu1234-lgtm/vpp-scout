@@ -28,9 +28,9 @@ export const runtime = 'nodejs'; // Ensure Node.js runtime for SSE support
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { executeVicmapAgent } from '@/lib/agents/vicmapAgent';
-import { executeMarketAgent, type MarketAgentOutput } from '@/lib/agents/marketAgent';
-import { executePlanningAgent, type PlanningAgentOutput } from '@/lib/agents/planningAgent';
+import { fetchSpatialData } from '@/lib/sources/VicmapSource';
+import { fetchMarketData, type MarketDataOutput } from '@/lib/sources/DomainSource';
+import { processPropertyData, type PropertyDataOutput } from '@/lib/processors/MarketProcessor';
 
 // Cache TTL: 30 days in milliseconds
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -55,7 +55,7 @@ async function handleStreamingResponse(
         };
 
         // STAGE 1: Spatial (~800ms)
-        const spatialResult = await executeVicmapAgent({ longitude, latitude });
+        const spatialResult = await fetchSpatialData({ longitude, latitude });
         if (!spatialResult.success) {
           sendEvent('error', { error: 'No property found' });
           controller.close();
@@ -75,7 +75,7 @@ async function handleStreamingResponse(
         });
 
         // STAGE 2: Market (~1.5s)
-        const marketResult = await executeMarketAgent({
+        const marketResult = await fetchMarketData({
           address: spatialResult.address,
           suburb: spatialResult.suburb,
           postcode: spatialResult.postcode,
@@ -92,7 +92,7 @@ async function handleStreamingResponse(
         });
 
         // STAGE 3: Planning (~2s)
-        const planningResult = await executePlanningAgent({
+        const propertyData = await processPropertyData({
           spatial: spatialResult,
           market: marketResult,
         }).catch(() => ({ success: false, highestBestUse: '', riskFactors: [], complianceScorecard: {} } as any));
@@ -218,7 +218,7 @@ export async function GET(
       address: spatialResult.address,
       suburb: spatialResult.suburb,
       postcode: spatialResult.postcode,
-    }).catch((err): MarketAgentOutput => {
+    }).catch((err): MarketDataOutput => {
       console.error('[Orchestrator] Market agent failed:', err);
       // Return empty market data rather than failing entire request
       return {
@@ -243,7 +243,7 @@ export async function GET(
     const planningResult = await executePlanningAgent({
       spatial: spatialResult,
       market: marketResultActual,
-    }).catch((err): PlanningAgentOutput => {
+    }).catch((err): PropertyDataOutput => {
       console.error('[Orchestrator] Planning agent failed:', err);
       // Return empty planning data rather than failing entire request
       return {

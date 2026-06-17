@@ -1,6 +1,7 @@
 /**
- * MARKET INTELLIGENCE AGENT - LEGALLY DEFENSIVE ARCHITECTURE
+ * DOMAIN SOURCE - DATA AGGREGATOR ARCHITECTURE
  *
+ * Fetches authoritative market data from Domain.com.au
  * STRICT FACTUAL EXTRACTION ONLY - NO COPYRIGHT MATERIAL
  *
  * Legal Compliance:
@@ -9,40 +10,26 @@
  * - Facts are not copyrightable (Phone Directories v Telstra)
  * - Expression is copyrightable (REA v Hardingham) - EXCLUDED
  *
- * Risk Mitigation:
- * - No logged-in scraping (avoids ToS contract)
- * - Rate-limited requests (1500ms between calls)
- * - User-Agent rotation (avoids detection patterns)
- * - AI fallback for factual extraction only
- *
- * Data Sources:
- * - Domain.com.au (public property listings - factual data only)
- * - Claude Sonnet for ambiguous HTML parsing (facts only)
- *
- * Architecture:
+ * Architecture: Data Aggregator (not AI-based)
  * - Primary: DOM selector extraction with Cheerio
  * - Fallback: Claude SDK for unstructured HTML parsing
- * - Strict data cleaning and type conversion
- * - Comprehensive error handling
+ * - Rate-limited requests (1500ms between calls)
+ * - User-Agent rotation
  *
- * Legal Notice:
- * This implementation scrapes ONLY publicly available factual data.
- * NO copyrighted material (photos, descriptions, floor plans) is extracted.
- * User accepts legal liability. Intended for MVP development only.
- * Production deployment MUST use licensed APIs (Domain API, CoreLogic).
+ * @module DomainSource
  */
 
 import axios, { AxiosError } from 'axios';
 import * as cheerio from 'cheerio';
 import Anthropic from '@anthropic-ai/sdk';
 
-export interface MarketAgentInput {
+export interface MarketDataInput {
   address: string;
   suburb: string;
   postcode: string;
 }
 
-export interface MarketAgentOutput {
+export interface MarketDataOutput {
   success: boolean;
   // Property Attributes
   bedrooms: number | null;
@@ -78,9 +65,9 @@ const USER_AGENTS = [
  * @param input - Address, suburb, postcode
  * @returns Market data and property attributes
  */
-export async function executeMarketAgent(
-  input: MarketAgentInput
-): Promise<MarketAgentOutput> {
+export async function fetchMarketData(
+  input: MarketDataInput
+): Promise<MarketDataOutput> {
   try {
     // Try Domain.com.au first (most reliable Australian source)
     const domainResult = await scrapeDomain(input);
@@ -127,7 +114,7 @@ export async function executeMarketAgent(
 /**
  * Scrape property data from Domain.com.au with AI fallback
  */
-async function scrapeDomain(input: MarketAgentInput): Promise<MarketAgentOutput> {
+async function scrapeDomain(input: MarketDataInput): Promise<MarketDataOutput> {
   try {
     // Construct Domain search URL
     const searchQuery = `${input.address}, ${input.suburb} ${input.postcode}`;
@@ -254,8 +241,8 @@ async function scrapeDomain(input: MarketAgentInput): Promise<MarketAgentOutput>
  */
 async function parseWithClaude(
   htmlContent: string,
-  input: MarketAgentInput
-): Promise<MarketAgentOutput> {
+  input: MarketDataInput
+): Promise<MarketDataOutput> {
   try {
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
