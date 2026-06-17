@@ -214,7 +214,7 @@ export async function GET(
     }
 
     // Execute market agent with spatial data
-    const marketResultActual = await executeMarketAgent({
+    const marketResultActual = await fetchMarketData({
       address: spatialResult.address,
       suburb: spatialResult.suburb,
       postcode: spatialResult.postcode,
@@ -240,7 +240,7 @@ export async function GET(
 
     // === STEP 3: AI PLANNING SYNTHESIS ===
     // Pass spatial + market data to AI Planning Agent
-    const propertyData = await executePlanningAgent({
+    const propertyData = await processPropertyData({
       spatial: spatialResult,
       market: marketResultActual,
     }).catch((err): PropertyDataOutput => {

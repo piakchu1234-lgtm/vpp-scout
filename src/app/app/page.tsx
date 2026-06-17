@@ -2,7 +2,7 @@
 
 import React, { Suspense, useEffect, useMemo, useRef, useState, memo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Download, Loader2, Map as MapIcon } from 'lucide-react';
+import { ArrowLeft, Download, Loader2, Map as MapIcon, FileText } from 'lucide-react';
 import { UserButton } from '@clerk/nextjs';
 import GlobalControls from '@/components/GlobalControls';
 import area from '@turf/area';
@@ -881,7 +881,7 @@ function AppCanvas() {
                 <div className="flex justify-between">
                   <span className="text-zinc-600 dark:text-zinc-400">Last Sold:</span>
                   <span className="font-semibold text-zinc-900 dark:text-white">
-                    {marketData?.lastSoldPrice ? `$${(marketData.lastSoldPrice / 1000).toFixed(0)}k` : '—'}
+                    {marketData?.lastSoldPrice ? `$${Math.round(marketData.lastSoldPrice / 1000)}k` : '—'}
                   </span>
                 </div>
               </div>
@@ -925,13 +925,13 @@ function AppCanvas() {
                 <div className="flex justify-between">
                   <span className="text-zinc-600 dark:text-zinc-400">VPP Tier:</span>
                   <span className="font-semibold text-zinc-900 dark:text-white">
-                    {yieldData?.fastTrackEligible ? 'Fast-Track' : 'Standard'}
+                    {yieldData?.isFastTrack ? 'Fast-Track' : 'Standard'}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-zinc-600 dark:text-zinc-400">Est. Units:</span>
                   <span className="font-semibold text-zinc-900 dark:text-white">
-                    {yieldData?.estimatedDwellings || '—'}
+                    {yieldData?.maxDwellings || '—'}
                   </span>
                 </div>
                 <div className="mt-3">
