@@ -771,14 +771,6 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
             'line-opacity': 0.9,
           },
         });
-          paint: {
-            'line-color': vppAuditResult?.isFastTrackEligible
-              ? '#10B981'  // Emerald green for fast-track
-              : '#64748B', // Slate for standard review
-            'line-width': 3,
-            'line-opacity': 1,
-          },
-        });
 
         // Add 3D extrusion layer if WebGL is supported and 3D mode is active
         if (canUse3D && is3D) {
