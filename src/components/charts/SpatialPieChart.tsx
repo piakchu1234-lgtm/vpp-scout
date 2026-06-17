@@ -1,19 +1,29 @@
 'use client';
 
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
+import type { Language } from '@/lib/i18n/propertyUi';
 
 interface SpatialPieChartProps {
   landSize: number;
   effectiveLandSize: number | null;
+  language?: Language;
 }
 
-export function SpatialPieChart({ landSize, effectiveLandSize }: SpatialPieChartProps) {
-  const usedLand = effectiveLandSize || landSize * 0.6; // Assume 60% if null
+export function SpatialPieChart({ landSize, effectiveLandSize, language = 'en' }: SpatialPieChartProps) {
+  const usedLand = effectiveLandSize || landSize * 0.6;
   const permeable = landSize - usedLand;
 
   const data = [
-    { name: 'Built Footprint', value: usedLand, color: '#E9E778' },
-    { name: 'Permeable Area', value: permeable, color: '#27272a' },
+    {
+      name: language === 'en' ? 'Built Footprint' : '建筑占地',
+      value: usedLand,
+      color: '#E9E778'
+    },
+    {
+      name: language === 'en' ? 'Permeable Area' : '透水面积',
+      value: permeable,
+      color: '#27272a'
+    },
   ];
 
   return (
