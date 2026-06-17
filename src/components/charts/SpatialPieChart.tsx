@@ -40,7 +40,7 @@ export function SpatialPieChart({ landSize, effectiveLandSize }: SpatialPieChart
             fontSize: '12px',
             color: '#fff'
           }}
-          formatter={(value: number) => `${value.toFixed(1)} m²`}
+          formatter={(value: any) => `${Number(value).toFixed(1)} m²`}
         />
         <Legend
           iconType="circle"

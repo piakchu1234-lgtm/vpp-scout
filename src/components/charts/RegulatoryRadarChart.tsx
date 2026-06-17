@@ -45,7 +45,7 @@ export function RegulatoryRadarChart({ yieldData }: RegulatoryRadarChartProps) {
             fontSize: '12px',
             color: '#fff'
           }}
-          formatter={(value: number) => `${value}%`}
+          formatter={(value: any) => `${Number(value)}%`}
         />
       </RadarChart>
     </ResponsiveContainer>
