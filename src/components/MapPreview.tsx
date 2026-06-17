@@ -766,8 +766,8 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
           type: 'line',
           source: 'property-boundary',
           paint: {
-            'line-color': '#E9E778',  // Crisp yellow stroke
-            'line-width': 2.5,        // 2.5px solid stroke
+            'line-color': '#E9E778',
+            'line-width': 2.5,
             'line-opacity': 0.9,
           },
         });
