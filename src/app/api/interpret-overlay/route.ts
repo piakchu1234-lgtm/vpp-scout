@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { interpretOverlayCode } from '@/lib/ai/vppInterpreter';
+import { interpretOverlayCode } from '@/lib/processors/VppInterpreter';
 
 export const runtime = 'nodejs';
 

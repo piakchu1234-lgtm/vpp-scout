@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import type { VPPInterpretation } from '@/lib/ai/vppInterpreter';
+import type { VPPInterpretation } from '@/lib/processors/VppInterpreter';
 
 type Props = {
   code: string;

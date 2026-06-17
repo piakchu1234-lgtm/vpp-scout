@@ -101,9 +101,9 @@ async function handleStreamingResponse(
           stage: 'complete',
           progress: 100,
           data: {
-            highestBestUse: planningResult.highestBestUse,
-            riskFactors: planningResult.riskFactors,
-            complianceScorecard: planningResult.complianceScorecard,
+            highestBestUse: propertyData.highestBestUse,
+            riskFactors: propertyData.riskFactors,
+            complianceScorecard: propertyData.complianceScorecard,
           },
         });
 
@@ -197,7 +197,7 @@ export async function GET(
     // === STEP 2: CONCURRENT AGENT EXECUTION ===
     // Execute Spatial and Market agents in parallel for optimal performance
     const [spatialResult, marketResult] = await Promise.all([
-      executeVicmapAgent({ longitude, latitude }),
+      fetchSpatialData({ longitude, latitude }),
       // Market agent needs approximate address - use spatial data after completion
       Promise.resolve(null), // Placeholder - will execute after spatial completes
     ]);
@@ -240,7 +240,7 @@ export async function GET(
 
     // === STEP 3: AI PLANNING SYNTHESIS ===
     // Pass spatial + market data to AI Planning Agent
-    const planningResult = await executePlanningAgent({
+    const propertyData = await executePlanningAgent({
       spatial: spatialResult,
       market: marketResultActual,
     }).catch((err): PropertyDataOutput => {
@@ -306,12 +306,12 @@ export async function GET(
         wallMaterial: marketResultActual.wallMaterial,
         roofMaterial: marketResultActual.roofMaterial,
         // AI Planning insights
-        fastTrackEligible: planningResult.tierClassification.includes('Fast Track'),
-        vppTier: planningResult.tierClassification,
-        highestBestUse: planningResult.highestBestUse,
-        riskFactors: planningResult.riskFactors,
+        fastTrackEligible: propertyData.tierClassification.includes('Fast Track'),
+        vppTier: propertyData.tierClassification,
+        highestBestUse: propertyData.highestBestUse,
+        riskFactors: propertyData.riskFactors,
         estimatedYield: null, // Can be calculated from existing yield engine
-        complianceScorecard: JSON.parse(JSON.stringify(planningResult.complianceScorecard)),
+        complianceScorecard: JSON.parse(JSON.stringify(propertyData.complianceScorecard)),
         // Metadata
         lastScrapedAt: new Date(),
         scrapedBy: 'orchestrator-v1',
@@ -338,11 +338,11 @@ export async function GET(
         wallMaterial: marketResultActual.wallMaterial,
         roofMaterial: marketResultActual.roofMaterial,
         // AI Planning insights
-        fastTrackEligible: planningResult.tierClassification.includes('Fast Track'),
-        vppTier: planningResult.tierClassification,
-        highestBestUse: planningResult.highestBestUse,
-        riskFactors: planningResult.riskFactors,
-        complianceScorecard: JSON.parse(JSON.stringify(planningResult.complianceScorecard)),
+        fastTrackEligible: propertyData.tierClassification.includes('Fast Track'),
+        vppTier: propertyData.tierClassification,
+        highestBestUse: propertyData.highestBestUse,
+        riskFactors: propertyData.riskFactors,
+        complianceScorecard: JSON.parse(JSON.stringify(propertyData.complianceScorecard)),
         // Metadata
         lastScrapedAt: new Date(),
         scrapedBy: 'orchestrator-v1',
@@ -358,7 +358,7 @@ export async function GET(
       agents: {
         spatial: spatialResult.success,
         market: marketResultActual.success,
-        planning: planningResult.success,
+        planning: propertyData.success,
       },
     });
   } catch (error) {
