@@ -889,7 +889,25 @@ function AppCanvas() {
 
             {/* Card 3: Development Assessment */}
             <div className="flex-1 min-w-[320px] max-w-md bg-[#05060E]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-5 text-white shadow-2xl">
-              <h3 className="text-xs font-semibold tracking-wider uppercase text-zinc-400 mb-3">Development Assessment</h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xs font-semibold tracking-wider uppercase text-zinc-400">Development Assessment</h3>
+                {planData && landSizeM2 && (
+                  <SsdBadge
+                    eligible={
+                      landSizeM2 >= 300 &&
+                      ['GRZ', 'NRZ', 'RGZ', 'MUZ', 'TZ'].some(zone => planData.zoneCode?.toUpperCase().startsWith(zone)) &&
+                      !planData.overlayRaw?.some(o => ['HO', 'BMO', 'LSIO', 'SBO', 'BFO'].some(prefix => o.toUpperCase().startsWith(prefix)))
+                    }
+                    reason={
+                      landSizeM2 < 300
+                        ? 'Lot size below 300m² minimum'
+                        : planData.overlayRaw?.some(o => ['HO', 'BMO', 'LSIO', 'SBO', 'BFO'].some(prefix => o.toUpperCase().startsWith(prefix)))
+                        ? 'Restrictive overlays present'
+                        : 'SSD fast-track pathway available'
+                    }
+                  />
+                )}
+              </div>
               {yieldData ? (
                 <RegulatoryRadarChart yieldData={yieldData} />
               ) : (
