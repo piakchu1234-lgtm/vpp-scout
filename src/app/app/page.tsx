@@ -947,8 +947,9 @@ function AppCanvas() {
 
           </div>
         </div>
+      </main>
 
-        {/* Recenter Button - Bottom Right */}
+      {/* Document Configurator Modal */}
       {showDocumentConfigurator && (
         <DocumentConfigurator
           lang={language}
