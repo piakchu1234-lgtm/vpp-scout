@@ -862,92 +862,40 @@ function AppCanvas() {
         <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-40 w-full max-w-5xl px-6">
           <div className="flex flex-row gap-6 flex-wrap md:flex-nowrap justify-center">
 
-            {/* Card 1: Market Data */}
-            <div className="flex-1 min-w-[280px] max-w-sm bg-white/70 dark:bg-[#05060E]/70 backdrop-blur-xl border border-white/40 dark:border-white/10 shadow-xl rounded-2xl p-5">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-200 mb-3 flex items-center gap-2">
-                <span className="w-2 h-2 bg-[#E9E778] rounded-full"></span>
-                Market Data
-              </h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-zinc-600 dark:text-zinc-400">Bedrooms:</span>
-                  <span className="font-semibold text-zinc-900 dark:text-white">
-                    {marketData?.bedrooms || '—'}
-                  </span>
+            {/* Card 1: Market Performance */}
+            <div className="flex-1 min-w-[320px] max-w-md bg-[#05060E]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-5 text-white shadow-2xl">
+              <h3 className="text-xs font-semibold tracking-wider uppercase text-zinc-400 mb-3">Market Performance</h3>
+              {marketData?.bedrooms ? (
+                <MarketBarChart bedrooms={marketData.bedrooms} bathrooms={marketData.bathrooms} carspaces={marketData.carspaces} />
+              ) : (
+                <div className="h-[180px] flex items-center justify-center text-sm text-zinc-500">
+                  Aggregating market data...
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-zinc-600 dark:text-zinc-400">Bathrooms:</span>
-                  <span className="font-semibold text-zinc-900 dark:text-white">
-                    {marketData?.bathrooms || '—'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-zinc-600 dark:text-zinc-400">Last Sold:</span>
-                  <span className="font-semibold text-zinc-900 dark:text-white">
-                    {marketData?.lastSoldPrice && typeof marketData.lastSoldPrice === 'number'
-                      ? `$${Math.round(marketData.lastSoldPrice / 1000)}k`
-                      : '—'}
-                  </span>
-                </div>
-              </div>
+              )}
             </div>
 
-            {/* Card 2: Vicmap Data */}
-            <div className="flex-1 min-w-[280px] max-w-sm bg-white/70 dark:bg-[#05060E]/70 backdrop-blur-xl border border-white/40 dark:border-white/10 shadow-xl rounded-2xl p-5">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-200 mb-3 flex items-center gap-2">
-                <span className="w-2 h-2 bg-[#E9E778] rounded-full"></span>
-                Vicmap Data
-              </h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-zinc-600 dark:text-zinc-400">Land Size:</span>
-                  <span className="font-semibold text-zinc-900 dark:text-white">
-                    {landSizeM2 ? `${landSizeM2.toFixed(1)} m²` : '—'}
-                  </span>
+            {/* Card 2: Site Parameters */}
+            <div className="flex-1 min-w-[320px] max-w-md bg-[#05060E]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-5 text-white shadow-2xl">
+              <h3 className="text-xs font-semibold tracking-wider uppercase text-zinc-400 mb-3">Site Parameters</h3>
+              {landSizeM2 ? (
+                <SpatialPieChart landSize={landSizeM2} effectiveLandSize={effectiveLandSizeM2} />
+              ) : (
+                <div className="h-[180px] flex items-center justify-center text-sm text-zinc-500">
+                  Loading spatial data...
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-zinc-600 dark:text-zinc-400">Zoning:</span>
-                  <span className="font-semibold text-zinc-900 dark:text-white">
-                    {planData?.zoneCode || '—'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-zinc-600 dark:text-zinc-400">Council:</span>
-                  <span className="font-semibold text-zinc-900 dark:text-white truncate max-w-[120px]">
-                    {liveCouncil || '—'}
-                  </span>
-                </div>
-              </div>
+              )}
             </div>
 
-            {/* Card 3: Compliance */}
-            <div className="flex-1 min-w-[280px] max-w-sm bg-white/70 dark:bg-[#05060E]/70 backdrop-blur-xl border border-white/40 dark:border-white/10 shadow-xl rounded-2xl p-5">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-200 mb-3 flex items-center gap-2">
-                <span className="w-2 h-2 bg-[#E9E778] rounded-full"></span>
-                Compliance
-              </h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-zinc-600 dark:text-zinc-400">Feasibility:</span>
-                  <span className="font-semibold text-zinc-900 dark:text-white">
-                    {yieldData?.isFeasible ? 'Feasible' : 'Not Feasible'}
-                  </span>
+            {/* Card 3: Development Assessment */}
+            <div className="flex-1 min-w-[320px] max-w-md bg-[#05060E]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-5 text-white shadow-2xl">
+              <h3 className="text-xs font-semibold tracking-wider uppercase text-zinc-400 mb-3">Development Assessment</h3>
+              {yieldData ? (
+                <RegulatoryRadarChart yieldData={yieldData} />
+              ) : (
+                <div className="h-[180px] flex items-center justify-center text-sm text-zinc-500">
+                  Processing compliance data...
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-zinc-600 dark:text-zinc-400">Est. Units:</span>
-                  <span className="font-semibold text-zinc-900 dark:text-white">
-                    {yieldData?.scenarios?.townhouse?.maxYield || yieldData?.scenarios?.apartment?.maxYield || '—'}
-                  </span>
-                </div>
-                <div className="mt-3">
-                  <button
-                    onClick={() => setShowDocumentConfigurator(true)}
-                    className="w-full px-4 py-2 bg-[#E9E778] text-[#05060E] font-bold text-xs uppercase tracking-wider rounded-lg hover:bg-[#d4d262] transition-colors"
-                  >
-                    Full Report
-                  </button>
-                </div>
-              </div>
+              )}
             </div>
 
           </div>
