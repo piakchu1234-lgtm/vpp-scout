@@ -56,7 +56,7 @@ export function ComplianceRadar({ metrics }: ComplianceRadarProps) {
               color: '#fff',
               padding: '8px'
             }}
-            formatter={(value: any, name: string, props: any) => {
+            formatter={(value: any, name: any, props: any) => {
               if (name === 'Current Site') {
                 return [`${Number(value).toFixed(1)}% (${props.payload.fullValue})`, name];
               }

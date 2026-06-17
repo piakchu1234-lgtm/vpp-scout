@@ -16,13 +16,13 @@ export function RegulatoryRadarChart({ yieldData }: RegulatoryRadarChartProps) {
   const metrics = [
     {
       parameter: 'Height',
-      actual: activeScenario?.maxHeight || 9,
-      threshold: 11, // GRZ typical max
+      actual: (activeScenario && 'maxHeight' in activeScenario) ? activeScenario.maxHeight : 9,
+      threshold: 11,
     },
     {
       parameter: 'Front Setback',
       actual: activeScenario?.setbackFront || 4,
-      threshold: 5, // Typical GRZ requirement
+      threshold: 5,
     },
     {
       parameter: 'Side Setback',
@@ -31,13 +31,13 @@ export function RegulatoryRadarChart({ yieldData }: RegulatoryRadarChartProps) {
     },
     {
       parameter: 'Site Coverage',
-      actual: activeScenario?.maxFootprintRatio || 50,
-      threshold: 60, // GRZ max
+      actual: (activeScenario && 'maxFootprintRatio' in activeScenario) ? activeScenario.maxFootprintRatio : 50,
+      threshold: 60,
     },
     {
       parameter: 'Garden Area',
       actual: activeScenario?.minLandscaping || 25,
-      threshold: 25, // GRZ min (inverted - more is better)
+      threshold: 25,
     },
   ];
 
