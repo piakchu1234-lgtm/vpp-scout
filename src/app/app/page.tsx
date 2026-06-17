@@ -831,6 +831,26 @@ function AppCanvas() {
 
       {/* Main Content - Full-Bleed Map */}
       <main className="flex-1 ml-20 relative">
+        {/* Floating Search Bar - Top Left */}
+        <div className="absolute top-6 left-6 z-50 w-96">
+          <div className="bg-[#05060E]/80 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-4">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+              Search Property
+            </h2>
+            <input
+              type="text"
+              placeholder="Enter address..."
+              className="w-full px-4 py-2 bg-[#241F21] border border-zinc-700 rounded-lg text-white text-sm placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-[#E9E778] focus:border-transparent"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  // TODO: Implement search
+                  console.log('Search:', e.currentTarget.value);
+                }
+              }}
+            />
+          </div>
+        </div>
+
         {/* Map Canvas */}
         <div className="absolute inset-0 w-full h-full">
           {hasCoords ? (
