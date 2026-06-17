@@ -881,7 +881,9 @@ function AppCanvas() {
                 <div className="flex justify-between">
                   <span className="text-zinc-600 dark:text-zinc-400">Last Sold:</span>
                   <span className="font-semibold text-zinc-900 dark:text-white">
-                    {marketData?.lastSoldPrice ? `$${Math.round(marketData.lastSoldPrice / 1000)}k` : '—'}
+                    {marketData?.lastSoldPrice && typeof marketData.lastSoldPrice === 'number'
+                      ? `$${Math.round(marketData.lastSoldPrice / 1000)}k`
+                      : '—'}
                   </span>
                 </div>
               </div>
@@ -923,15 +925,15 @@ function AppCanvas() {
               </h3>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-zinc-600 dark:text-zinc-400">VPP Tier:</span>
+                  <span className="text-zinc-600 dark:text-zinc-400">Feasibility:</span>
                   <span className="font-semibold text-zinc-900 dark:text-white">
-                    {yieldData?.isFastTrack ? 'Fast-Track' : 'Standard'}
+                    {yieldData?.isFeasible ? 'Feasible' : 'Not Feasible'}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-zinc-600 dark:text-zinc-400">Est. Units:</span>
                   <span className="font-semibold text-zinc-900 dark:text-white">
-                    {yieldData?.maxDwellings || '—'}
+                    {yieldData?.scenarios?.townhouse?.maxYield || yieldData?.scenarios?.apartment?.maxYield || '—'}
                   </span>
                 </div>
                 <div className="mt-3">
