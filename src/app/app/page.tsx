@@ -41,6 +41,7 @@ import { generatePropertyPDF, type DocumentConfig } from '@/lib/pdfGenerator';
 import { fetchAgentMarketData } from '@/lib/sources/AgentSource';
 import { mergeAgentMarketData, type MergedMarketData } from '@/lib/agentMarketIntegration';
 import { DataSourceBadge } from '@/components/ui/DataSourceBadge';
+import { calculateSSDFeasibility } from '@/lib/planning/ssdCalculator';
 import type { AIMarketResponse } from '@/types/property';
 
 const MELBOURNE_FALLBACK = { lat: -37.8136, lon: 144.9631 };
@@ -703,6 +704,19 @@ function AppCanvas() {
     };
   }, [planData?.zoneCode, planData?.overlayRaw, landSizeM2, aiInsight?.estimatedFrontage]);
 
+  // SSD Feasibility calculation
+  const ssdFeasibility = useMemo(() => {
+    if (!planData?.zoneCode || !landSizeM2 || landSizeM2 <= 0) return null;
+
+    return calculateSSDFeasibility({
+      totalLotArea: landSizeM2,
+      zoningCode: planData.zoneCode,
+      existingFootprint: effectiveLandSizeM2 ? landSizeM2 - effectiveLandSizeM2 : undefined,
+      effectiveLandSize: effectiveLandSizeM2 ?? undefined,
+      overlays: planData.overlayRaw || [],
+    });
+  }, [landSizeM2, planData?.zoneCode, planData?.overlayRaw, effectiveLandSizeM2]);
+
   // SaaS CTA handlers
   const handleSaveToProject = () => {
     projectState.saveState(selectedParcels, aiInsight);
@@ -1113,39 +1127,65 @@ function AppCanvas() {
             )}
           </div>
 
-          {/* Card 4: Site Geometry */}
+          {/* Card 4: SSD Feasibility */}
           <div className="flex-1 min-w-[280px] max-w-[350px] bg-zinc-950/80 backdrop-blur-md border border-zinc-800 rounded-xl p-4 shadow-2xl pointer-events-auto">
             <h3 className="text-xs font-semibold tracking-wider uppercase text-zinc-400 mb-3">
-              Site Geometry
+              SSD Feasibility
             </h3>
-            <div className="space-y-2 pt-2">
-              {landSizeM2 && (
+            {ssdFeasibility ? (
+              <div className="space-y-2 pt-2">
+                {/* Eligibility Status */}
                 <div className="flex justify-between items-center py-2 border-b border-zinc-700">
-                  <span className="text-xs text-zinc-400 uppercase tracking-wider">Lot Area</span>
-                  <span className="text-sm font-semibold text-white">
-                    {Math.round(landSizeM2).toLocaleString()} m²
-                  </span>
-                </div>
-              )}
-              {aiInsight?.estimatedFrontage && (
-                <div className="flex justify-between items-center py-2 border-b border-zinc-700">
-                  <span className="text-xs text-zinc-400 uppercase tracking-wider">Frontage</span>
-                  <span className="text-sm font-semibold text-white">
-                    {aiInsight.estimatedFrontage}
-                  </span>
-                </div>
-              )}
-              {landSizeM2 && (
-                <div className="flex justify-between items-center py-2 border-b border-zinc-700">
-                  <span className="text-xs text-zinc-400 uppercase tracking-wider">SSD Eligible</span>
+                  <span className="text-xs text-zinc-400 uppercase tracking-wider">Eligible</span>
                   <span className={`text-sm font-semibold ${
-                    landSizeM2 >= 300 ? 'text-green-400' : 'text-amber-400'
+                    ssdFeasibility.isEligible ? 'text-green-400' : 'text-red-400'
                   }`}>
-                    {landSizeM2 >= 300 ? 'Yes' : 'No'}
+                    {ssdFeasibility.isEligible ? 'Yes' : 'No'}
                   </span>
                 </div>
-              )}
-            </div>
+
+                {/* Max SSD Size */}
+                {ssdFeasibility.isEligible && (
+                  <div className="flex justify-between items-center py-2 border-b border-zinc-700">
+                    <span className="text-xs text-zinc-400 uppercase tracking-wider">Max SSD Size</span>
+                    <span className="text-sm font-semibold text-white">
+                      {ssdFeasibility.maxSsdSize}m²
+                    </span>
+                  </div>
+                )}
+
+                {/* Required Garden Area */}
+                <div className="flex justify-between items-center py-2 border-b border-zinc-700">
+                  <span className="text-xs text-zinc-400 uppercase tracking-wider">Garden Req.</span>
+                  <span className="text-sm font-semibold text-white">
+                    {ssdFeasibility.requiredGardenArea}m²
+                  </span>
+                </div>
+
+                {/* Site Coverage */}
+                <div className="flex justify-between items-center py-2 border-b border-zinc-700">
+                  <span className="text-xs text-zinc-400 uppercase tracking-wider">Max Coverage</span>
+                  <span className="text-sm font-semibold text-white">
+                    {Math.round(ssdFeasibility.maxSiteCoverage * 100)}%
+                  </span>
+                </div>
+
+                {/* Key Flag */}
+                {ssdFeasibility.flags.length > 0 && (
+                  <div className="mt-3 pt-2 border-t border-zinc-700">
+                    <p className={`text-xs ${
+                      ssdFeasibility.isEligible ? 'text-green-400' : 'text-amber-400'
+                    }`}>
+                      {ssdFeasibility.flags[0]}
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="h-[160px] flex items-center justify-center text-sm text-zinc-500">
+                Calculating feasibility...
+              </div>
+            )}
           </div>
         </div>
       )}
