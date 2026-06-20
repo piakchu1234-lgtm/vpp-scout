@@ -249,3 +249,60 @@ model PropertyParcel {
 //    AND lot_area >= 600
 //    AND zone_code = 'GRZ1';
 
+// ==============================================================================
+// SAVED PROJECT MODEL - Project Persistence & 3D PDF Exports
+// ==============================================================================
+
+model SavedProject {
+  // PRIMARY IDENTIFIERS
+  id     String  @id @default(cuid())
+  userId String? // Future: Link to user accounts
+
+  // PROPERTY IDENTIFIERS
+  address String  @db.VarChar(500)
+  pfi     String? @db.VarChar(50)
+
+  // PLANNING DATA
+  zoneCode        String   @db.VarChar(50)
+  zoneDescription String?  @db.VarChar(200)
+  lotArea         Float
+  overlays        String[]
+
+  // COORDINATES
+  coordinates Json // { lat: number, lng: number }
+
+  // MARKET DATA
+  estimatedValue   Float?
+  marketDataSource String? @db.VarChar(50) // "domain" | "agent" | "manual"
+
+  // FINANCIAL ANALYSIS (from Card 4 ROI Calculator)
+  roiData Json // { constructionCost, endValue, profit, roi, costPerSqm, floorArea }
+
+  // 3D MASSING GEOMETRY
+  massingGeometry Json?  // GeoJSON Polygon of building envelope
+  floorArea       Float?
+  buildingHeight  Float? @default(5.0)
+
+  // MAP STATE (for restoration when loading project)
+  mapState Json // { center: [lng, lat], zoom, bearing, pitch }
+
+  // PDF SNAPSHOT (base64 image of 3D map)
+  mapSnapshot String? @db.Text // Base64 PNG from Mapbox canvas
+
+  // METADATA
+  projectName String?   @db.VarChar(200)
+  notes       String?   @db.Text
+  tags        String[]  @default([])
+
+  // TIMESTAMPS
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // INDEXES
+  @@index([address])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([tags])
+  @@map("saved_projects")
+}
+

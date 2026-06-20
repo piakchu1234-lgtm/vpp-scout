@@ -53,6 +53,7 @@ import {
   formatArea,
 } from '@/lib/map/measurementUtils';
 import { detectEasementConflict } from '@/lib/map/spatialConflict';
+import { captureMapboxCanvas } from '@/lib/mapCapture';
 import DAMapLayer from '@/components/map/DAMapLayer';
 import EasementMapLayer from '@/components/map/EasementMapLayer';
 import MassingLayer from '@/components/map/MassingLayer';
@@ -598,10 +599,23 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
         async getSnapshot() {
           const map = mapRef.current?.getMap();
           if (!map) return null;
-          if (!map.loaded()) {
-            await new Promise<void>((r) => map.once('idle', () => r()));
+
+          // Use safe capture with retry mechanism
+          const result = await captureMapboxCanvas(map, {
+            format: 'png',
+            quality: 1.0,
+            timeout: 10000,
+            retries: 3,
+            idleDelay: 500,
+          });
+
+          if (result.success && result.dataURL) {
+            console.log('[MapPreview] ✅ Canvas captured:', result.width, 'x', result.height);
+            return result.dataURL;
+          } else {
+            console.error('[MapPreview] ❌ Canvas capture failed:', result.error);
+            return null;
           }
-          return map.getCanvas().toDataURL('image/png');
         },
         getMap() {
           return mapRef.current?.getMap() ?? null;
