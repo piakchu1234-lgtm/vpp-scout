@@ -46,8 +46,15 @@ import {
   supports3DExtrusion,
   type ZonedParcel,
 } from '@/lib/mapboxLayerEngine';
+import {
+  calculateLineDistance,
+  calculatePolygonArea,
+  formatDistance,
+  formatArea,
+} from '@/lib/map/measurementUtils';
 
 import 'mapbox-gl/dist/mapbox-gl.css';
+import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
@@ -265,6 +272,13 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
     const [drawnAreaM2, setDrawnAreaM2] = useState<number | null>(null);
     const [drawModeInternal, setDrawModeInternal] = useState<'draw_polygon' | 'draw_line_string' | null>(null);
 
+    // Measurement state for displaying tooltips
+    const [measurement, setMeasurement] = useState<{
+      type: 'distance' | 'area';
+      value: string;
+      featureId: string;
+    } | null>(null);
+
     // Sync external drawMode prop with internal state
     useEffect(() => {
       if (drawMode !== undefined) {
@@ -379,17 +393,33 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
         drawRef.current = draw;
         map.addControl(draw, 'top-right');
 
-        // Listen for draw events to calculate area
+        // Listen for draw events to calculate area and measurements
         function handleDrawCreate(e: any) {
           if (e.features && e.features.length > 0) {
             const feature = e.features[0];
+
             if (feature.geometry.type === 'Polygon') {
-              const areaM2 = area(feature);
+              const areaM2 = calculatePolygonArea(feature);
               setDrawnAreaM2(areaM2);
               if (onDrawnAreaChange) onDrawnAreaChange(areaM2);
+
+              // Set measurement tooltip
+              setMeasurement({
+                type: 'area',
+                value: formatArea(areaM2),
+                featureId: feature.id,
+              });
             } else if (feature.geometry.type === 'LineString') {
+              const distance = calculateLineDistance(feature);
               setDrawnAreaM2(null);
               if (onDrawnAreaChange) onDrawnAreaChange(null);
+
+              // Set measurement tooltip
+              setMeasurement({
+                type: 'distance',
+                value: formatDistance(distance),
+                featureId: feature.id,
+              });
             }
           }
         }
@@ -397,10 +427,27 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
         function handleDrawUpdate(e: any) {
           if (e.features && e.features.length > 0) {
             const feature = e.features[0];
+
             if (feature.geometry.type === 'Polygon') {
-              const areaM2 = area(feature);
+              const areaM2 = calculatePolygonArea(feature);
               setDrawnAreaM2(areaM2);
               if (onDrawnAreaChange) onDrawnAreaChange(areaM2);
+
+              // Update measurement tooltip
+              setMeasurement({
+                type: 'area',
+                value: formatArea(areaM2),
+                featureId: feature.id,
+              });
+            } else if (feature.geometry.type === 'LineString') {
+              const distance = calculateLineDistance(feature);
+
+              // Update measurement tooltip
+              setMeasurement({
+                type: 'distance',
+                value: formatDistance(distance),
+                featureId: feature.id,
+              });
             }
           }
         }
@@ -408,6 +455,7 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
         function handleDrawDelete() {
           setDrawnAreaM2(null);
           if (onDrawnAreaChange) onDrawnAreaChange(null);
+          setMeasurement(null);
         }
 
         map.on('draw.create', handleDrawCreate);
@@ -1522,6 +1570,20 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
             </Popup>
           )}
         </Map>
+
+        {/* Measurement Tooltip for Draw Tools */}
+        {measurement && (
+          <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none z-50">
+            <div className="bg-zinc-900/95 backdrop-blur-md border border-[#E9E778] rounded-lg px-3 py-2 shadow-2xl">
+              <div className="flex items-center gap-2 text-white">
+                <span className="text-xs font-semibold text-[#E9E778]">
+                  {measurement.type === 'distance' ? '📏' : '📐'}
+                </span>
+                <span className="text-sm font-bold">{measurement.value}</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {(distancePoints.length >= 2 || areaPoints.length >= 3) && (
           <div className="absolute left-2 top-2 space-y-1 rounded bg-white/95 px-3 py-2 font-mono text-xs shadow-sm backdrop-blur dark:bg-zinc-950/95">
