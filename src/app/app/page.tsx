@@ -861,15 +861,23 @@ function AppCanvas() {
           language={language}
           zoneCode={planData?.zoneCode || null}
           zoneDescription={planData?.zoneDescription || null}
-          landSizeM2={landSizeM2}
-          effectiveLandSizeM2={effectiveLandSizeM2}
-          mergedMarketData={mergedMarketData}
-          isLoadingAgent={isLoadingAgent}
-          isLoadingMarket={isLoadingMarket}
           planData={planData}
-          yieldData={yieldData}
           onExportPDF={handleExportPdf}
           isGeneratingPDF={isGeneratingPdf}
+          onTestAgent={async () => {
+            setIsTestingAgent(true);
+            try {
+              const testAddress = addressParam || '45 Kooyong Road, Armadale VIC 3143';
+              console.log('🤖 [TEST AGENT] Starting agentic search for:', testAddress);
+              const result = await fetchAgentMarketData(testAddress);
+              console.log('🤖 [TEST AGENT] ✅ SUCCESS! Result:', result);
+            } catch (error) {
+              console.error('🤖 [TEST AGENT] ❌ FAILED:', error);
+            } finally {
+              setIsTestingAgent(false);
+            }
+          }}
+          isTestingAgent={isTestingAgent}
         />
       )}
 
@@ -918,65 +926,9 @@ function AppCanvas() {
       </aside>
 
       {/* Main Content - Full-Bleed Map */}
-      <main className="flex-1 ml-[420px] relative">
-        {/* Floating Search Bar - Top Left */}
-        <div className="absolute top-6 left-6 z-50 w-96">
-          <div className="bg-[#05060E]/80 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-4">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
-              Search Property
-            </h2>
-            <input
-              type="text"
-              placeholder="Enter address..."
-              className="w-full px-4 py-2 bg-[#241F21] border border-zinc-700 rounded-lg text-white text-sm placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-[#E9E778] focus:border-transparent"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  // TODO: Implement search
-                  console.log('Search:', e.currentTarget.value);
-                }
-              }}
-            />
-          </div>
-        </div>
-
-        {/* TEST AGENT Button - Top Left (below search) */}
-        <div className="absolute top-32 left-6 z-50">
-          <button
-            onClick={async () => {
-              setIsTestingAgent(true);
-              try {
-                // Real Victorian residential property for live testing
-                const testAddress = addressParam || '45 Kooyong Road, Armadale VIC 3143';
-                console.log('🤖 [TEST AGENT] Starting agentic search for:', testAddress);
-
-                const result = await fetchAgentMarketData(testAddress);
-
-                console.log('🤖 [TEST AGENT] ✅ SUCCESS! Result:', result);
-                console.log('🤖 [TEST AGENT] Bedrooms:', result.bedrooms);
-                console.log('🤖 [TEST AGENT] Bathrooms:', result.bathrooms);
-                console.log('🤖 [TEST AGENT] Estimated Value:', result.estimated_value ? `$${result.estimated_value.toLocaleString()}` : 'null');
-              } catch (error) {
-                console.error('🤖 [TEST AGENT] ❌ FAILED:', error);
-              } finally {
-                setIsTestingAgent(false);
-              }
-            }}
-            disabled={isTestingAgent}
-            className="px-4 py-2 bg-[#E9E778] hover:bg-[#E9E778]/90 disabled:bg-zinc-700 text-[#241F21] font-semibold rounded-lg text-sm transition-colors flex items-center gap-2 shadow-lg"
-          >
-            {isTestingAgent ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Testing Agent...
-              </>
-            ) : (
-              '🤖 TEST AGENT'
-            )}
-          </button>
-        </div>
-
+      <main className="flex-1 ml-[380px] relative">
         {/* Map Canvas */}
-        <div className="absolute inset-0 w-full h-full">
+        <div className="absolute inset-0 w-full h-full pb-[300px]">
           {hasCoords ? (
             <>
               <MapPreviewMemoized
@@ -1060,6 +1012,112 @@ function AppCanvas() {
           )}
       </div>
       </main>
+
+      {/* Horizontal Bottom Dock - Analytics Cards */}
+      {hasCoords && (
+        <div className="fixed bottom-0 left-[380px] right-0 h-[300px] bg-zinc-950/80 backdrop-blur-md border-t border-zinc-800 p-4 flex gap-4 overflow-x-auto z-20">
+          {/* Card 1: Development Assessment */}
+          <div className="flex-1 min-w-[320px] bg-[#05060E]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-5 text-white shadow-2xl">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-semibold tracking-wider uppercase text-zinc-400">
+                Development Assessment
+              </h3>
+              {planData && landSizeM2 && (
+                <SsdBadge
+                  eligible={
+                    landSizeM2 >= 300 &&
+                    ['GRZ', 'NRZ', 'RGZ', 'MUZ', 'TZ'].some((zone) =>
+                      planData.zoneCode?.toUpperCase().startsWith(zone)
+                    ) &&
+                    !planData.overlayRaw?.some((o) =>
+                      ['HO', 'BMO', 'LSIO', 'SBO', 'BFO'].some((prefix) =>
+                        o.toUpperCase().startsWith(prefix)
+                      )
+                    )
+                  }
+                  reason={
+                    landSizeM2 < 300
+                      ? 'Lot size below 300m² minimum'
+                      : planData.overlayRaw?.some((o) =>
+                          ['HO', 'BMO', 'LSIO', 'SBO', 'BFO'].some((prefix) =>
+                            o.toUpperCase().startsWith(prefix)
+                          )
+                        )
+                      ? 'Restrictive overlays present'
+                      : 'SSD fast-track pathway available'
+                  }
+                />
+              )}
+            </div>
+            {yieldData ? (
+              <RegulatoryRadarChart yieldData={yieldData} />
+            ) : (
+              <div className="h-[180px] flex items-center justify-center text-sm text-zinc-500">
+                Processing compliance data...
+              </div>
+            )}
+          </div>
+
+          {/* Card 2: Site Parameters */}
+          <div className="flex-1 min-w-[320px] bg-[#05060E]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-5 text-white shadow-2xl">
+            <h3 className="text-xs font-semibold tracking-wider uppercase text-zinc-400 mb-3">
+              Site Parameters
+            </h3>
+            {landSizeM2 ? (
+              <SpatialPieChart landSize={landSizeM2} effectiveLandSize={effectiveLandSizeM2} />
+            ) : (
+              <div className="h-[180px] flex items-center justify-center text-sm text-zinc-500">
+                Loading spatial data...
+              </div>
+            )}
+          </div>
+
+          {/* Card 3: Market Performance */}
+          <div className="flex-1 min-w-[320px] bg-[#05060E]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-5 text-white shadow-2xl">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-semibold tracking-wider uppercase text-zinc-400">
+                Market Performance
+              </h3>
+              {mergedMarketData.source !== 'none' && !isLoadingAgent && !isLoadingMarket && (
+                <DataSourceBadge source={mergedMarketData.source} language={language} />
+              )}
+            </div>
+            {isLoadingAgent || isLoadingMarket ? (
+              <div className="h-[180px] flex items-center justify-center text-sm text-zinc-500">
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                Aggregating market data...
+              </div>
+            ) : mergedMarketData.bedrooms !== null || mergedMarketData.estimatedValue !== null ? (
+              <div className="space-y-3 pt-2">
+                {mergedMarketData.bedrooms !== null && (
+                  <div className="flex justify-between items-center py-2 border-b border-zinc-800">
+                    <span className="text-xs text-zinc-400 uppercase tracking-wider">
+                      Bedrooms / Bathrooms
+                    </span>
+                    <span className="text-sm font-semibold text-white">
+                      {mergedMarketData.bedrooms} / {mergedMarketData.bathrooms ?? 0}
+                    </span>
+                  </div>
+                )}
+                {mergedMarketData.estimatedValue && (
+                  <div className="flex justify-between items-center py-2 border-b border-zinc-800">
+                    <span className="text-xs text-zinc-400 uppercase tracking-wider">
+                      {language === 'en' ? 'Estimated Value' : '估计价值'}
+                    </span>
+                    <span className="text-sm font-semibold text-white">
+                      ${mergedMarketData.estimatedValue.toLocaleString('en-AU')}
+                    </span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="h-[180px] flex items-center justify-center text-sm text-zinc-500">
+                No market data available
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Document Configurator Modal */}
       {showDocumentConfigurator && (
