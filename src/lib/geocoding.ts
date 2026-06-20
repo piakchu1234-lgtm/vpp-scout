@@ -20,7 +20,7 @@ const VICMAP_ADDRESS_URL =
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 
 /** Hard cap on Vicmap calls — we prefer a fast fallback over a slow answer. */
-const VICMAP_TIMEOUT_MS = 3000;
+const VICMAP_TIMEOUT_MS = 6000;
 const NOMINATIM_TIMEOUT_MS = 8000;
 
 export type GeocodeSource = 'vicmap' | 'nominatim';

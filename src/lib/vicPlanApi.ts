@@ -40,6 +40,18 @@ async function pointQuery(
   lat: number,
   timeoutMs = 20000,
 ): Promise<ArcgisFeature[]> {
+  // Validate coordinates before sending to ArcGIS
+  if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
+    console.warn('[vicPlanApi] Invalid coordinates:', { lon, lat });
+    return [];
+  }
+
+  // Validate coordinate ranges (Victoria bounds: roughly 140-150 lon, -39 to -34 lat)
+  if (lon < 140 || lon > 150 || lat < -40 || lat > -33) {
+    console.warn('[vicPlanApi] Coordinates outside Victoria bounds:', { lon, lat });
+    return [];
+  }
+
   const params = {
     geometry: `${lon},${lat}`,
     geometryType: 'esriGeometryPoint',
@@ -54,15 +66,21 @@ async function pointQuery(
   ).toString();
   console.debug('[vicPlanApi] GET', `${url}?${qs}`);
 
-  const { data } = await axios.get<ArcgisResponse>(url, {
-    params,
-    timeout: timeoutMs,
-  });
+  try {
+    const { data } = await axios.get<ArcgisResponse>(url, {
+      params,
+      timeout: timeoutMs,
+    });
 
-  if (data.error) {
-    throw new Error(`ArcGIS error: ${data.error.message}`);
+    if (data.error) {
+      throw new Error(`ArcGIS error: ${data.error.message}`);
+    }
+    return data.features ?? [];
+  } catch (error) {
+    console.error('[vicPlanApi] Query failed:', error);
+    // Fail gracefully - return empty array instead of throwing
+    return [];
   }
-  return data.features ?? [];
 }
 
 function readString(
@@ -192,31 +210,45 @@ export async function fetchVicParcelForPoint(
   lat: number,
   timeoutMs = 20000,
 ): Promise<ParcelPointResult | null> {
-  const params = {
-    geometry: `${lon},${lat}`,
-    geometryType: 'esriGeometryPoint',
-    inSR: 4326,
-    outSR: 4326,
-    spatialRel: 'esriSpatialRelIntersects',
-    distance: 20,
-    units: 'esriSRUnit_Meter',
-    returnGeometry: true,
-    // Request all parcel metadata fields to enable smart filtering
-    outFields: 'parcel_spi,parcel_pfi,parcel_status,parcel_type,is_primary',
-    f: 'json',
-  };
-
-  const { data } = await axios.get<ArcgisAttributedParcelResponse>(PARCEL_URL, {
-    params,
-    timeout: timeoutMs,
-  });
-
-  if (data.error) {
-    throw new Error(`ArcGIS error: ${data.error.message}`);
+  // Validate coordinates before sending to ArcGIS
+  if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
+    console.warn('[fetchVicParcelForPoint] Invalid coordinates:', { lon, lat });
+    return null;
   }
 
-  const features = data.features ?? [];
-  if (features.length === 0) return null;
+  // Validate coordinate ranges (Victoria bounds)
+  if (lon < 140 || lon > 150 || lat < -40 || lat > -33) {
+    console.warn('[fetchVicParcelForPoint] Coordinates outside Victoria bounds:', { lon, lat });
+    return null;
+  }
+
+  try {
+    const params = {
+      geometry: `${lon},${lat}`,
+      geometryType: 'esriGeometryPoint',
+      inSR: 4326,
+      outSR: 4326,
+      spatialRel: 'esriSpatialRelIntersects',
+      distance: 20,
+      units: 'esriSRUnit_Meter',
+      returnGeometry: true,
+      // Request all parcel metadata fields to enable smart filtering
+      outFields: 'parcel_spi,parcel_pfi,parcel_status,parcel_type,is_primary',
+      f: 'json',
+    };
+
+    const { data } = await axios.get<ArcgisAttributedParcelResponse>(PARCEL_URL, {
+      params,
+      timeout: timeoutMs,
+    });
+
+    if (data.error) {
+      console.warn('[fetchVicParcelForPoint] ArcGIS returned error:', data.error.message);
+      return null;
+    }
+
+    const features = data.features ?? [];
+    if (features.length === 0) return null;
 
   // PRIMARY POLYGON FILTER: Multi-stage selection strategy to ensure we get
   // the master cadastral boundary, not a sub-lot, strata plan, or easement.
@@ -308,6 +340,11 @@ export async function fetchVicParcelForPoint(
     polygon: { type: 'Polygon', coordinates: rings },
     spi,
   };
+  } catch (error) {
+    console.error('[fetchVicParcelForPoint] Query failed:', error);
+    // Fail gracefully - return null instead of throwing
+    return null;
+  }
 }
 
 /**

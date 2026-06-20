@@ -38,6 +38,8 @@ import { useProjectState } from '@/hooks/useProjectState';
 import { fetchMarketData, type MarketDataResult } from '@/lib/marketData';
 import { generatePropertyPDF, type DocumentConfig } from '@/lib/pdfGenerator';
 import { fetchAgentMarketData } from '@/lib/sources/AgentSource';
+import { mergeAgentMarketData, type MergedMarketData } from '@/lib/agentMarketIntegration';
+import type { AIMarketResponse } from '@/types/property';
 
 const MELBOURNE_FALLBACK = { lat: -37.8136, lon: 144.9631 };
 const VICMAP_TIMEOUT_MS = 15000;
@@ -197,11 +199,26 @@ function AppCanvas() {
   // alone is insufficient because it initialises false, opening a race
   // window on first render where the timer could fire with a null insight.
   const [hasAttemptedAI, setHasAttemptedAI] = useState(false);
-  const [showReportPreview, setShowReportPreview] = useState(false);
 
   // Market data state — property attributes from Domain API (beds/baths/cars/etc)
   const [marketData, setMarketData] = useState<MarketDataResult | null>(null);
   const [isLoadingMarket, setIsLoadingMarket] = useState(false);
+
+  // Agent market data state — agentic web scraping for bedrooms/bathrooms/value
+  const [agentMarketData, setAgentMarketData] = useState<AIMarketResponse | null>(null);
+  const [isLoadingAgent, setIsLoadingAgent] = useState(false);
+  const [hasAttemptedAgent, setHasAttemptedAgent] = useState(false);
+
+  // Merged market data with source tracking
+  const mergedMarketData: MergedMarketData = useMemo(() => {
+    return mergeAgentMarketData(
+      agentMarketData,
+      marketData?.bedrooms,
+      marketData?.bathrooms
+    );
+  }, [agentMarketData, marketData]);
+
+  const [showReportPreview, setShowReportPreview] = useState(false);
 
   // Agent test state
   const [isTestingAgent, setIsTestingAgent] = useState(false);
@@ -512,6 +529,47 @@ function AppCanvas() {
     };
   }, [address, reportLanguage]);
 
+  // Agent market data fetch — agentic web scraping for bedrooms/bathrooms/value
+  // Runs in parallel with AI insight fetch to minimize latency
+  useEffect(() => {
+    if (!address) {
+      setAgentMarketData(null);
+      setHasAttemptedAgent(false);
+      setIsLoadingAgent(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingAgent(true);
+    setAgentMarketData(null);
+    setHasAttemptedAgent(false);
+
+    fetchAgentMarketData(address)
+      .then((data: AIMarketResponse) => {
+        if (!cancelled) {
+          setAgentMarketData(data);
+          console.log('[AppCanvas] Agent market data fetched:', data);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          console.error('[AppCanvas] Agent market fetch failed', err);
+          // Set empty data on error instead of leaving null
+          setAgentMarketData({ bedrooms: null, bathrooms: null, estimated_value: null });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingAgent(false);
+          setHasAttemptedAgent(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [address]);
+
   // Market data fetch — property attributes from Domain API (beds/baths/cars/year built/last sold)
   useEffect(() => {
     if (!address || !hasCoords) {
@@ -547,13 +605,17 @@ function AppCanvas() {
   }, [address, lat, lon, hasCoords]);
 
   // Auto-save to localStorage when key state changes (debounced)
+  // Auto-save to localStorage with deep equality check to prevent infinite loops.
+  // React 19: projectState object reference changes on every render, so we
+  // destructure saveState and only depend on the data that actually changes.
+  const { saveState } = projectState;
   useEffect(() => {
     if (!hasHydrated) return; // Don't save on initial hydration
     const timeoutId = setTimeout(() => {
-      projectState.saveState(selectedParcels, aiInsight);
+      saveState(selectedParcels, aiInsight);
     }, 500);
     return () => clearTimeout(timeoutId);
-  }, [selectedParcels, aiInsight, hasHydrated, projectState]);
+  }, [selectedParcels, aiInsight, hasHydrated, saveState]);
 
   const effectiveLandSizeM2 = hasPrimaryLandSize
     ? landSizeM2
@@ -1111,6 +1173,8 @@ function AppCanvas() {
               planData={planData}
               aiInsight={aiInsight}
               liveCouncil={liveCouncil}
+              mergedMarketData={mergedMarketData}
+              language={language}
             />
           </div>
         </div>

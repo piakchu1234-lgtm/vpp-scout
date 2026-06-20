@@ -2,6 +2,8 @@
 import React, { forwardRef } from 'react';
 import type { AIInsightData } from '@/app/app/page';
 import type { VicPlanData } from '@/lib/vicPlanApi';
+import type { MergedMarketData } from '@/lib/agentMarketIntegration';
+import { DataSourceBadge } from '@/components/ui/DataSourceBadge';
 import { describeOverlayCode } from '@/components/sidebar/PlanningConstraintsTab';
 
 // ResCode / NCC 2026 screening constants — duplicated from
@@ -22,6 +24,10 @@ export interface ComprehensiveReportProps {
    * Auditor's localCouncil so the PDF carries deterministic council
    * data even when Gemini fails. */
   liveCouncil?: string | null;
+  /** Merged market data from agent + Domain with source tracking */
+  mergedMarketData?: MergedMarketData;
+  /** UI language for bilingual rendering */
+  language?: 'en' | 'zh';
 }
 
 const formatDate = (d: Date) =>
@@ -34,7 +40,7 @@ const formatM2 = (n: number | null | undefined) =>
 
 const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>(
   function ComprehensiveReport(
-    { address, lat, lon, landSizeM2, lotPlan, planData, aiInsight, liveCouncil },
+    { address, lat, lon, landSizeM2, lotPlan, planData, aiInsight, liveCouncil, mergedMarketData, language = 'en' },
     ref,
   ) {
     // Google Street View API — hero image for first-page visual hierarchy
@@ -75,9 +81,11 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
 
     const hazards = (aiInsight?.hazards ?? []).filter((h) => h && h.trim().length > 0);
 
-    const beds = typeof aiInsight?.bedrooms === 'number' ? aiInsight.bedrooms : null;
-    const baths = typeof aiInsight?.bathrooms === 'number' ? aiInsight.bathrooms : null;
+    // Use merged market data with fallback to AI insight
+    const beds = mergedMarketData?.bedrooms ?? (typeof aiInsight?.bedrooms === 'number' ? aiInsight.bedrooms : null);
+    const baths = mergedMarketData?.bathrooms ?? (typeof aiInsight?.bathrooms === 'number' ? aiInsight.bathrooms : null);
     const cars = typeof aiInsight?.carspaces === 'number' ? aiInsight.carspaces : null;
+    const estimatedValue = mergedMarketData?.estimatedValue;
 
     const frontage = aiInsight?.estimatedFrontage?.trim() || null;
     const marketEstimate = aiInsight?.marketEstimate?.trim() || null;
@@ -240,6 +248,12 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
               <Cell
                 label="Bed / Bath / Car"
                 value={`${beds ?? '—'} / ${baths ?? '—'} / ${cars ?? '—'}`}
+              />
+            )}
+            {estimatedValue && (
+              <Cell
+                label={language === 'en' ? 'Estimated Value' : '估计价值'}
+                value={`$${estimatedValue.toLocaleString('en-AU')}`}
               />
             )}
             {hasMarketEstimate && (
@@ -535,8 +549,16 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
         <footer className="border-t border-gray-300 pt-3 mt-2 text-[9px] text-gray-600 leading-relaxed">
           Planning-stage screening tool synthesised by the SimplySite Senior Victorian Architect
           Auditor. Inputs are drawn from Vicmap (parcel + zone + overlays) and verified live
-          listing / planning sources via Google Search grounding. Confirm all figures with a
-          registered building surveyor and town planner before acquisition.
+          listing / planning sources via Google Search grounding.
+          {mergedMarketData && mergedMarketData.source !== 'none' && (
+            <>
+              {' '}Property market attributes (bedrooms, bathrooms, estimated value) sourced via {' '}
+              {mergedMarketData.source === 'agent' && 'agentic web search (Tavily API)'}
+              {mergedMarketData.source === 'domain' && 'Domain API'}
+              {mergedMarketData.source === 'mock' && 'sample data'}.
+            </>
+          )}
+          {' '}Confirm all figures with a registered building surveyor and town planner before acquisition.
         </footer>
 
         <div className="mt-12 pt-4 border-t border-zinc-300 text-[10px] text-zinc-500 leading-relaxed break-inside-avoid">

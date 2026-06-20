@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { ParcelFeature } from '@/lib/vicPlanApi';
 import type { AIInsightData } from '@/app/app/page';
 
@@ -19,6 +19,10 @@ export type ProjectState = {
  *
  * React 19 + Next.js App Router pattern: initial load happens in useEffect
  * to avoid hydration mismatches between server and client.
+ *
+ * The saveState function is wrapped in useCallback to maintain stable
+ * reference identity across renders, preventing infinite loops in parent
+ * components that depend on it.
  */
 export function useProjectState() {
   const [isLoaded, setIsLoaded] = useState(false);
@@ -48,7 +52,7 @@ export function useProjectState() {
     }
   }, []);
 
-  const saveState = (parcels: ParcelFeature[], insight: AIInsightData | null) => {
+  const saveState = useCallback((parcels: ParcelFeature[], insight: AIInsightData | null) => {
     if (typeof window === 'undefined') return;
 
     const state: ProjectState = {
@@ -67,15 +71,15 @@ export function useProjectState() {
     } catch (err) {
       console.error('[useProjectState] Failed to save to localStorage', err);
     }
-  };
+  }, []);
 
-  const clearState = () => {
+  const clearState = useCallback(() => {
     if (typeof window === 'undefined') return;
 
     localStorage.removeItem(STORAGE_KEY);
     setSavedState(null);
     console.log('[useProjectState] Cleared localStorage');
-  };
+  }, []);
 
   return {
     isLoaded,

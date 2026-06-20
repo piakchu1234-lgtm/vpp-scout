@@ -17,6 +17,8 @@ import type { MarketDataResult } from '@/lib/marketData';
 import type { VicPlanData } from '@/lib/vicPlanApi';
 import type { YieldData } from '@/lib/yieldEngine';
 import type { PlanningOverlay } from '@/components/dashboard/PlanningCard';
+import type { MergedMarketData } from '@/lib/agentMarketIntegration';
+import { DataSourceBadge } from '@/components/ui/DataSourceBadge';
 
 type Lang = 'en' | 'zh';
 
@@ -33,6 +35,7 @@ type InsightPanelProps = {
   isLoadingAI: boolean;
   marketData: MarketDataResult | null;
   isLoadingMarket: boolean;
+  mergedMarketData: MergedMarketData;
   planData: VicPlanData | null;
   overlays: PlanningOverlay[] | null;
   yieldData: YieldData;
@@ -88,6 +91,7 @@ export default function InsightPanel({
   isLoadingAI,
   marketData,
   isLoadingMarket,
+  mergedMarketData,
   planData,
   overlays,
   yieldData,
@@ -115,10 +119,11 @@ export default function InsightPanel({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Prioritize market data over AI insight for property attributes
-  const bedrooms = marketData?.bedrooms ?? aiInsight?.bedrooms ?? null;
-  const bathrooms = marketData?.bathrooms ?? aiInsight?.bathrooms ?? null;
+  // Use merged market data with source tracking
+  const bedrooms = mergedMarketData.bedrooms ?? aiInsight?.bedrooms ?? null;
+  const bathrooms = mergedMarketData.bathrooms ?? aiInsight?.bathrooms ?? null;
   const carspaces = marketData?.carspaces ?? aiInsight?.carspaces ?? null;
+  const estimatedValue = mergedMarketData.estimatedValue;
 
   // Detect vacant land: explicit flag from AI OR all property metrics are 0/null
   const isVacantLand = aiInsight?.isVacantLand || (bedrooms === 0 && bathrooms === 0 && carspaces === 0);
@@ -326,7 +331,14 @@ export default function InsightPanel({
             {/* Beds/Baths/Cars - Show skeleton or data */}
             {(isLoadingMarket || (bedrooms !== null && bedrooms > 0)) && (
               <div className="py-3">
-                <div className="text-xs uppercase tracking-wider text-zinc-500 mb-1">{LABELS.bedsBathsCars[language]}</div>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="text-xs uppercase tracking-wider text-zinc-500">
+                    {LABELS.bedsBathsCars[language]}
+                  </div>
+                  {!isLoadingMarket && bedrooms !== null && (
+                    <DataSourceBadge source={mergedMarketData.source} language={language} />
+                  )}
+                </div>
                 {isLoadingMarket && bedrooms === null ? (
                   <Skeleton className="h-5 w-40" />
                 ) : (
@@ -334,6 +346,21 @@ export default function InsightPanel({
                     🛏️ {bedrooms} | 🛁 {bathrooms || 0} | 🚗 {carspaces || 0}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Estimated Value - Show if available from agent */}
+            {estimatedValue && (
+              <div className="py-3">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="text-xs uppercase tracking-wider text-zinc-500">
+                    {language === 'en' ? 'Estimated Value' : '估计价值'}
+                  </div>
+                  <DataSourceBadge source={mergedMarketData.source} language={language} />
+                </div>
+                <div className="text-white font-medium transition-opacity duration-300">
+                  ${estimatedValue.toLocaleString()}
+                </div>
               </div>
             )}
 
