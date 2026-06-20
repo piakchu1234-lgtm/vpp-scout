@@ -126,6 +126,7 @@ function AppCanvas() {
   const addressParam = params.get('address');
   const latParam = params.get('lat');
   const lonParam = params.get('lon');
+  const projectIdParam = params.get('projectId');
   const lat = latParam ? Number(latParam) : MELBOURNE_FALLBACK.lat;
   const lon = lonParam ? Number(lonParam) : MELBOURNE_FALLBACK.lon;
   const hasCoords = Number.isFinite(lat) && Number.isFinite(lon);
@@ -400,6 +401,63 @@ function AppCanvas() {
 
     setHasHydrated(true);
   }, [projectState.isLoaded, projectState.savedState]);
+
+  // Load project from database when projectId is present
+  useEffect(() => {
+    if (!projectIdParam) return;
+
+    const loadProject = async () => {
+      try {
+        console.log('[Project Load] Loading project:', projectIdParam);
+        const response = await fetch(`/api/projects/${projectIdParam}`);
+
+        if (!response.ok) {
+          throw new Error('Failed to load project');
+        }
+
+        const data = await response.json();
+        const project = data.project;
+
+        console.log('[Project Load] ✅ Project loaded:', project.address);
+
+        // Update URL with address and coordinates
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.delete('projectId');
+        newUrl.searchParams.set('address', project.address);
+        newUrl.searchParams.set('lat', project.coordinates.lat.toString());
+        newUrl.searchParams.set('lon', project.coordinates.lng.toString());
+        router.replace(newUrl.pathname + newUrl.search);
+
+        // Restore map viewport state
+        if (project.mapState && mapPreviewRef.current) {
+          const map = mapPreviewRef.current.getMap();
+          if (map) {
+            setTimeout(() => {
+              map.flyTo({
+                center: project.mapState.center,
+                zoom: project.mapState.zoom,
+                bearing: project.mapState.bearing,
+                pitch: project.mapState.pitch,
+                duration: 2000,
+              });
+            }, 500);
+          }
+        }
+
+        // Restore 3D massing state
+        if (project.massingGeometry) {
+          setShow3DMassing(true);
+        }
+
+        console.log('[Project Load] ✅ State hydrated');
+      } catch (error) {
+        console.error('[Project Load] ❌ Error:', error);
+        alert('Failed to load project');
+      }
+    };
+
+    loadProject();
+  }, [projectIdParam, router]);
 
   const paymentParam = params.get('payment');
   const typeParam = params.get('type');

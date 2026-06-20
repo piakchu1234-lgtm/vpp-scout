@@ -11,13 +11,15 @@
 'use client';
 
 import { useTheme } from 'next-themes';
-import { Sun, Moon, Languages } from 'lucide-react';
+import { Sun, Moon, Languages, FolderOpen } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function GlobalControls() {
   const { theme, setTheme } = useTheme();
   const [language, setLanguage] = useState<'en' | 'zh'>('en');
   const [mounted, setMounted] = useState(false);
+  const router = useRouter();
 
   // Avoid hydration mismatch
   useEffect(() => {
@@ -52,6 +54,18 @@ export default function GlobalControls() {
 
   return (
     <>
+      {/* Projects Button */}
+      <button
+        onClick={() => router.push('/projects')}
+        aria-label="View saved projects"
+        className="flex items-center gap-2 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E9E778]"
+      >
+        <FolderOpen className="w-4 h-4 text-zinc-400" aria-hidden="true" />
+        <span className="text-sm font-medium text-zinc-100">
+          Projects
+        </span>
+      </button>
+
       {/* Language Toggle */}
       <button
         onClick={toggleLanguage}
