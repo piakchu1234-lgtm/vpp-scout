@@ -90,3 +90,14 @@ input[type="number"] {
     display: block !important;
   }
 }
+
+/* Easement Tooltip Styling */
+.easement-tooltip .mapboxgl-popup-content {
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+.easement-tooltip .mapboxgl-popup-tip {
+  border-top-color: rgb(24 24 27 / 0.95) !important;
+}
