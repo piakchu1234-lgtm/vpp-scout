@@ -16,15 +16,11 @@ const nextConfig: NextConfig = {
   // Optimize Mapbox GL JS for Turbopack
   transpilePackages: ['mapbox-gl'],
 
-  webpack: (config, { isServer }) => {
-    // Fix Mapbox GL JS in client bundles
-    if (!isServer) {
-      config.resolve.alias = {
-        ...config.resolve.alias,
-        'mapbox-gl': 'mapbox-gl/dist/mapbox-gl.js',
-      };
-    }
-    return config;
+  // Turbopack configuration for Mapbox GL JS
+  turbopack: {
+    resolveAlias: {
+      'mapbox-gl': 'mapbox-gl/dist/mapbox-gl.js',
+    },
   },
 };
 
