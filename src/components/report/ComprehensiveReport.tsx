@@ -3,6 +3,7 @@ import React, { forwardRef } from 'react';
 import type { AIInsightData } from '@/app/app/page';
 import type { VicPlanData } from '@/lib/vicPlanApi';
 import type { MergedMarketData } from '@/lib/agentMarketIntegration';
+import type { MassingResult, FinancialAnalysis } from '@/lib/massingEngine';
 import { DataSourceBadge } from '@/components/ui/DataSourceBadge';
 import { describeOverlayCode } from '@/components/sidebar/PlanningConstraintsTab';
 
@@ -28,6 +29,12 @@ export interface ComprehensiveReportProps {
   mergedMarketData?: MergedMarketData;
   /** UI language for bilingual rendering */
   language?: 'en' | 'zh';
+  /** 3D map snapshot (Base64 PNG from WebGL canvas) */
+  mapSnapshot?: string | null;
+  /** Generated 3D massing result */
+  generatedMassing?: MassingResult | null;
+  /** Financial analysis (ROI calculations) */
+  financialAnalysis?: FinancialAnalysis | null;
 }
 
 const formatDate = (d: Date) =>
@@ -38,9 +45,27 @@ const formatM2 = (n: number | null | undefined) =>
     ? `${Math.round(n).toLocaleString('en-AU')} m²`
     : '—';
 
+const formatCurrency = (amount: number): string => {
+  return `$${Math.round(amount).toLocaleString('en-AU')}`;
+};
+
 const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>(
   function ComprehensiveReport(
-    { address, lat, lon, landSizeM2, lotPlan, planData, aiInsight, liveCouncil, mergedMarketData, language = 'en' },
+    {
+      address,
+      lat,
+      lon,
+      landSizeM2,
+      lotPlan,
+      planData,
+      aiInsight,
+      liveCouncil,
+      mergedMarketData,
+      language = 'en',
+      mapSnapshot,
+      generatedMassing,
+      financialAnalysis,
+    },
     ref,
   ) {
     // Google Street View API — hero image for first-page visual hierarchy
@@ -561,6 +586,120 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
           {' '}Confirm all figures with a registered building surveyor and town planner before acquisition.
         </footer>
 
+        {/* 3D Site Massing & Financial Analysis Section */}
+        {(mapSnapshot || financialAnalysis) && (
+          <div className="mt-12 break-inside-avoid">
+            {/* Section Header */}
+            <div className="mb-6">
+              <h2 className="text-2xl font-black text-black mb-1">
+                3D Site Massing & Financial Feasibility
+              </h2>
+              <h3 className="text-lg font-bold text-gray-600">
+                3D 建筑体量与财务可行性
+              </h3>
+            </div>
+
+            {/* 3D Map Snapshot */}
+            {mapSnapshot && (
+              <div className="mb-6 break-inside-avoid">
+                <div className="border-2 border-gray-300 rounded-lg overflow-hidden bg-white">
+                  <img
+                    src={mapSnapshot}
+                    alt="3D Site Massing Visualization"
+                    className="w-full h-auto"
+                    style={{ maxWidth: '100%', display: 'block' }}
+                  />
+                </div>
+                <p className="text-xs text-gray-600 mt-2 text-center italic">
+                  Generated 3D building envelope with VPP-compliant setbacks |
+                  符合 VPP 规范的三维建筑包络
+                </p>
+              </div>
+            )}
+
+            {/* Financial Analysis Table */}
+            {financialAnalysis && generatedMassing && (
+              <div className="break-inside-avoid">
+                <h3 className="text-base font-bold text-black mb-3">
+                  Financial Analysis | 财务分析
+                </h3>
+
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Floor Area */}
+                  <Cell
+                    label="FLOOR AREA | 建筑面积"
+                    value={`${generatedMassing.floorArea.toFixed(1)} m²`}
+                    caption="Single Storey Dwelling"
+                  />
+
+                  {/* Construction Cost */}
+                  <Cell
+                    label="CONSTRUCTION COST | 建筑成本"
+                    value={formatCurrency(financialAnalysis.constructionCost)}
+                    caption={`@ $${financialAnalysis.costPerSqm.toLocaleString()}/m²`}
+                  />
+
+                  {/* Estimated End Value */}
+                  {financialAnalysis.endValue !== undefined && (
+                    <Cell
+                      label="ESTIMATED END VALUE | 预计最终价值"
+                      value={formatCurrency(financialAnalysis.endValue)}
+                      caption={mergedMarketData?.source || 'Market Analysis'}
+                    />
+                  )}
+
+                  {/* Estimated Profit */}
+                  {financialAnalysis.profit !== undefined && (
+                    <div className="border border-gray-300 rounded p-3 bg-gradient-to-br from-green-50 to-emerald-50">
+                      <div className="text-[9px] uppercase tracking-widest text-gray-600 font-bold mb-1">
+                        ESTIMATED PROFIT | 预计利润
+                      </div>
+                      <div className={`text-lg font-black tabular-nums break-words ${
+                        financialAnalysis.profit >= 0 ? 'text-green-700' : 'text-red-700'
+                      }`}>
+                        {formatCurrency(financialAnalysis.profit)}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ROI */}
+                  {financialAnalysis.roi !== undefined && (
+                    <div className="border border-gray-300 rounded p-3 bg-gradient-to-br from-blue-50 to-indigo-50">
+                      <div className="text-[9px] uppercase tracking-widest text-gray-600 font-bold mb-1">
+                        RETURN ON INVESTMENT | 投资回报率
+                      </div>
+                      <div className={`text-lg font-black tabular-nums break-words ${
+                        financialAnalysis.roi >= 15 ? 'text-green-700' :
+                        financialAnalysis.roi >= 10 ? 'text-amber-700' : 'text-red-700'
+                      }`}>
+                        {financialAnalysis.roi.toFixed(1)}%
+                      </div>
+                      <div className="text-[9px] text-gray-600 mt-0.5 font-mono leading-tight">
+                        {financialAnalysis.isViable ? '✓ Commercially Viable' : '⚠ Below Threshold'}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Financial Summary Note */}
+                <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded">
+                  <p className="text-xs text-amber-900 leading-relaxed">
+                    <strong>Note:</strong> Financial estimates are indicative only and based on
+                    current market data and standard construction costs ($2,500/m²). Actual costs
+                    may vary based on finishes, site conditions, and contractor selection.
+                    Professional quantity surveyor assessment recommended.
+                  </p>
+                  <p className="text-xs text-amber-800 leading-relaxed mt-1">
+                    <strong>注意：</strong>财务估算仅供参考，基于当前市场数据和标准建筑成本（2,500澳元/平方米）。
+                    实际成本可能因装修、场地条件和承包商选择而有所不同。建议进行专业工程造价评估。
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Disclaimer */}
         <div className="mt-12 pt-4 border-t border-zinc-300 text-[10px] text-zinc-500 leading-relaxed break-inside-avoid">
           <strong>Disclaimer:</strong> This Comprehensive Feasibility Report is generated by SimplySite for preliminary planning and investigative purposes only. Site dimensions, overlays, and statutory calculations are synthesized from Vicmap and Google data sources and may not reflect recent title amendments. This document does not constitute formal town planning, legal, or architectural advice. Users must independently verify all boundaries, easements, and planning controls with a licensed land surveyor and the relevant municipal council prior to the commencement of any design or construction.
         </div>

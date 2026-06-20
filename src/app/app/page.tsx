@@ -149,6 +149,7 @@ function AppCanvas() {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isSavingProject, setIsSavingProject] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [capturedMapSnapshot, setCapturedMapSnapshot] = useState<string | null>(null);
 
   // Handler for PDF export
   const handleExportPdf = async () => {
@@ -158,6 +159,17 @@ function AppCanvas() {
     try {
       // Capture map snapshot
       const mapSnapshot = await mapPreviewRef.current?.getSnapshot();
+
+      // Store snapshot for report rendering
+      if (mapSnapshot) {
+        setCapturedMapSnapshot(mapSnapshot);
+        console.log('[PDF Export] ✅ Map snapshot captured');
+      } else {
+        console.warn('[PDF Export] ⚠️ Map snapshot failed');
+      }
+
+      // Small delay to let React update the report component with the snapshot
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       // Gather payload
       const payload = {
@@ -1503,6 +1515,9 @@ function AppCanvas() {
               liveCouncil={liveCouncil}
               mergedMarketData={mergedMarketData}
               language={language}
+              mapSnapshot={capturedMapSnapshot}
+              generatedMassing={generatedMassing}
+              financialAnalysis={financialAnalysis}
             />
           </div>
         </div>
