@@ -31,6 +31,10 @@ type PropertySidePanelProps = {
   onToggleDAs?: (show: boolean) => void;
   show3DMassing?: boolean;
   onToggle3DMassing?: (show: boolean) => void;
+  showBoundaryLabels?: boolean;
+  onToggleBoundaryLabels?: (show: boolean) => void;
+  showContours?: boolean;
+  onToggleContours?: (show: boolean) => void;
   daData?: any[]; // Array of fetched DAs
   propertyLat?: number;
   propertyLng?: number;
@@ -55,6 +59,10 @@ export default function PropertySidePanel({
   onToggleDAs,
   show3DMassing = false,
   onToggle3DMassing,
+  showBoundaryLabels = false,
+  onToggleBoundaryLabels,
+  showContours = false,
+  onToggleContours,
   daData = [],
   propertyLat,
   propertyLng,
@@ -360,6 +368,46 @@ export default function PropertySidePanel({
                   type="checkbox"
                   checked={show3DMassing}
                   onChange={(e) => onToggle3DMassing(e.target.checked)}
+                  className="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-[#E9E778] focus:ring-2 focus:ring-[#E9E778] focus:ring-offset-0"
+                />
+              </label>
+            )}
+
+            {/* Boundary Dimensions Toggle */}
+            {onToggleBoundaryLabels && (
+              <label className="flex items-center justify-between cursor-pointer group">
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-0.5 bg-[#E9E778] rounded"></div>
+                  <span className="text-sm text-zinc-300 group-hover:text-white transition-colors">
+                    Boundary Dimensions
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={showBoundaryLabels}
+                  onChange={(e) => onToggleBoundaryLabels(e.target.checked)}
+                  className="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-[#E9E778] focus:ring-2 focus:ring-[#E9E778] focus:ring-offset-0"
+                />
+              </label>
+            )}
+
+            {/* Topography Contours Toggle */}
+            {onToggleContours && (
+              <label className="flex items-center justify-between cursor-pointer group">
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-[#E9E778]" viewBox="0 0 16 16" fill="none">
+                    <path d="M2 4 Q8 2 14 4" stroke="currentColor" strokeWidth="1.5" />
+                    <path d="M2 8 Q8 6 14 8" stroke="currentColor" strokeWidth="1.5" />
+                    <path d="M2 12 Q8 10 14 12" stroke="currentColor" strokeWidth="1.5" />
+                  </svg>
+                  <span className="text-sm text-zinc-300 group-hover:text-white transition-colors">
+                    Topography Contours
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={showContours}
+                  onChange={(e) => onToggleContours(e.target.checked)}
                   className="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-[#E9E778] focus:ring-2 focus:ring-[#E9E778] focus:ring-offset-0"
                 />
               </label>
