@@ -5,10 +5,8 @@
  * Processes geometry, planning zones, and pre-calculates SSD eligibility.
  */
 
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import type { ParcelFeature } from '@/lib/vicPlanApi';
-
-const prisma = new PrismaClient();
 
 export interface ParcelIngestionStats {
   total: number;

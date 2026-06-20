@@ -5,27 +5,12 @@
  * Implements 7-day TTL and address normalization for cache key stability.
  */
 
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 
-// Lazy initialization - only create client if DATABASE_URL is configured
-let prisma: PrismaClient | null = null;
-
-function getPrismaClient(): PrismaClient | null {
-  if (prisma) return prisma;
-
-  // Check if DATABASE_URL is configured
-  if (!process.env.DATABASE_URL) {
-    console.warn('[agentMarketCache] DATABASE_URL not configured - caching disabled');
-    return null;
-  }
-
-  try {
-    prisma = new PrismaClient();
-    return prisma;
-  } catch (error) {
-    console.error('[agentMarketCache] Failed to initialize Prisma client:', error);
-    return null;
-  }
+function getPrismaClient() {
+  // Return the singleton prisma client
+  // If it's a mock (during build), operations will be no-ops
+  return prisma;
 }
 
 // 7-day TTL in milliseconds

@@ -5,9 +5,7 @@
  * Leverages PostGIS for advanced geometric operations.
  */
 
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 export interface PropertySearchFilters {
   /** Bounding box: [minLng, minLat, maxLng, maxLat] */
