@@ -16,6 +16,7 @@ import { PROPERTY_UI, type Language } from '@/lib/i18n/propertyUi';
 import ComprehensiveReport from '@/components/report/ComprehensiveReport';
 import { MapPreview } from '@/components/MapPreview';
 import MapControlsToolbar from '@/components/MapControlsToolbar';
+import PropertySidePanel from '@/components/dashboard/PropertySidePanel';
 import InsightPanel from '@/components/dashboard/InsightPanel';
 import DocumentConfigurator from '@/components/dashboard/DocumentConfigurator';
 import { describeOverlayCode, type PlanningOverlay } from '@/components/dashboard/PlanningCard';
@@ -853,6 +854,25 @@ function AppCanvas() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#05060E]">
+      {/* Property Side Panel - Left Side */}
+      {hasCoords && (
+        <PropertySidePanel
+          address={address}
+          language={language}
+          zoneCode={planData?.zoneCode || null}
+          zoneDescription={planData?.zoneDescription || null}
+          landSizeM2={landSizeM2}
+          effectiveLandSizeM2={effectiveLandSizeM2}
+          mergedMarketData={mergedMarketData}
+          isLoadingAgent={isLoadingAgent}
+          isLoadingMarket={isLoadingMarket}
+          planData={planData}
+          yieldData={yieldData}
+          onExportPDF={handleExportPdf}
+          isGeneratingPDF={isGeneratingPdf}
+        />
+      )}
+
       {/* Left Control Rail */}
       <aside className="fixed left-0 top-0 h-full w-20 z-50 bg-[#05060E]/70 backdrop-blur-md border-r border-white/10 flex flex-col items-center py-6">
         {/* Logo at top */}
@@ -898,7 +918,7 @@ function AppCanvas() {
       </aside>
 
       {/* Main Content - Full-Bleed Map */}
-      <main className="flex-1 ml-20 relative">
+      <main className="flex-1 ml-[420px] relative">
         {/* Floating Search Bar - Top Left */}
         <div className="absolute top-6 left-6 z-50 w-96">
           <div className="bg-[#05060E]/80 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-4">
@@ -1039,99 +1059,6 @@ function AppCanvas() {
             </div>
           )}
       </div>
-
-        {/* Floating Bottom Dashboard */}
-        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-40 w-full max-w-5xl px-6">
-          <div className="flex flex-row gap-6 flex-wrap md:flex-nowrap justify-center">
-
-            {/* Card 1: Market Performance */}
-            <div className="flex-1 min-w-[320px] max-w-md bg-[#05060E]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-5 text-white shadow-2xl">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-xs font-semibold tracking-wider uppercase text-zinc-400">Market Performance</h3>
-                {mergedMarketData.source !== 'none' && !isLoadingAgent && !isLoadingMarket && (
-                  <DataSourceBadge source={mergedMarketData.source} language={language} />
-                )}
-              </div>
-              {(isLoadingAgent || isLoadingMarket) ? (
-                <div className="h-[180px] flex items-center justify-center text-sm text-zinc-500">
-                  Aggregating market data...
-                </div>
-              ) : mergedMarketData.bedrooms !== null ? (
-                <MarketBarChart
-                  bedrooms={mergedMarketData.bedrooms}
-                  bathrooms={mergedMarketData.bathrooms ?? 0}
-                  carspaces={marketData?.carspaces ?? 0}
-                />
-              ) : (
-                <div className="h-[180px] flex items-center justify-center text-sm text-zinc-500">
-                  No market data available
-                </div>
-              )}
-            </div>
-
-            {/* Card 2: Site Parameters */}
-            <div className="flex-1 min-w-[320px] max-w-md bg-[#05060E]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-5 text-white shadow-2xl">
-              <h3 className="text-xs font-semibold tracking-wider uppercase text-zinc-400 mb-3">Site Parameters</h3>
-              {landSizeM2 ? (
-                <SpatialPieChart landSize={landSizeM2} effectiveLandSize={effectiveLandSizeM2} />
-              ) : (
-                <div className="h-[180px] flex items-center justify-center text-sm text-zinc-500">
-                  Loading spatial data...
-                </div>
-              )}
-            </div>
-
-            {/* Card 3: Development Assessment */}
-            <div className="flex-1 min-w-[320px] max-w-md bg-[#05060E]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-5 text-white shadow-2xl">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-xs font-semibold tracking-wider uppercase text-zinc-400">Development Assessment</h3>
-                {planData && landSizeM2 && (
-                  <SsdBadge
-                    eligible={
-                      landSizeM2 >= 300 &&
-                      ['GRZ', 'NRZ', 'RGZ', 'MUZ', 'TZ'].some(zone => planData.zoneCode?.toUpperCase().startsWith(zone)) &&
-                      !planData.overlayRaw?.some(o => ['HO', 'BMO', 'LSIO', 'SBO', 'BFO'].some(prefix => o.toUpperCase().startsWith(prefix)))
-                    }
-                    reason={
-                      landSizeM2 < 300
-                        ? 'Lot size below 300m² minimum'
-                        : planData.overlayRaw?.some(o => ['HO', 'BMO', 'LSIO', 'SBO', 'BFO'].some(prefix => o.toUpperCase().startsWith(prefix)))
-                        ? 'Restrictive overlays present'
-                        : 'SSD fast-track pathway available'
-                    }
-                  />
-                )}
-              </div>
-              {yieldData ? (
-                <RegulatoryRadarChart yieldData={yieldData} />
-              ) : (
-                <div className="h-[180px] flex items-center justify-center text-sm text-zinc-500">
-                  Processing compliance data...
-                </div>
-              )}
-
-              {/* Export PDF Button */}
-              <button
-                onClick={handleExportPdf}
-                disabled={!address || isGeneratingPdf}
-                className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#E9E778] text-[#05060E] font-bold text-xs uppercase tracking-wider rounded-lg hover:bg-[#d4d262] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isGeneratingPdf ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Generating Report...
-                  </>
-                ) : (
-                  <>
-                    <FileDown className="w-4 h-4" />
-                    Export PDF Report
-                  </>
-                )}
-              </button>
-            </div>
-
-          </div>
-        </div>
       </main>
 
       {/* Document Configurator Modal */}
