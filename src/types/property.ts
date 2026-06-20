@@ -3,11 +3,17 @@
  *
  * Structured output from the AI agent's web search and extraction.
  * All fields are nullable to handle cases where data cannot be found.
+ * Includes suburb-level market trends for Domain/REA data parity.
  */
 export type AIMarketResponse = {
   bedrooms: number | null;
   bathrooms: number | null;
   estimated_value: number | null;
+  suburbTrends?: {
+    suburbMedianPrice: number | null;
+    suburbGrowthRate: number | null; // percentage
+    averageDaysOnMarket: number | null;
+  };
 };
 
 /**

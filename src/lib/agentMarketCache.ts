@@ -89,6 +89,9 @@ export async function getCachedAgentMarketData(address: string) {
       bedrooms: cached.bedrooms,
       bathrooms: cached.bathrooms,
       estimated_value: cached.estimatedValue,
+      suburbMedianPrice: cached.suburbMedianPrice,
+      suburbGrowthRate: cached.suburbGrowthRate,
+      averageDaysOnMarket: cached.averageDaysOnMarket,
       source: cached.source,
       toolCalls: cached.toolCalls,
       cacheHit: true,
@@ -111,6 +114,9 @@ export async function setCachedAgentMarketData(
     bedrooms: number | null;
     bathrooms: number | null;
     estimated_value: number | null;
+    suburbMedianPrice?: number | null;
+    suburbGrowthRate?: number | null;
+    averageDaysOnMarket?: number | null;
     source: string;
     toolCalls: number;
   }
@@ -131,6 +137,9 @@ export async function setCachedAgentMarketData(
         bedrooms: data.bedrooms,
         bathrooms: data.bathrooms,
         estimatedValue: data.estimated_value,
+        suburbMedianPrice: data.suburbMedianPrice ?? null,
+        suburbGrowthRate: data.suburbGrowthRate ?? null,
+        averageDaysOnMarket: data.averageDaysOnMarket ?? null,
         source: data.source,
         toolCalls: data.toolCalls,
       },
@@ -138,6 +147,9 @@ export async function setCachedAgentMarketData(
         bedrooms: data.bedrooms,
         bathrooms: data.bathrooms,
         estimatedValue: data.estimated_value,
+        suburbMedianPrice: data.suburbMedianPrice ?? null,
+        suburbGrowthRate: data.suburbGrowthRate ?? null,
+        averageDaysOnMarket: data.averageDaysOnMarket ?? null,
         source: data.source,
         toolCalls: data.toolCalls,
         updatedAt: new Date(),

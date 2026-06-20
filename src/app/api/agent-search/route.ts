@@ -141,16 +141,28 @@ const SYSTEM_PROMPT = `You are a data extraction agent specializing in Australia
 
 Your task:
 1. Use the search_property_web tool to find information about the provided address
-2. Extract ONLY the following fields from the search results:
+2. Extract the following fields from the search results:
+
+   PROPERTY-SPECIFIC DATA:
    - bedrooms (number of bedrooms)
    - bathrooms (number of bathrooms)
    - estimated_value (estimated market value in AUD, as a number without dollar signs or commas)
+
+   SUBURB-LEVEL MARKET TRENDS (for the property's postcode/suburb):
+   - suburbMedianPrice (median house/unit price for the suburb in AUD)
+   - suburbGrowthRate (annual growth rate as a percentage, e.g., 12.5 for 12.5%)
+   - averageDaysOnMarket (average days properties stay on market in this suburb)
 
 3. Return ONLY a valid JSON object matching this exact structure:
 {
   "bedrooms": <number | null>,
   "bathrooms": <number | null>,
-  "estimated_value": <number | null>
+  "estimated_value": <number | null>,
+  "suburbTrends": {
+    "suburbMedianPrice": <number | null>,
+    "suburbGrowthRate": <number | null>,
+    "averageDaysOnMarket": <number | null>
+  }
 }
 
 Rules:
@@ -158,7 +170,11 @@ Rules:
 - Do NOT hallucinate or invent data
 - Do NOT include any text outside the JSON object
 - Convert price strings like "$850,000" to numbers like 850000
-- Be conservative: if you're unsure, return null for that field`;
+- Convert percentages like "12.5%" to numbers like 12.5
+- Be conservative: if you're unsure, return null for that field
+- Search specifically for suburb/postcode trends in addition to the property data
+- Look for terms like "median price", "market growth", "days on market", "time to sell"`;
+
 
 export async function POST(req: Request) {
   try {
@@ -185,6 +201,11 @@ export async function POST(req: Request) {
           bedrooms: cachedData.bedrooms,
           bathrooms: cachedData.bathrooms,
           estimated_value: cachedData.estimated_value,
+          suburbTrends: {
+            suburbMedianPrice: cachedData.suburbMedianPrice ?? null,
+            suburbGrowthRate: cachedData.suburbGrowthRate ?? null,
+            averageDaysOnMarket: cachedData.averageDaysOnMarket ?? null,
+          },
         },
         metadata: {
           toolCalls: cachedData.toolCalls,
@@ -332,6 +353,9 @@ export async function POST(req: Request) {
       bedrooms: finalResponse.bedrooms,
       bathrooms: finalResponse.bathrooms,
       estimated_value: finalResponse.estimated_value,
+      suburbMedianPrice: finalResponse.suburbTrends?.suburbMedianPrice ?? null,
+      suburbGrowthRate: finalResponse.suburbTrends?.suburbGrowthRate ?? null,
+      averageDaysOnMarket: finalResponse.suburbTrends?.averageDaysOnMarket ?? null,
       source: 'agent',
       toolCalls: toolCallCount,
     });
