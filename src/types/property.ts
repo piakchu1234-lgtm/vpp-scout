@@ -26,6 +26,10 @@ export type AgentSearchResponse = {
   success: boolean;
   data?: AIMarketResponse;
   error?: string;
-  toolCalls?: number; // For debugging: how many tool calls were made
-  searchExecuted?: boolean; // Whether the search tool was actually invoked
+  metadata?: {
+    toolCalls: number; // How many tool calls were made
+    searchExecuted: boolean; // Whether the search tool was actually invoked
+    cacheHit: boolean; // Whether data was served from PostgreSQL cache
+    cachedAt?: string; // ISO timestamp of when data was cached (only on cache hit)
+  };
 };

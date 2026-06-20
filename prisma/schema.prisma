@@ -145,6 +145,34 @@ enum Priority {
 }
 
 // ==============================================================================
+// AGENT MARKET CACHE MODEL - Agentic Web Scraping Cache
+// ==============================================================================
+
+model AgentMarketCache {
+  // PRIMARY IDENTIFIERS
+  id      String @id @default(uuid())
+  address String @unique @db.VarChar(500) // Normalized address for cache lookup
+
+  // MARKET ATTRIBUTES (from agentic web search)
+  bedrooms       Int?
+  bathrooms      Int?
+  estimatedValue Int? // AUD (stored as whole dollars, not cents)
+
+  // METADATA
+  source    String   @db.VarChar(50) // "agent" | "domain" | "mock"
+  toolCalls Int      @default(1) // Number of LLM tool calls used
+
+  // TIMESTAMPS (7-day TTL enforced at application level)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // INDEXES
+  @@index([address])
+  @@index([updatedAt])
+  @@map("agent_market_cache")
+}
+
+// ==============================================================================
 // MIGRATION NOTES
 // ==============================================================================
 // 1. PostGIS Extension: Run `CREATE EXTENSION IF NOT EXISTS postgis;` on database

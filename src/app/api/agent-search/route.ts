@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import type { AIMarketResponse, AgentSearchRequest, AgentSearchResponse } from '@/types/property';
+import { getCachedAgentMarketData, setCachedAgentMarketData } from '@/lib/agentMarketCache';
 
 // Node runtime required for Anthropic SDK
 export const runtime = 'nodejs';
@@ -171,6 +172,32 @@ export async function POST(req: Request) {
       );
     }
 
+    console.log(`[agent-search] Starting agentic search for: "${address}"`);
+
+    // CACHE-FIRST ARCHITECTURE: Check PostgreSQL cache before calling Tavily/Anthropic
+    const cachedData = await getCachedAgentMarketData(address);
+
+    if (cachedData) {
+      // CACHE HIT ✅ - Return cached data instantly (sub-100ms response)
+      return NextResponse.json<AgentSearchResponse>({
+        success: true,
+        data: {
+          bedrooms: cachedData.bedrooms,
+          bathrooms: cachedData.bathrooms,
+          estimated_value: cachedData.estimated_value,
+        },
+        metadata: {
+          toolCalls: cachedData.toolCalls,
+          searchExecuted: false,
+          cacheHit: true,
+          cachedAt: cachedData.cachedAt.toISOString(),
+        },
+      });
+    }
+
+    // CACHE MISS ❌ - Proceed with agentic web search
+    console.log('[agent-search] Cache miss, executing live search...');
+
     const apiKey = process.env.ANTHROPIC_API_KEY;
     const baseUrl = process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com';
 
@@ -180,8 +207,6 @@ export async function POST(req: Request) {
         { status: 500 }
       );
     }
-
-    console.log(`[agent-search] Starting agentic search for: "${address}"`);
 
     // Initialize Anthropic client
     const anthropic = new Anthropic({
@@ -238,8 +263,11 @@ export async function POST(req: Request) {
               {
                 success: false,
                 error: 'Agent returned invalid JSON',
-                toolCalls: toolCallCount,
-                searchExecuted,
+                metadata: {
+                  toolCalls: toolCallCount,
+                  searchExecuted,
+                  cacheHit: false,
+                },
               },
               { status: 500 }
             );
@@ -287,8 +315,11 @@ export async function POST(req: Request) {
         {
           success: false,
           error: 'Agent did not return a valid response',
-          toolCalls: toolCallCount,
-          searchExecuted,
+          metadata: {
+            toolCalls: toolCallCount,
+            searchExecuted,
+            cacheHit: false,
+          },
         },
         { status: 500 }
       );
@@ -296,11 +327,23 @@ export async function POST(req: Request) {
 
     console.log(`[agent-search] Success! Tool calls: ${toolCallCount}, Result:`, finalResponse);
 
+    // CACHE WRITE: Save fresh data to PostgreSQL for future requests
+    await setCachedAgentMarketData(address, {
+      bedrooms: finalResponse.bedrooms,
+      bathrooms: finalResponse.bathrooms,
+      estimated_value: finalResponse.estimated_value,
+      source: 'agent',
+      toolCalls: toolCallCount,
+    });
+
     return NextResponse.json<AgentSearchResponse>({
       success: true,
       data: finalResponse,
-      toolCalls: toolCallCount,
-      searchExecuted,
+      metadata: {
+        toolCalls: toolCallCount,
+        searchExecuted,
+        cacheHit: false,
+      },
     });
   } catch (error) {
     console.error('[agent-search] Error:', error);

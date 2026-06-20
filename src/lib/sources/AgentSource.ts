@@ -43,7 +43,7 @@ export async function fetchAgentMarketData(address: string): Promise<AIMarketRes
   }
 
   console.log(
-    `[AgentSource] Success! Tool calls: ${result.toolCalls}, Search executed: ${result.searchExecuted}`,
+    `[AgentSource] Success! ${result.metadata?.cacheHit ? '⚡ CACHE HIT' : '🔍 LIVE SEARCH'} - Tool calls: ${result.metadata?.toolCalls || 0}, Search executed: ${result.metadata?.searchExecuted || false}`,
     result.data
   );
 
