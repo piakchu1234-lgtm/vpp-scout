@@ -37,6 +37,7 @@ import { auditVPPCompliance } from '@/lib/vppAuditor';
 import { useProjectState } from '@/hooks/useProjectState';
 import { fetchMarketData, type MarketDataResult } from '@/lib/marketData';
 import { generatePropertyPDF, type DocumentConfig } from '@/lib/pdfGenerator';
+import { fetchAgentMarketData } from '@/lib/sources/AgentSource';
 
 const MELBOURNE_FALLBACK = { lat: -37.8136, lon: 144.9631 };
 const VICMAP_TIMEOUT_MS = 15000;
@@ -201,6 +202,9 @@ function AppCanvas() {
   // Market data state — property attributes from Domain API (beds/baths/cars/etc)
   const [marketData, setMarketData] = useState<MarketDataResult | null>(null);
   const [isLoadingMarket, setIsLoadingMarket] = useState(false);
+
+  // Agent test state
+  const [isTestingAgent, setIsTestingAgent] = useState(false);
 
   // PDF generation state
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
@@ -850,6 +854,42 @@ function AppCanvas() {
               }}
             />
           </div>
+        </div>
+
+        {/* TEST AGENT Button - Top Left (below search) */}
+        <div className="absolute top-32 left-6 z-50">
+          <button
+            onClick={async () => {
+              setIsTestingAgent(true);
+              try {
+                // Real Victorian residential property for live testing
+                const testAddress = addressParam || '45 Kooyong Road, Armadale VIC 3143';
+                console.log('🤖 [TEST AGENT] Starting agentic search for:', testAddress);
+
+                const result = await fetchAgentMarketData(testAddress);
+
+                console.log('🤖 [TEST AGENT] ✅ SUCCESS! Result:', result);
+                console.log('🤖 [TEST AGENT] Bedrooms:', result.bedrooms);
+                console.log('🤖 [TEST AGENT] Bathrooms:', result.bathrooms);
+                console.log('🤖 [TEST AGENT] Estimated Value:', result.estimated_value ? `$${result.estimated_value.toLocaleString()}` : 'null');
+              } catch (error) {
+                console.error('🤖 [TEST AGENT] ❌ FAILED:', error);
+              } finally {
+                setIsTestingAgent(false);
+              }
+            }}
+            disabled={isTestingAgent}
+            className="px-4 py-2 bg-[#E9E778] hover:bg-[#E9E778]/90 disabled:bg-zinc-700 text-[#241F21] font-semibold rounded-lg text-sm transition-colors flex items-center gap-2 shadow-lg"
+          >
+            {isTestingAgent ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Testing Agent...
+              </>
+            ) : (
+              '🤖 TEST AGENT'
+            )}
+          </button>
         </div>
 
         {/* Map Canvas */}
