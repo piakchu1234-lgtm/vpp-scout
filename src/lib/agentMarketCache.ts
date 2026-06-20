@@ -7,7 +7,26 @@
 
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+// Lazy initialization - only create client if DATABASE_URL is configured
+let prisma: PrismaClient | null = null;
+
+function getPrismaClient(): PrismaClient | null {
+  if (prisma) return prisma;
+
+  // Check if DATABASE_URL is configured
+  if (!process.env.DATABASE_URL) {
+    console.warn('[agentMarketCache] DATABASE_URL not configured - caching disabled');
+    return null;
+  }
+
+  try {
+    prisma = new PrismaClient();
+    return prisma;
+  } catch (error) {
+    console.error('[agentMarketCache] Failed to initialize Prisma client:', error);
+    return null;
+  }
+}
 
 // 7-day TTL in milliseconds
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -46,6 +65,12 @@ export function isCacheValid(updatedAt: Date): boolean {
  * Otherwise returns null (cache miss).
  */
 export async function getCachedAgentMarketData(address: string) {
+  const prisma = getPrismaClient();
+  if (!prisma) {
+    console.log('[agentMarketCache] Cache disabled - DATABASE_URL not configured');
+    return null;
+  }
+
   const normalizedAddress = normalizeAddress(address);
 
   try {
@@ -105,6 +130,12 @@ export async function setCachedAgentMarketData(
     toolCalls: number;
   }
 ) {
+  const prisma = getPrismaClient();
+  if (!prisma) {
+    console.log('[agentMarketCache] Cache disabled - skipping write');
+    return;
+  }
+
   const normalizedAddress = normalizeAddress(address);
 
   try {
@@ -146,6 +177,12 @@ export async function setCachedAgentMarketData(
  * Useful for manual cache busting or admin tools.
  */
 export async function invalidateCachedAgentMarketData(address: string) {
+  const prisma = getPrismaClient();
+  if (!prisma) {
+    console.log('[agentMarketCache] Cache disabled - skipping invalidation');
+    return;
+  }
+
   const normalizedAddress = normalizeAddress(address);
 
   try {
@@ -164,6 +201,12 @@ export async function invalidateCachedAgentMarketData(address: string) {
  * Returns total entries, expired entries, and cache hit rate analytics.
  */
 export async function getCacheStats() {
+  const prisma = getPrismaClient();
+  if (!prisma) {
+    console.log('[agentMarketCache] Cache disabled - no stats available');
+    return null;
+  }
+
   try {
     const total = await prisma.agentMarketCache.count();
     const sevenDaysAgo = new Date(Date.now() - CACHE_TTL_MS);
