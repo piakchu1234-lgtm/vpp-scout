@@ -55,7 +55,9 @@ import {
 import { detectEasementConflict } from '@/lib/map/spatialConflict';
 import DAMapLayer from '@/components/map/DAMapLayer';
 import EasementMapLayer from '@/components/map/EasementMapLayer';
+import MassingLayer from '@/components/map/MassingLayer';
 import type { DevelopmentApplication } from '@/types/developmentApplication';
+import type { MassingResult } from '@/lib/massingEngine';
 
 import 'mapbox-gl/dist/mapbox-gl.css';
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
@@ -141,6 +143,8 @@ type Props = {
   showEasements?: boolean;
   onEasementsLoaded?: (easements: any[]) => void;
   onSpatialConflict?: (conflict: { hasConflict: boolean; message?: string }) => void;
+  show3DMassing?: boolean;
+  generatedMassing?: MassingResult | null;
 };
 
 export type MapPreviewHandle = {
@@ -245,6 +249,8 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
       showEasements = false,
       onEasementsLoaded,
       onSpatialConflict,
+      show3DMassing = false,
+      generatedMassing = null,
     },
     ref,
   ) {
@@ -1638,6 +1644,16 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
               lng={lon}
               visible={showEasements}
               onEasementsLoaded={handleEasementsLoaded}
+            />
+          )}
+
+          {/* 3D Building Massing Layer */}
+          {show3DMassing && (
+            <MassingLayer
+              massing={generatedMassing}
+              visible={show3DMassing}
+              opacity={0.7}
+              color="#3B82F6"
             />
           )}
         </Map>

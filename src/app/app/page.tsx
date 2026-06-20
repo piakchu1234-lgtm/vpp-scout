@@ -43,6 +43,14 @@ import { fetchAgentMarketData } from '@/lib/sources/AgentSource';
 import { mergeAgentMarketData, type MergedMarketData } from '@/lib/agentMarketIntegration';
 import { DataSourceBadge } from '@/components/ui/DataSourceBadge';
 import { calculateSSDFeasibility } from '@/lib/planning/ssdCalculator';
+import {
+  generateBuildingEnvelope,
+  getStandardSetbacks,
+  calculateFinancialAnalysis,
+  formatCurrency,
+  formatROI,
+  type MassingResult,
+} from '@/lib/massingEngine';
 import type { AIMarketResponse } from '@/types/property';
 
 const MELBOURNE_FALLBACK = { lat: -37.8136, lon: 144.9631 };
@@ -237,6 +245,7 @@ function AppCanvas() {
   // Map layer visibility state
   const [showEasements, setShowEasements] = useState(false);
   const [showDAs, setShowDAs] = useState(false);
+  const [show3DMassing, setShow3DMassing] = useState(false);
 
   // Multi-parcel selection state for MapControlsToolbar — restored from localStorage on mount
   const [selectedParcels, setSelectedParcels] = useState<ParcelFeature[]>([]);
@@ -729,6 +738,39 @@ function AppCanvas() {
     message?: string;
   }>({ hasConflict: false });
 
+  // 3D Massing generation
+  const generatedMassing = useMemo<MassingResult | null>(() => {
+    if (!show3DMassing || !activeSiteGeometry || !planData?.zoneCode) {
+      return null;
+    }
+
+    // Only support Polygon geometry (not MultiPolygon)
+    if (activeSiteGeometry.type !== 'Polygon') {
+      console.warn('[massingEngine] MultiPolygon not supported for massing generation');
+      return null;
+    }
+
+    const setbacks = getStandardSetbacks(planData.zoneCode);
+    const massing = generateBuildingEnvelope(activeSiteGeometry, setbacks, 60);
+
+    return massing;
+  }, [show3DMassing, activeSiteGeometry, planData?.zoneCode]);
+
+  // Financial analysis for generated massing
+  const financialAnalysis = useMemo(() => {
+    if (!generatedMassing) return null;
+
+    // Use market data estimated value if available
+    const estimatedValue = mergedMarketData?.estimatedValue ?? undefined;
+
+    return calculateFinancialAnalysis(
+      generatedMassing.floorArea,
+      2500, // $2500/sqm construction cost
+      estimatedValue,
+      15 // 15% ROI threshold
+    );
+  }, [generatedMassing, mergedMarketData]);
+
   // DA modal state
   const [selectedDA, setSelectedDA] = useState<any>(null);
   const [showDAModal, setShowDAModal] = useState(false);
@@ -961,6 +1003,8 @@ function AppCanvas() {
           onToggleEasements={setShowEasements}
           showDAs={showDAs}
           onToggleDAs={setShowDAs}
+          show3DMassing={show3DMassing}
+          onToggle3DMassing={setShow3DMassing}
         />
       )}
 
@@ -997,6 +1041,8 @@ function AppCanvas() {
                 showEasements={showEasements}
                 onEasementsLoaded={setEasementData}
                 onSpatialConflict={setSpatialConflict}
+                show3DMassing={show3DMassing}
+                generatedMassing={generatedMassing}
                 className="h-full w-full"
               />
               <MapControlsToolbar
@@ -1229,6 +1275,65 @@ function AppCanvas() {
                           )}
                         </p>
                       </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Financial Analysis (3D Massing) */}
+                {generatedMassing && financialAnalysis && (
+                  <div className="mt-3 pt-3 border-t border-zinc-700">
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+                      Financial Analysis
+                    </h4>
+                    <div className="space-y-2">
+                      {/* Generated Floor Area */}
+                      <div className="flex justify-between items-center py-1.5">
+                        <span className="text-xs text-zinc-400">Generated Envelope</span>
+                        <span className="text-sm font-semibold text-white">
+                          {generatedMassing.floorArea.toFixed(1)}m²
+                        </span>
+                      </div>
+
+                      {/* Construction Cost */}
+                      <div className="flex justify-between items-center py-1.5">
+                        <span className="text-xs text-zinc-400">Est. Construction</span>
+                        <span className="text-sm font-semibold text-amber-400">
+                          {formatCurrency(financialAnalysis.constructionCost)}
+                        </span>
+                      </div>
+
+                      {/* ROI (if market data available) */}
+                      {financialAnalysis.roi !== undefined && (
+                        <>
+                          <div className="flex justify-between items-center py-1.5">
+                            <span className="text-xs text-zinc-400">Est. End Value</span>
+                            <span className="text-sm font-semibold text-white">
+                              {formatCurrency(financialAnalysis.endValue || 0)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center py-1.5">
+                            <span className="text-xs text-zinc-400">Est. Profit</span>
+                            <span className={`text-sm font-bold ${
+                              (financialAnalysis.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'
+                            }`}>
+                              {formatCurrency(financialAnalysis.profit || 0)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center py-1.5 bg-zinc-800/50 px-2 rounded">
+                            <span className="text-xs font-semibold text-zinc-300">ROI</span>
+                            <span className={`text-base font-bold ${
+                              financialAnalysis.isViable ? 'text-green-400' : 'text-red-400'
+                            }`}>
+                              {formatROI(financialAnalysis.roi)}
+                            </span>
+                          </div>
+                        </>
+                      )}
+
+                      {/* Cost per sqm note */}
+                      <p className="text-xs text-zinc-500 italic mt-2">
+                        Based on ${financialAnalysis.costPerSqm}/m² construction cost
+                      </p>
                     </div>
                   </div>
                 )}

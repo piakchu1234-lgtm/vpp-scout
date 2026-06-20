@@ -26,6 +26,8 @@ type PropertySidePanelProps = {
   onToggleEasements?: (show: boolean) => void;
   showDAs?: boolean;
   onToggleDAs?: (show: boolean) => void;
+  show3DMassing?: boolean;
+  onToggle3DMassing?: (show: boolean) => void;
 };
 
 export default function PropertySidePanel({
@@ -43,6 +45,8 @@ export default function PropertySidePanel({
   onToggleEasements,
   showDAs = false,
   onToggleDAs,
+  show3DMassing = false,
+  onToggle3DMassing,
 }: PropertySidePanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [overlaysExpanded, setOverlaysExpanded] = useState(true);
@@ -219,6 +223,24 @@ export default function PropertySidePanel({
                   type="checkbox"
                   checked={showDAs}
                   onChange={(e) => onToggleDAs(e.target.checked)}
+                  className="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-[#E9E778] focus:ring-2 focus:ring-[#E9E778] focus:ring-offset-0"
+                />
+              </label>
+            )}
+
+            {/* 3D Massing Toggle */}
+            {onToggle3DMassing && (
+              <label className="flex items-center justify-between cursor-pointer group">
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-3 bg-blue-500/30 border border-blue-500 rounded-sm"></div>
+                  <span className="text-sm text-zinc-300 group-hover:text-white transition-colors">
+                    3D Building Envelope
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={show3DMassing}
+                  onChange={(e) => onToggle3DMassing(e.target.checked)}
                   className="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-[#E9E778] focus:ring-2 focus:ring-[#E9E778] focus:ring-offset-0"
                 />
               </label>
