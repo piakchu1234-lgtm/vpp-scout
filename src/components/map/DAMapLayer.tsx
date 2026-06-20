@@ -25,6 +25,9 @@ interface DAMapLayerProps {
 
   /** Callback when DA is clicked */
   onDAClick?: (da: DevelopmentApplication) => void;
+
+  /** Callback when DAs are loaded */
+  onDAsLoaded?: (das: DevelopmentApplication[]) => void;
 }
 
 export default function DAMapLayer({
@@ -33,6 +36,7 @@ export default function DAMapLayer({
   radius = 1000,
   visible,
   onDAClick,
+  onDAsLoaded,
 }: DAMapLayerProps) {
   const [daData, setDaData] = useState<DevelopmentApplication[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -55,21 +59,24 @@ export default function DAMapLayer({
 
         if (result.success && result.applications) {
           setDaData(result.applications);
+          onDAsLoaded?.(result.applications);
           console.log(`[DAMapLayer] Loaded ${result.applications.length} DAs`);
         } else {
           console.error('[DAMapLayer] Failed to load DAs:', result.error);
           setDaData([]);
+          onDAsLoaded?.([]);
         }
       } catch (error) {
         console.error('[DAMapLayer] Fetch error:', error);
         setDaData([]);
+        onDAsLoaded?.([]);
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchDAs();
-  }, [lat, lng, radius, visible]);
+  }, [lat, lng, radius, visible, onDAsLoaded]);
 
   if (!visible || daData.length === 0) {
     return null;

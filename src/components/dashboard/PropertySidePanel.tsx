@@ -10,6 +10,7 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, FileDown, Loader2, Search } from 'lucide-react';
 import type { VicPlanData } from '@/lib/vicPlanApi';
+import * as turf from '@turf/turf';
 
 type PropertySidePanelProps = {
   address: string | null;
@@ -28,6 +29,9 @@ type PropertySidePanelProps = {
   onToggleDAs?: (show: boolean) => void;
   show3DMassing?: boolean;
   onToggle3DMassing?: (show: boolean) => void;
+  daData?: any[]; // Array of fetched DAs
+  propertyLat?: number;
+  propertyLng?: number;
 };
 
 export default function PropertySidePanel({
@@ -47,6 +51,9 @@ export default function PropertySidePanel({
   onToggleDAs,
   show3DMassing = false,
   onToggle3DMassing,
+  daData = [],
+  propertyLat,
+  propertyLng,
 }: PropertySidePanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [overlaysExpanded, setOverlaysExpanded] = useState(true);
@@ -56,6 +63,49 @@ export default function PropertySidePanel({
       onSearch?.(searchQuery);
     }
   };
+
+  // Calculate DA statistics
+  const daStats = React.useMemo(() => {
+    if (!daData || daData.length === 0) {
+      return null;
+    }
+
+    // Status breakdown
+    const approved = daData.filter((da) => da.status === 'approved').length;
+    const pending = daData.filter((da) => da.status === 'pending').length;
+    const refused = daData.filter((da) => da.status === 'refused').length;
+
+    // Proximity breakdown (if property coordinates available)
+    let within500m = 0;
+    let between500and1km = 0;
+
+    if (propertyLat && propertyLng) {
+      const propertyPoint = turf.point([propertyLng, propertyLat]);
+
+      daData.forEach((da) => {
+        if (da.lat && da.lng) {
+          const daPoint = turf.point([da.lng, da.lat]);
+          const distanceKm = turf.distance(propertyPoint, daPoint, { units: 'kilometers' });
+          const distanceM = distanceKm * 1000;
+
+          if (distanceM <= 500) {
+            within500m++;
+          } else if (distanceM <= 1000) {
+            between500and1km++;
+          }
+        }
+      });
+    }
+
+    return {
+      total: daData.length,
+      approved,
+      pending,
+      refused,
+      within500m,
+      between500and1km,
+    };
+  }, [daData, propertyLat, propertyLng]);
 
   return (
     <div className="fixed left-20 top-0 h-screen w-[380px] bg-[#0A0A0A] border-r border-zinc-800 overflow-y-auto z-40">
@@ -208,24 +258,65 @@ export default function PropertySidePanel({
 
             {/* Development Applications Toggle */}
             {onToggleDAs && (
-              <label className="flex items-center justify-between cursor-pointer group">
-                <div className="flex items-center gap-2">
-                  <div className="flex gap-1">
-                    <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                    <div className="w-2 h-2 rounded-full bg-amber-500"></div>
-                    <div className="w-2 h-2 rounded-full bg-red-500"></div>
+              <>
+                <label className="flex items-center justify-between cursor-pointer group">
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-1">
+                      <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                      <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                      <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                    </div>
+                    <span className="text-sm text-zinc-300 group-hover:text-white transition-colors">
+                      Local DAs (1km)
+                    </span>
                   </div>
-                  <span className="text-sm text-zinc-300 group-hover:text-white transition-colors">
-                    Local DAs (1km)
-                  </span>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={showDAs}
-                  onChange={(e) => onToggleDAs(e.target.checked)}
-                  className="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-[#E9E778] focus:ring-2 focus:ring-[#E9E778] focus:ring-offset-0"
-                />
-              </label>
+                  <input
+                    type="checkbox"
+                    checked={showDAs}
+                    onChange={(e) => onToggleDAs(e.target.checked)}
+                    className="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-[#E9E778] focus:ring-2 focus:ring-[#E9E778] focus:ring-offset-0"
+                  />
+                </label>
+
+                {/* DA Statistics Panel */}
+                {showDAs && daStats && (
+                  <div className="ml-6 mt-2 p-3 bg-zinc-900/95 backdrop-blur-sm border border-zinc-800 rounded-lg">
+                    {/* Status Breakdown */}
+                    <div className="flex items-center justify-between text-xs mb-2">
+                      <span className="text-zinc-400">Total:</span>
+                      <span className="font-semibold text-white">{daStats.total}</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs mb-3">
+                      <div className="flex items-center gap-1">
+                        <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                        <span className="text-zinc-400">{daStats.approved}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                        <span className="text-zinc-400">{daStats.pending}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                        <span className="text-zinc-400">{daStats.refused}</span>
+                      </div>
+                    </div>
+
+                    {/* Proximity Breakdown */}
+                    {propertyLat && propertyLng && (
+                      <div className="pt-2 border-t border-zinc-800">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-zinc-400">Within 500m:</span>
+                          <span className="font-semibold text-blue-400">{daStats.within500m}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs mt-1">
+                          <span className="text-zinc-400">500m–1km:</span>
+                          <span className="font-semibold text-zinc-300">{daStats.between500and1km}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
             )}
 
             {/* 3D Massing Toggle */}

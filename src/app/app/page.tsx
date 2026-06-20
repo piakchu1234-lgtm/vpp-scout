@@ -774,6 +774,7 @@ function AppCanvas() {
   // DA modal state
   const [selectedDA, setSelectedDA] = useState<any>(null);
   const [showDAModal, setShowDAModal] = useState(false);
+  const [daData, setDAData] = useState<any[]>([]);
 
   const handleDAClick = (da: any) => {
     setSelectedDA(da);
@@ -1005,6 +1006,9 @@ function AppCanvas() {
           onToggleDAs={setShowDAs}
           show3DMassing={show3DMassing}
           onToggle3DMassing={setShow3DMassing}
+          daData={daData}
+          propertyLat={lat}
+          propertyLng={lon}
         />
       )}
 
@@ -1038,6 +1042,7 @@ function AppCanvas() {
                 vppAuditResult={vppAuditResult}
                 showDAs={showDAs}
                 onDAClick={handleDAClick}
+                onDAsLoaded={setDAData}
                 showEasements={showEasements}
                 onEasementsLoaded={setEasementData}
                 onSpatialConflict={setSpatialConflict}

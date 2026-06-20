@@ -140,6 +140,7 @@ type Props = {
   } | null;
   showDAs?: boolean;
   onDAClick?: (da: DevelopmentApplication) => void;
+  onDAsLoaded?: (das: DevelopmentApplication[]) => void;
   showEasements?: boolean;
   onEasementsLoaded?: (easements: any[]) => void;
   onSpatialConflict?: (conflict: { hasConflict: boolean; message?: string }) => void;
@@ -246,6 +247,7 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
       vppAuditResult,
       showDAs = false,
       onDAClick,
+      onDAsLoaded,
       showEasements = false,
       onEasementsLoaded,
       onSpatialConflict,
@@ -1634,6 +1636,7 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
               radius={1000}
               visible={showDAs}
               onDAClick={onDAClick}
+              onDAsLoaded={onDAsLoaded}
             />
           )}
 
