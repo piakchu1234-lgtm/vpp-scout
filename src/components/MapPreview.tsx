@@ -52,9 +52,11 @@ import {
   formatDistance,
   formatArea,
 } from '@/lib/map/measurementUtils';
+import DAMapLayer from '@/components/map/DAMapLayer';
+import EasementMapLayer from '@/components/map/EasementMapLayer';
+import type { DevelopmentApplication } from '@/types/developmentApplication';
 
 import 'mapbox-gl/dist/mapbox-gl.css';
-import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
@@ -133,6 +135,10 @@ type Props = {
     tier: string;
     noThirdPartyAppeals: boolean;
   } | null;
+  showDAs?: boolean;
+  onDAClick?: (da: DevelopmentApplication) => void;
+  showEasements?: boolean;
+  onEasementsLoaded?: (easements: any[]) => void;
 };
 
 export type MapPreviewHandle = {
@@ -232,6 +238,10 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
       zoneCode,
       overlayCodes = [],
       vppAuditResult,
+      showDAs = false,
+      onDAClick,
+      showEasements = false,
+      onEasementsLoaded,
     },
     ref,
   ) {
@@ -1568,6 +1578,27 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
                 </div>
               </div>
             </Popup>
+          )}
+
+          {/* DA Map Layer - Development Applications */}
+          {showDAs && (
+            <DAMapLayer
+              lat={lat}
+              lng={lon}
+              radius={1000}
+              visible={showDAs}
+              onDAClick={onDAClick}
+            />
+          )}
+
+          {/* Easement Map Layer */}
+          {showEasements && (
+            <EasementMapLayer
+              lat={lat}
+              lng={lon}
+              visible={showEasements}
+              onEasementsLoaded={onEasementsLoaded}
+            />
           )}
         </Map>
 

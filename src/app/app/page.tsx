@@ -19,6 +19,7 @@ import MapControlsToolbar from '@/components/MapControlsToolbar';
 import PropertySidePanel from '@/components/dashboard/PropertySidePanel';
 import InsightPanel from '@/components/dashboard/InsightPanel';
 import DocumentConfigurator from '@/components/dashboard/DocumentConfigurator';
+import DADetailsModal from '@/components/modal/DADetailsModal';
 import { describeOverlayCode, type PlanningOverlay } from '@/components/dashboard/PlanningCard';
 import CollapsibleSidebar from '@/components/dashboard/CollapsibleSidebar';
 import { usePropertyData } from '@/hooks/usePropertyData';
@@ -728,6 +729,15 @@ function AppCanvas() {
     message?: string;
   }>({ hasConflict: false });
 
+  // DA modal state
+  const [selectedDA, setSelectedDA] = useState<any>(null);
+  const [showDAModal, setShowDAModal] = useState(false);
+
+  const handleDAClick = (da: any) => {
+    setSelectedDA(da);
+    setShowDAModal(true);
+  };
+
   // SaaS CTA handlers
   const handleSaveToProject = () => {
     projectState.saveState(selectedParcels, aiInsight);
@@ -982,6 +992,10 @@ function AppCanvas() {
                 zoneCode={planData?.zoneCode}
                 overlayCodes={planData?.overlayRaw}
                 vppAuditResult={vppAuditResult}
+                showDAs={showDAs}
+                onDAClick={handleDAClick}
+                showEasements={showEasements}
+                onEasementsLoaded={setEasementData}
                 className="h-full w-full"
               />
               <MapControlsToolbar
@@ -1276,6 +1290,13 @@ function AppCanvas() {
           </div>
         </div>
       ) : null}
+
+      {/* DA Details Modal */}
+      <DADetailsModal
+        da={selectedDA}
+        isOpen={showDAModal}
+        onClose={() => setShowDAModal(false)}
+      />
     </div>
   );
 }
