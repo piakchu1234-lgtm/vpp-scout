@@ -22,6 +22,10 @@ type PropertySidePanelProps = {
   onSearch?: (query: string) => void;
   onTestAgent?: () => void;
   isTestingAgent?: boolean;
+  showEasements?: boolean;
+  onToggleEasements?: (show: boolean) => void;
+  showDAs?: boolean;
+  onToggleDAs?: (show: boolean) => void;
 };
 
 export default function PropertySidePanel({
@@ -35,6 +39,10 @@ export default function PropertySidePanel({
   onSearch,
   onTestAgent,
   isTestingAgent = false,
+  showEasements = false,
+  onToggleEasements,
+  showDAs = false,
+  onToggleDAs,
 }: PropertySidePanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [overlaysExpanded, setOverlaysExpanded] = useState(true);
@@ -170,7 +178,55 @@ export default function PropertySidePanel({
           )}
         </div>
 
-        {/* Additional Statutory Data (Future: Constraints, Easements, etc.) */}
+        {/* Map Layers Section */}
+        <div className="bg-[#05060E]/80 backdrop-blur-xl border border-white/10 rounded-xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-zinc-800">
+            <h3 className="text-sm font-semibold text-white">Map Layers</h3>
+          </div>
+          <div className="px-4 py-3 space-y-3">
+            {/* Easements Toggle */}
+            {onToggleEasements && (
+              <label className="flex items-center justify-between cursor-pointer group">
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-0.5 bg-red-500 rounded" style={{ borderTop: '2px dashed' }}></div>
+                  <span className="text-sm text-zinc-300 group-hover:text-white transition-colors">
+                    Easements
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={showEasements}
+                  onChange={(e) => onToggleEasements(e.target.checked)}
+                  className="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-[#E9E778] focus:ring-2 focus:ring-[#E9E778] focus:ring-offset-0"
+                />
+              </label>
+            )}
+
+            {/* Development Applications Toggle */}
+            {onToggleDAs && (
+              <label className="flex items-center justify-between cursor-pointer group">
+                <div className="flex items-center gap-2">
+                  <div className="flex gap-1">
+                    <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                    <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                    <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                  </div>
+                  <span className="text-sm text-zinc-300 group-hover:text-white transition-colors">
+                    Local DAs (1km)
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={showDAs}
+                  onChange={(e) => onToggleDAs(e.target.checked)}
+                  className="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-[#E9E778] focus:ring-2 focus:ring-[#E9E778] focus:ring-offset-0"
+                />
+              </label>
+            )}
+          </div>
+        </div>
+
+        {/* Additional Statutory Data (Future: Constraints, etc.) */}
         <div className="text-xs text-zinc-500 italic">
           Additional statutory data sections will appear here.
         </div>

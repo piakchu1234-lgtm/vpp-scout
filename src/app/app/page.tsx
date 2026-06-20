@@ -233,6 +233,10 @@ function AppCanvas() {
   // Derive report language from UI language state - unified language control
   const reportLanguage = language === 'en' ? 'English' : 'Chinese';
 
+  // Map layer visibility state
+  const [showEasements, setShowEasements] = useState(false);
+  const [showDAs, setShowDAs] = useState(false);
+
   // Multi-parcel selection state for MapControlsToolbar — restored from localStorage on mount
   const [selectedParcels, setSelectedParcels] = useState<ParcelFeature[]>([]);
 
@@ -717,6 +721,13 @@ function AppCanvas() {
     });
   }, [landSizeM2, planData?.zoneCode, planData?.overlayRaw, effectiveLandSizeM2]);
 
+  // Easement data and spatial conflict detection
+  const [easementData, setEasementData] = useState<any[]>([]);
+  const [spatialConflict, setSpatialConflict] = useState<{
+    hasConflict: boolean;
+    message?: string;
+  }>({ hasConflict: false });
+
   // SaaS CTA handlers
   const handleSaveToProject = () => {
     projectState.saveState(selectedParcels, aiInsight);
@@ -936,6 +947,10 @@ function AppCanvas() {
             }
           }}
           isTestingAgent={isTestingAgent}
+          showEasements={showEasements}
+          onToggleEasements={setShowEasements}
+          showDAs={showDAs}
+          onToggleDAs={setShowDAs}
         />
       )}
 
@@ -1178,6 +1193,18 @@ function AppCanvas() {
                     }`}>
                       {ssdFeasibility.flags[0]}
                     </p>
+                  </div>
+                )}
+
+                {/* Spatial Conflict Warning */}
+                {spatialConflict.hasConflict && (
+                  <div className="mt-3 pt-2 border-t border-zinc-700">
+                    <div className="flex items-start gap-2 px-3 py-2 bg-red-500/10 border border-red-500/30 rounded">
+                      <span className="text-red-400 text-xs font-bold">⚠️</span>
+                      <p className="text-xs text-red-400 flex-1">
+                        {spatialConflict.message}
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>
