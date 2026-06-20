@@ -179,3 +179,73 @@ model AgentMarketCache {
 // 2. Geometry Column: Consider native PostGIS geometry type for advanced spatial queries
 // 3. Indexes: Add GiST index on geometry for spatial performance if using native PostGIS
 // 4. Price Storage: Stored as cents (Int) to avoid floating-point precision issues
+
+// ==============================================================================
+// PROPERTY PARCEL MODEL - Reverse Search Engine (PostGIS-optimized)
+// ==============================================================================
+
+model PropertyParcel {
+  // PRIMARY IDENTIFIERS
+  id  String @id @default(cuid())
+  pfi String @unique // Parcel Feature Identifier (Vicmap)
+
+  // SPATIAL GEOMETRY (Native PostGIS)
+  geometry Unsupported("geometry(Polygon, 4326)") // SRID 4326 = WGS84
+
+  // CADASTRAL ATTRIBUTES
+  lotArea    Float   // Square meters
+  lotPlan    String? @db.VarChar(50)
+  address    String  @db.VarChar(500)
+  suburb     String  @db.VarChar(100)
+  postcode   String  @db.VarChar(10)
+  lga        String? @db.VarChar(100) // Local Government Area
+  centroidX  Decimal @db.Decimal(10, 7) // Longitude (for quick lookups)
+  centroidY  Decimal @db.Decimal(10, 7) // Latitude (for quick lookups)
+
+  // PLANNING FRAMEWORK
+  zoneCode      String   @db.VarChar(50) // Primary zone (e.g., "GRZ1")
+  overlays      String[] // Planning overlays (e.g., ["HO123", "BMO"])
+  hasHeritage   Boolean  @default(false) // Quick filter: Has Heritage Overlay
+  hasBushfire   Boolean  @default(false) // Quick filter: Has Bushfire Management Overlay
+  hasFlood      Boolean  @default(false) // Quick filter: Has Flood/Inundation Overlay
+
+  // SITE FEASIBILITY (Pre-calculated for fast filtering)
+  ssdEligible      Boolean @default(false) // ≥300m² + eligible zone + no restrictive overlays
+  frontageEstimate Float? // Estimated street frontage in meters
+
+  // DATA FRESHNESS
+  lastUpdated DateTime @default(now())
+  dataSource  String   @db.VarChar(50) // "vicmap" | "manual"
+
+  // METADATA
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // INDEXES
+  @@index([zoneCode])
+  @@index([suburb, postcode])
+  @@index([lotArea])
+  @@index([ssdEligible])
+  @@index([hasHeritage])
+  @@index([lastUpdated])
+  @@map("property_parcels")
+}
+
+// ==============================================================================
+// POSTGIS SETUP INSTRUCTIONS
+// ==============================================================================
+// 1. Enable PostGIS extension:
+//    CREATE EXTENSION IF NOT EXISTS postgis;
+//
+// 2. Create spatial index (after migration):
+//    CREATE INDEX property_parcels_geometry_idx ON property_parcels USING GIST (geometry);
+//
+// 3. Verify PostGIS installation:
+//    SELECT PostGIS_version();
+//
+// 4. Example spatial query:
+//    SELECT * FROM property_parcels
+//    WHERE ST_Intersects(geometry, ST_MakeEnvelope(144.9, -37.9, 145.0, -37.8, 4326))
+//    AND lot_area >= 600
+//    AND zone_code = 'GRZ1';
+
