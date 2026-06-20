@@ -52,6 +52,7 @@ import {
   formatDistance,
   formatArea,
 } from '@/lib/map/measurementUtils';
+import { detectEasementConflict } from '@/lib/map/spatialConflict';
 import DAMapLayer from '@/components/map/DAMapLayer';
 import EasementMapLayer from '@/components/map/EasementMapLayer';
 import type { DevelopmentApplication } from '@/types/developmentApplication';
@@ -139,6 +140,7 @@ type Props = {
   onDAClick?: (da: DevelopmentApplication) => void;
   showEasements?: boolean;
   onEasementsLoaded?: (easements: any[]) => void;
+  onSpatialConflict?: (conflict: { hasConflict: boolean; message?: string }) => void;
 };
 
 export type MapPreviewHandle = {
@@ -242,6 +244,7 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
       onDAClick,
       showEasements = false,
       onEasementsLoaded,
+      onSpatialConflict,
     },
     ref,
   ) {
@@ -288,6 +291,15 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
       value: string;
       featureId: string;
     } | null>(null);
+
+    // Easement data for spatial conflict detection
+    const [loadedEasements, setLoadedEasements] = useState<EasementData[]>([]);
+
+    // Handle easement data loading
+    const handleEasementsLoaded = (easements: EasementData[]) => {
+      setLoadedEasements(easements);
+      onEasementsLoaded?.(easements);
+    };
 
     // Sync external drawMode prop with internal state
     useEffect(() => {
@@ -419,6 +431,15 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
                 value: formatArea(areaM2),
                 featureId: feature.id,
               });
+
+              // Spatial conflict detection with easements
+              if (loadedEasements.length > 0 && onSpatialConflict) {
+                const conflict = detectEasementConflict(feature, loadedEasements);
+                onSpatialConflict({
+                  hasConflict: conflict.hasConflict,
+                  message: conflict.warningMessage,
+                });
+              }
             } else if (feature.geometry.type === 'LineString') {
               const distance = calculateLineDistance(feature);
               setDrawnAreaM2(null);
@@ -430,6 +451,11 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
                 value: formatDistance(distance),
                 featureId: feature.id,
               });
+
+              // Clear conflict for line strings
+              if (onSpatialConflict) {
+                onSpatialConflict({ hasConflict: false });
+              }
             }
           }
         }
@@ -449,6 +475,15 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
                 value: formatArea(areaM2),
                 featureId: feature.id,
               });
+
+              // Re-check spatial conflict on polygon update
+              if (loadedEasements.length > 0 && onSpatialConflict) {
+                const conflict = detectEasementConflict(feature, loadedEasements);
+                onSpatialConflict({
+                  hasConflict: conflict.hasConflict,
+                  message: conflict.warningMessage,
+                });
+              }
             } else if (feature.geometry.type === 'LineString') {
               const distance = calculateLineDistance(feature);
 
@@ -466,6 +501,11 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
           setDrawnAreaM2(null);
           if (onDrawnAreaChange) onDrawnAreaChange(null);
           setMeasurement(null);
+
+          // Clear spatial conflict when drawing is deleted
+          if (onSpatialConflict) {
+            onSpatialConflict({ hasConflict: false });
+          }
         }
 
         map.on('draw.create', handleDrawCreate);
@@ -1597,7 +1637,7 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
               lat={lat}
               lng={lon}
               visible={showEasements}
-              onEasementsLoaded={onEasementsLoaded}
+              onEasementsLoaded={handleEasementsLoaded}
             />
           )}
         </Map>

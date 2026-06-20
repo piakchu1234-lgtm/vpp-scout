@@ -996,6 +996,7 @@ function AppCanvas() {
                 onDAClick={handleDAClick}
                 showEasements={showEasements}
                 onEasementsLoaded={setEasementData}
+                onSpatialConflict={setSpatialConflict}
                 className="h-full w-full"
               />
               <MapControlsToolbar
@@ -1213,11 +1214,21 @@ function AppCanvas() {
                 {/* Spatial Conflict Warning */}
                 {spatialConflict.hasConflict && (
                   <div className="mt-3 pt-2 border-t border-zinc-700">
-                    <div className="flex items-start gap-2 px-3 py-2 bg-red-500/10 border border-red-500/30 rounded">
-                      <span className="text-red-400 text-xs font-bold">⚠️</span>
-                      <p className="text-xs text-red-400 flex-1">
-                        {spatialConflict.message}
-                      </p>
+                    <div className="flex items-start gap-2 px-3 py-2.5 bg-red-500/10 border border-red-500/30 rounded-lg">
+                      <span className="text-red-400 text-base font-bold mt-0.5">⚠️</span>
+                      <div className="flex-1">
+                        <p className="text-xs text-red-400 font-bold mb-1">
+                          Spatial Conflict Detected
+                        </p>
+                        <p className="text-xs text-red-300 leading-relaxed">
+                          Proposed footprint geometry overlaps an active easement. Clearance or alternative siting required under VPP Clause 52.02 (Easements) and Clause 56.03 (Site Layout).
+                          {spatialConflict.message && (
+                            <span className="block mt-1 text-red-200">
+                              {spatialConflict.message.replace('⚠️ Spatial Conflict: ', '')}
+                            </span>
+                          )}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 )}
