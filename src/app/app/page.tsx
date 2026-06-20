@@ -39,6 +39,7 @@ import { fetchMarketData, type MarketDataResult } from '@/lib/marketData';
 import { generatePropertyPDF, type DocumentConfig } from '@/lib/pdfGenerator';
 import { fetchAgentMarketData } from '@/lib/sources/AgentSource';
 import { mergeAgentMarketData, type MergedMarketData } from '@/lib/agentMarketIntegration';
+import { DataSourceBadge } from '@/components/ui/DataSourceBadge';
 import type { AIMarketResponse } from '@/types/property';
 
 const MELBOURNE_FALLBACK = { lat: -37.8136, lon: 144.9631 };
@@ -1045,12 +1046,25 @@ function AppCanvas() {
 
             {/* Card 1: Market Performance */}
             <div className="flex-1 min-w-[320px] max-w-md bg-[#05060E]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-5 text-white shadow-2xl">
-              <h3 className="text-xs font-semibold tracking-wider uppercase text-zinc-400 mb-3">Market Performance</h3>
-              {marketData?.bedrooms ? (
-                <MarketBarChart bedrooms={marketData.bedrooms} bathrooms={marketData.bathrooms} carspaces={marketData.carspaces} />
-              ) : (
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xs font-semibold tracking-wider uppercase text-zinc-400">Market Performance</h3>
+                {mergedMarketData.source !== 'none' && !isLoadingAgent && !isLoadingMarket && (
+                  <DataSourceBadge source={mergedMarketData.source} language={language} />
+                )}
+              </div>
+              {(isLoadingAgent || isLoadingMarket) ? (
                 <div className="h-[180px] flex items-center justify-center text-sm text-zinc-500">
                   Aggregating market data...
+                </div>
+              ) : mergedMarketData.bedrooms !== null ? (
+                <MarketBarChart
+                  bedrooms={mergedMarketData.bedrooms}
+                  bathrooms={mergedMarketData.bathrooms ?? 0}
+                  carspaces={marketData?.carspaces ?? 0}
+                />
+              ) : (
+                <div className="h-[180px] flex items-center justify-center text-sm text-zinc-500">
+                  No market data available
                 </div>
               )}
             </div>
