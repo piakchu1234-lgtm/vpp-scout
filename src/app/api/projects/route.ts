@@ -1,11 +1,12 @@
 /**
  * Projects API - GET (list) and POST (create)
  *
- * GET /api/projects - List all saved projects
- * POST /api/projects - Create new project
+ * GET /api/projects - List all saved projects for authenticated user
+ * POST /api/projects - Create new project for authenticated user
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
@@ -13,10 +14,20 @@ export const runtime = 'nodejs';
 
 /**
  * GET /api/projects
- * List all saved projects (with pagination and filtering)
+ * List all saved projects for the authenticated user (with pagination and filtering)
  */
 export async function GET(request: NextRequest) {
   try {
+    // Get authenticated user ID from Clerk
+    const { userId } = await auth();
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Unauthorized - Please sign in' },
+        { status: 401 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
 
     // Pagination
@@ -25,16 +36,13 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * limit;
 
     // Filters
-    const userId = searchParams.get('userId');
     const tag = searchParams.get('tag');
     const search = searchParams.get('search');
 
-    // Build where clause
-    const where: any = {};
-
-    if (userId) {
-      where.userId = userId;
-    }
+    // Build where clause - ALWAYS filter by authenticated user ID
+    const where: any = {
+      userId, // CRITICAL: Only return projects belonging to this user
+    };
 
     if (tag) {
       where.tags = {
@@ -50,7 +58,7 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    // Fetch projects
+    // Fetch projects - filtered by userId
     const [projects, total] = await Promise.all([
       prisma.savedProject.findMany({
         where,
@@ -103,10 +111,20 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/projects
- * Create new saved project
+ * Create new saved project for authenticated user
  */
 export async function POST(request: NextRequest) {
   try {
+    // Get authenticated user ID from Clerk
+    const { userId } = await auth();
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Unauthorized - Please sign in' },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
 
     const {
@@ -128,7 +146,6 @@ export async function POST(request: NextRequest) {
       projectName,
       notes,
       tags,
-      userId,
     } = body;
 
     // Validation

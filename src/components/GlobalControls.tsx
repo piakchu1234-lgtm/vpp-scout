@@ -2,6 +2,8 @@
  * GLOBAL CONTROLS HEADER
  *
  * Floating top-right header overlay with:
+ * - User profile (Clerk UserButton)
+ * - Projects navigation
  * - Bilingual language toggle (EN/中文)
  * - Light/Dark mode toggle
  * - Semi-transparent backdrop
@@ -14,6 +16,7 @@ import { useTheme } from 'next-themes';
 import { Sun, Moon, Languages, FolderOpen } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { UserButton } from '@clerk/nextjs';
 
 export default function GlobalControls() {
   const { theme, setTheme } = useTheme();
@@ -30,6 +33,7 @@ export default function GlobalControls() {
     // Return placeholder while mounting to prevent layout shift
     return (
       <div className="flex items-center gap-2">
+        <div className="w-10 h-10 bg-zinc-800 border border-zinc-700 rounded-full animate-pulse" />
         <div className="w-20 h-10 bg-zinc-800 border border-zinc-700 rounded-lg animate-pulse" />
         <div className="w-10 h-10 bg-zinc-800 border border-zinc-700 rounded-lg animate-pulse" />
       </div>
@@ -54,6 +58,19 @@ export default function GlobalControls() {
 
   return (
     <>
+      {/* User Profile Button (Clerk) */}
+      <div className="flex items-center">
+        <UserButton
+          appearance={{
+            elements: {
+              avatarBox: 'w-10 h-10',
+              userButtonPopoverCard: 'bg-zinc-900 border border-zinc-800',
+              userButtonPopoverActionButton: 'hover:bg-zinc-800',
+            }
+          }}
+        />
+      </div>
+
       {/* Projects Button */}
       <button
         onClick={() => router.push('/projects')}

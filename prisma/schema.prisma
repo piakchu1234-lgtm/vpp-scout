@@ -255,8 +255,8 @@ model PropertyParcel {
 
 model SavedProject {
   // PRIMARY IDENTIFIERS
-  id     String  @id @default(cuid())
-  userId String? // Future: Link to user accounts
+  id     String @id @default(cuid())
+  userId String // REQUIRED: Clerk user ID for data isolation
 
   // PROPERTY IDENTIFIERS
   address String  @db.VarChar(500)

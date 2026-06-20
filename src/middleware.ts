@@ -1,13 +1,28 @@
-import { clerkMiddleware } from '@clerk/nextjs/server';
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
-// All routes are public by default. clerkMiddleware() still needs to run
-// on every request so server helpers like `auth()` and `currentUser()`
-// (used in /api/checkout, /settings, etc.) can read the session — without
-// it, Clerk throws "auth() was called but Clerk can't detect usage of
-// clerkMiddleware()". Add `auth.protect()` calls inside this callback if
-// specific routes need to be gated.
+// Define protected routes that require authentication
+const isProtectedRoute = createRouteMatcher([
+  '/app(.*)',
+  '/projects(.*)',
+  '/settings(.*)',
+  '/api/projects(.*)',
+  '/api/site-finder(.*)',
+  '/api/ai-analyst(.*)',
+  '/api/agent-search(.*)',
+  '/api/assess-ssd(.*)',
+  '/api/development-applications(.*)',
+  '/api/insight(.*)',
+  '/api/market-data(.*)',
+  '/api/vpp-agent(.*)',
+]);
+
 export default clerkMiddleware(async (auth, req) => {
+  // Protect routes that require authentication
+  if (isProtectedRoute(req)) {
+    await auth.protect();
+  }
+
   const response = NextResponse.next();
 
   // Permissive CSP headers to allow react-to-print's dynamic iframe
