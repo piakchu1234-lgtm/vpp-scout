@@ -46,7 +46,7 @@ export default function PropertySidePanel({
   };
 
   return (
-    <div className="fixed left-0 top-0 h-screen w-[380px] bg-[#0A0A0A] border-r border-zinc-800 overflow-y-auto z-20">
+    <div className="fixed left-20 top-0 h-screen w-[380px] bg-[#0A0A0A] border-r border-zinc-800 overflow-y-auto z-40">
       {/* Header Section */}
       <div className="sticky top-0 bg-[#0A0A0A]/95 backdrop-blur-xl border-b border-zinc-800 p-6 z-10 space-y-4">
         {/* Address */}

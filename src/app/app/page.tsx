@@ -854,33 +854,6 @@ function AppCanvas() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#05060E]">
-      {/* Property Side Panel - Left Side */}
-      {hasCoords && (
-        <PropertySidePanel
-          address={address}
-          language={language}
-          zoneCode={planData?.zoneCode || null}
-          zoneDescription={planData?.zoneDescription || null}
-          planData={planData}
-          onExportPDF={handleExportPdf}
-          isGeneratingPDF={isGeneratingPdf}
-          onTestAgent={async () => {
-            setIsTestingAgent(true);
-            try {
-              const testAddress = addressParam || '45 Kooyong Road, Armadale VIC 3143';
-              console.log('🤖 [TEST AGENT] Starting agentic search for:', testAddress);
-              const result = await fetchAgentMarketData(testAddress);
-              console.log('🤖 [TEST AGENT] ✅ SUCCESS! Result:', result);
-            } catch (error) {
-              console.error('🤖 [TEST AGENT] ❌ FAILED:', error);
-            } finally {
-              setIsTestingAgent(false);
-            }
-          }}
-          isTestingAgent={isTestingAgent}
-        />
-      )}
-
       {/* Left Control Rail */}
       <aside className="fixed left-0 top-0 h-full w-20 z-50 bg-[#05060E]/70 backdrop-blur-md border-r border-white/10 flex flex-col items-center py-6">
         {/* Logo at top */}
@@ -925,10 +898,37 @@ function AppCanvas() {
         </div>
       </aside>
 
+      {/* Property Side Panel - Next to Control Rail */}
+      {hasCoords && (
+        <PropertySidePanel
+          address={address}
+          language={language}
+          zoneCode={planData?.zoneCode || null}
+          zoneDescription={planData?.zoneDescription || null}
+          planData={planData}
+          onExportPDF={handleExportPdf}
+          isGeneratingPDF={isGeneratingPdf}
+          onTestAgent={async () => {
+            setIsTestingAgent(true);
+            try {
+              const testAddress = addressParam || '45 Kooyong Road, Armadale VIC 3143';
+              console.log('🤖 [TEST AGENT] Starting agentic search for:', testAddress);
+              const result = await fetchAgentMarketData(testAddress);
+              console.log('🤖 [TEST AGENT] ✅ SUCCESS! Result:', result);
+            } catch (error) {
+              console.error('🤖 [TEST AGENT] ❌ FAILED:', error);
+            } finally {
+              setIsTestingAgent(false);
+            }
+          }}
+          isTestingAgent={isTestingAgent}
+        />
+      )}
+
       {/* Main Content - Full-Bleed Map */}
-      <main className="flex-1 ml-[380px] relative">
+      <main className="flex-1 ml-[480px] relative">
         {/* Map Canvas */}
-        <div className="absolute inset-0 w-full h-full pb-[300px]">
+        <div className="absolute inset-0 w-full h-full">
           {hasCoords ? (
             <>
               <MapPreviewMemoized
@@ -1013,11 +1013,11 @@ function AppCanvas() {
       </div>
       </main>
 
-      {/* Horizontal Bottom Dock - Analytics Cards */}
+      {/* 4-Card Floating Bottom Array */}
       {hasCoords && (
-        <div className="fixed bottom-0 left-[380px] right-0 h-[300px] bg-zinc-950/80 backdrop-blur-md border-t border-zinc-800 p-4 flex gap-4 overflow-x-auto z-20">
+        <div className="absolute bottom-8 left-[500px] right-8 flex justify-between gap-4 z-20 pointer-events-none">
           {/* Card 1: Development Assessment */}
-          <div className="flex-1 min-w-[320px] bg-[#05060E]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-5 text-white shadow-2xl">
+          <div className="flex-1 min-w-[280px] max-w-[350px] bg-zinc-950/80 backdrop-blur-md border border-zinc-800 rounded-xl p-4 shadow-2xl pointer-events-auto">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-semibold tracking-wider uppercase text-zinc-400">
                 Development Assessment
@@ -1052,28 +1052,28 @@ function AppCanvas() {
             {yieldData ? (
               <RegulatoryRadarChart yieldData={yieldData} />
             ) : (
-              <div className="h-[180px] flex items-center justify-center text-sm text-zinc-500">
+              <div className="h-[160px] flex items-center justify-center text-sm text-zinc-500">
                 Processing compliance data...
               </div>
             )}
           </div>
 
           {/* Card 2: Site Parameters */}
-          <div className="flex-1 min-w-[320px] bg-[#05060E]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-5 text-white shadow-2xl">
+          <div className="flex-1 min-w-[280px] max-w-[350px] bg-zinc-950/80 backdrop-blur-md border border-zinc-800 rounded-xl p-4 shadow-2xl pointer-events-auto">
             <h3 className="text-xs font-semibold tracking-wider uppercase text-zinc-400 mb-3">
               Site Parameters
             </h3>
             {landSizeM2 ? (
               <SpatialPieChart landSize={landSizeM2} effectiveLandSize={effectiveLandSizeM2} />
             ) : (
-              <div className="h-[180px] flex items-center justify-center text-sm text-zinc-500">
+              <div className="h-[160px] flex items-center justify-center text-sm text-zinc-500">
                 Loading spatial data...
               </div>
             )}
           </div>
 
           {/* Card 3: Market Performance */}
-          <div className="flex-1 min-w-[320px] bg-[#05060E]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-5 text-white shadow-2xl">
+          <div className="flex-1 min-w-[280px] max-w-[350px] bg-zinc-950/80 backdrop-blur-md border border-zinc-800 rounded-xl p-4 shadow-2xl pointer-events-auto">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-semibold tracking-wider uppercase text-zinc-400">
                 Market Performance
@@ -1083,27 +1083,23 @@ function AppCanvas() {
               )}
             </div>
             {isLoadingAgent || isLoadingMarket ? (
-              <div className="h-[180px] flex items-center justify-center text-sm text-zinc-500">
+              <div className="h-[160px] flex items-center justify-center text-sm text-zinc-500">
                 <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                Aggregating market data...
+                Aggregating...
               </div>
             ) : mergedMarketData.bedrooms !== null || mergedMarketData.estimatedValue !== null ? (
-              <div className="space-y-3 pt-2">
+              <div className="space-y-2 pt-2">
                 {mergedMarketData.bedrooms !== null && (
-                  <div className="flex justify-between items-center py-2 border-b border-zinc-800">
-                    <span className="text-xs text-zinc-400 uppercase tracking-wider">
-                      Bedrooms / Bathrooms
-                    </span>
+                  <div className="flex justify-between items-center py-2 border-b border-zinc-700">
+                    <span className="text-xs text-zinc-400 uppercase tracking-wider">Beds / Baths</span>
                     <span className="text-sm font-semibold text-white">
                       {mergedMarketData.bedrooms} / {mergedMarketData.bathrooms ?? 0}
                     </span>
                   </div>
                 )}
                 {mergedMarketData.estimatedValue && (
-                  <div className="flex justify-between items-center py-2 border-b border-zinc-800">
-                    <span className="text-xs text-zinc-400 uppercase tracking-wider">
-                      {language === 'en' ? 'Estimated Value' : '估计价值'}
-                    </span>
+                  <div className="flex justify-between items-center py-2 border-b border-zinc-700">
+                    <span className="text-xs text-zinc-400 uppercase tracking-wider">Est. Value</span>
                     <span className="text-sm font-semibold text-white">
                       ${mergedMarketData.estimatedValue.toLocaleString('en-AU')}
                     </span>
@@ -1111,10 +1107,45 @@ function AppCanvas() {
                 )}
               </div>
             ) : (
-              <div className="h-[180px] flex items-center justify-center text-sm text-zinc-500">
-                No market data available
+              <div className="h-[160px] flex items-center justify-center text-sm text-zinc-500">
+                No market data
               </div>
             )}
+          </div>
+
+          {/* Card 4: Site Geometry */}
+          <div className="flex-1 min-w-[280px] max-w-[350px] bg-zinc-950/80 backdrop-blur-md border border-zinc-800 rounded-xl p-4 shadow-2xl pointer-events-auto">
+            <h3 className="text-xs font-semibold tracking-wider uppercase text-zinc-400 mb-3">
+              Site Geometry
+            </h3>
+            <div className="space-y-2 pt-2">
+              {landSizeM2 && (
+                <div className="flex justify-between items-center py-2 border-b border-zinc-700">
+                  <span className="text-xs text-zinc-400 uppercase tracking-wider">Lot Area</span>
+                  <span className="text-sm font-semibold text-white">
+                    {Math.round(landSizeM2).toLocaleString()} m²
+                  </span>
+                </div>
+              )}
+              {aiInsight?.estimatedFrontage && (
+                <div className="flex justify-between items-center py-2 border-b border-zinc-700">
+                  <span className="text-xs text-zinc-400 uppercase tracking-wider">Frontage</span>
+                  <span className="text-sm font-semibold text-white">
+                    {aiInsight.estimatedFrontage}
+                  </span>
+                </div>
+              )}
+              {landSizeM2 && (
+                <div className="flex justify-between items-center py-2 border-b border-zinc-700">
+                  <span className="text-xs text-zinc-400 uppercase tracking-wider">SSD Eligible</span>
+                  <span className={`text-sm font-semibold ${
+                    landSizeM2 >= 300 ? 'text-green-400' : 'text-amber-400'
+                  }`}>
+                    {landSizeM2 >= 300 ? 'Yes' : 'No'}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
