@@ -20,6 +20,7 @@ import PropertySidePanel from '@/components/dashboard/PropertySidePanel';
 import InsightPanel from '@/components/dashboard/InsightPanel';
 import DocumentConfigurator from '@/components/dashboard/DocumentConfigurator';
 import DADetailsModal from '@/components/modal/DADetailsModal';
+import SaveProjectModal from '@/components/modal/SaveProjectModal';
 import { describeOverlayCode, type PlanningOverlay } from '@/components/dashboard/PlanningCard';
 import CollapsibleSidebar from '@/components/dashboard/CollapsibleSidebar';
 import { usePropertyData } from '@/hooks/usePropertyData';
@@ -51,6 +52,7 @@ import {
   formatROI,
   type MassingResult,
 } from '@/lib/massingEngine';
+import { prepareProjectState, generateProjectName } from '@/lib/projectPersistence';
 import type { AIMarketResponse } from '@/types/property';
 
 const MELBOURNE_FALLBACK = { lat: -37.8136, lon: 144.9631 };
@@ -145,6 +147,8 @@ function AppCanvas() {
   const [isStorefrontOpen, setIsStorefrontOpen] = useState(false);
   const [language, setLanguage] = useState<Lang>('en');
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [isSavingProject, setIsSavingProject] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
 
   // Handler for PDF export
   const handleExportPdf = async () => {
@@ -201,6 +205,96 @@ function AppCanvas() {
       setIsGeneratingPdf(false);
     }
   };
+
+  // Handler for Save Project
+  const handleSaveProject = async (projectName: string, notes: string, tags: string[]) => {
+    if (!address || !planData || !lat || !lon || isSavingProject) {
+      throw new Error('Missing required data for saving project');
+    }
+
+    setIsSavingProject(true);
+    try {
+      console.log('[SaveProject] Starting project save...');
+
+      // Step 1: Capture map snapshot
+      console.log('[SaveProject] Capturing map canvas...');
+      const mapSnapshot = await mapPreviewRef.current?.getSnapshot();
+
+      if (!mapSnapshot) {
+        console.warn('[SaveProject] ⚠️ Map snapshot capture failed, continuing without image');
+      } else {
+        console.log('[SaveProject] ✅ Map snapshot captured');
+      }
+
+      // Step 2: Get current map viewport state
+      const map = mapPreviewRef.current?.getMap();
+      const mapState = {
+        center: map ? [map.getCenter().lng, map.getCenter().lat] as [number, number] : [lon, lat],
+        zoom: map?.getZoom() || 19,
+        bearing: map?.getBearing() || 0,
+        pitch: map?.getPitch() || 0,
+      };
+
+      // Step 3: Prepare project state
+      console.log('[SaveProject] Preparing project state...');
+      const projectState = prepareProjectState({
+        address,
+        pfi: undefined, // VicPlanData doesn't have pfi field
+        zoneCode: planData.zoneCode || 'UNKNOWN',
+        zoneDescription: planData.zoneDescription || undefined,
+        lotArea: landSizeM2 || 0,
+        overlays: planData.overlayRaw || [],
+        lat,
+        lng: lon,
+        estimatedValue: mergedMarketData?.estimatedValue ?? undefined,
+        marketDataSource: mergedMarketData?.source || undefined,
+        generatedMassing,
+        financialAnalysis,
+        mapCenter: mapState.center as [number, number],
+        mapZoom: mapState.zoom,
+        mapBearing: mapState.bearing,
+        mapPitch: mapState.pitch,
+        mapSnapshot: mapSnapshot || undefined,
+        projectName,
+        notes,
+        tags,
+      });
+
+      console.log('[SaveProject] Project state prepared:', {
+        address: projectState.address,
+        zoneCode: projectState.zoneCode,
+        hasSnapshot: !!projectState.mapSnapshot,
+        hasMassing: !!projectState.massingGeometry,
+      });
+
+      // Step 4: Save to database
+      console.log('[SaveProject] Saving to database...');
+      const response = await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(projectState),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to save project');
+      }
+
+      const result = await response.json();
+      console.log('[SaveProject] ✅ Project saved successfully:', result.project.id);
+
+      // Success notification (you can add a toast here)
+      alert(`✅ Project saved successfully!\n\nProject ID: ${result.project.id}`);
+
+    } catch (error) {
+      console.error('[SaveProject] ❌ Error:', error);
+      alert(`❌ Failed to save project: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw error;
+    } finally {
+      setIsSavingProject(false);
+    }
+  };
+
   const [isNavigating, setIsNavigating] = useState(false);
   const [aiInsight, setAiInsight] = useState<AIInsightData | null>(null);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
@@ -986,6 +1080,8 @@ function AppCanvas() {
           planData={planData}
           onExportPDF={handleExportPdf}
           isGeneratingPDF={isGeneratingPdf}
+          onSaveProject={() => setShowSaveModal(true)}
+          isSavingProject={isSavingProject}
           onTestAgent={async () => {
             setIsTestingAgent(true);
             try {
@@ -1417,6 +1513,18 @@ function AppCanvas() {
         da={selectedDA}
         isOpen={showDAModal}
         onClose={() => setShowDAModal(false)}
+      />
+
+      {/* Save Project Modal */}
+      <SaveProjectModal
+        isOpen={showSaveModal}
+        onClose={() => setShowSaveModal(false)}
+        onSave={handleSaveProject}
+        defaultName={
+          address && planData?.zoneCode
+            ? generateProjectName(address, planData.zoneCode)
+            : ''
+        }
       />
     </div>
   );

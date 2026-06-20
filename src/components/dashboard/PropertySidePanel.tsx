@@ -8,7 +8,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, FileDown, Loader2, Search } from 'lucide-react';
+import { ChevronDown, ChevronUp, FileDown, Loader2, Search, Save } from 'lucide-react';
 import type { VicPlanData } from '@/lib/vicPlanApi';
 import * as turf from '@turf/turf';
 
@@ -20,6 +20,8 @@ type PropertySidePanelProps = {
   planData: VicPlanData | null;
   onExportPDF: () => void;
   isGeneratingPDF: boolean;
+  onSaveProject?: () => void;
+  isSavingProject?: boolean;
   onSearch?: (query: string) => void;
   onTestAgent?: () => void;
   isTestingAgent?: boolean;
@@ -42,6 +44,8 @@ export default function PropertySidePanel({
   planData,
   onExportPDF,
   isGeneratingPDF,
+  onSaveProject,
+  isSavingProject = false,
   onSearch,
   onTestAgent,
   isTestingAgent = false,
@@ -164,24 +168,48 @@ export default function PropertySidePanel({
           </button>
         )}
 
-        {/* Export PDF Button */}
-        <button
-          onClick={onExportPDF}
-          disabled={isGeneratingPDF || !address}
-          className="w-full px-4 py-2.5 bg-[#E9E778] hover:bg-[#E9E778]/90 disabled:bg-zinc-700 disabled:cursor-not-allowed text-[#05060E] font-semibold rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
-        >
-          {isGeneratingPDF ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Generating PDF...
-            </>
-          ) : (
-            <>
-              <FileDown className="w-4 h-4" />
-              Export PDF Report
-            </>
+        {/* Action Buttons */}
+        <div className="grid grid-cols-2 gap-3">
+          {/* Save Project Button */}
+          {onSaveProject && (
+            <button
+              onClick={onSaveProject}
+              disabled={isSavingProject || !address}
+              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-700 disabled:cursor-not-allowed text-white font-semibold rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+            >
+              {isSavingProject ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  Save
+                </>
+              )}
+            </button>
           )}
-        </button>
+
+          {/* Export PDF Button */}
+          <button
+            onClick={onExportPDF}
+            disabled={isGeneratingPDF || !address}
+            className={`${onSaveProject ? '' : 'col-span-2'} px-4 py-2.5 bg-[#E9E778] hover:bg-[#E9E778]/90 disabled:bg-zinc-700 disabled:cursor-not-allowed text-[#05060E] font-semibold rounded-lg text-sm transition-colors flex items-center justify-center gap-2`}
+          >
+            {isGeneratingPDF ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Generating PDF...
+              </>
+            ) : (
+              <>
+                <FileDown className="w-4 h-4" />
+                Export PDF
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Statutory Data Section */}
