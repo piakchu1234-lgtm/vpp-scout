@@ -39,6 +39,9 @@ type PropertySidePanelProps = {
   daData?: any[]; // Array of fetched DAs
   propertyLat?: number;
   propertyLng?: number;
+  activeScenario?: 'current' | 'ssd' | 'dual_occ' | 'townhouse';
+  onScenarioChange?: (scenario: 'current' | 'ssd' | 'dual_occ' | 'townhouse') => void;
+  scenarioLabel?: string;
 };
 
 export default function PropertySidePanel({
@@ -63,6 +66,14 @@ export default function PropertySidePanel({
   showBoundaryLabels = false,
   onToggleBoundaryLabels,
   showContours = false,
+  onToggleContours,
+  daData,
+  propertyLat,
+  propertyLng,
+  activeScenario = 'current',
+  onScenarioChange,
+  scenarioLabel,
+}: PropertySidePanelProps) {
   onToggleContours,
   daData = [],
   propertyLat,
@@ -176,6 +187,30 @@ export default function PropertySidePanel({
             />
           </div>
         </div>
+
+        {/* Scenario Selector */}
+        {onScenarioChange && (
+          <div className="space-y-2">
+            <label className="text-zinc-400 text-xs font-semibold uppercase tracking-wider block">
+              {language === 'en' ? 'Development Scenario' : '开发场景'}
+            </label>
+            <select
+              value={activeScenario}
+              onChange={(e) => onScenarioChange(e.target.value as 'current' | 'ssd' | 'dual_occ' | 'townhouse')}
+              className="w-full bg-zinc-900 border border-zinc-700 text-white rounded-lg p-3 text-sm focus:ring-2 focus:ring-[#E9E778] focus:border-transparent outline-none transition-colors"
+            >
+              <option value="current">{language === 'en' ? 'Current Status' : '当前状态'}</option>
+              <option value="ssd">{language === 'en' ? 'Small Second Dwelling (60m²)' : '小型第二住宅 (60m²)'}</option>
+              <option value="dual_occ">{language === 'en' ? 'Dual Occupancy (2 Dwellings)' : '双户住宅 (2套)'}</option>
+              <option value="townhouse">{language === 'en' ? 'Townhouses (Max Yield)' : '联排别墅 (最大产量)'}</option>
+            </select>
+            {scenarioLabel && (
+              <p className="text-xs text-zinc-500 italic mt-1">
+                {language === 'en' ? 'Active:' : '活跃:'} {scenarioLabel}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Action Buttons */}
         <div className="grid grid-cols-2 gap-3">

@@ -153,6 +153,7 @@ function AppCanvas() {
   const [overlayGeometries, setOverlayGeometries] = useState<OverlayGeometry[]>([]);
   const [isStorefrontOpen, setIsStorefrontOpen] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(true); // Collapsible side panel state
+  const [activeScenario, setActiveScenario] = useState<'current' | 'ssd' | 'dual_occ' | 'townhouse'>('current'); // Scenario Engine
   const { language } = useLanguage();
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isSavingProject, setIsSavingProject] = useState(false);
@@ -916,6 +917,59 @@ function AppCanvas() {
     });
   }, [landSizeM2, planData?.zoneCode, planData?.overlayRaw, effectiveLandSizeM2]);
 
+  // Scenario Engine: Computed metrics based on active scenario
+  const scenarioMetrics = useMemo(() => {
+    const frontage = aiInsight?.estimatedFrontage
+      ? parseFloat(aiInsight.estimatedFrontage.replace(/[^0-9.]/g, ''))
+      : null;
+
+    const baseValue = mergedMarketData.estimatedValue || 0;
+    const townhouseYield = yieldData?.scenarios?.townhouse?.maxYield || 0;
+
+    // Scenario data dictionary
+    const scenarios = {
+      current: {
+        label: 'Current Status',
+        maxYield: '1 Dwelling',
+        estValue: baseValue,
+      },
+      ssd: {
+        label: 'Small Second Dwelling (60m²)',
+        maxYield: ssdFeasibility?.isEligible ? `1 SSD (${ssdFeasibility.maxSsdSize}m²)` : 'Not Eligible',
+        estValue: ssdFeasibility?.isEligible ? baseValue * 1.25 : baseValue,
+      },
+      dual_occ: {
+        label: 'Dual Occupancy (2 Dwellings)',
+        maxYield: '2 Units',
+        estValue: baseValue * 1.6,
+      },
+      townhouse: {
+        label: 'Townhouses (Max Yield)',
+        maxYield: townhouseYield > 0 ? `${townhouseYield} TH` : 'Not Feasible',
+        estValue: townhouseYield > 0 ? baseValue * (1.8 + townhouseYield * 0.2) : baseValue,
+      },
+    };
+
+    const active = scenarios[activeScenario];
+
+    return {
+      zoning: planData?.zoneCode || '—',
+      lotSize: landSizeM2 || 0,
+      frontage: frontage || 0,
+      maxYield: active.maxYield,
+      estValue: active.estValue,
+      label: active.label,
+    };
+  }, [
+    activeScenario,
+    planData?.zoneCode,
+    landSizeM2,
+    aiInsight?.estimatedFrontage,
+    mergedMarketData.estimatedValue,
+    yieldData?.scenarios?.townhouse?.maxYield,
+    ssdFeasibility,
+  ]);
+
   // Easement data and spatial conflict detection
   const [easementData, setEasementData] = useState<any[]>([]);
   const [spatialConflict, setSpatialConflict] = useState<{
@@ -1180,6 +1234,9 @@ function AppCanvas() {
               isGeneratingPDF={isGeneratingPdf}
               onSaveProject={() => setShowSaveModal(true)}
               isSavingProject={isSavingProject}
+              activeScenario={activeScenario}
+              onScenarioChange={setActiveScenario}
+              scenarioLabel={scenarioMetrics.label}
             onTestAgent={async () => {
               setIsTestingAgent(true);
               try {
@@ -1329,59 +1386,53 @@ function AppCanvas() {
       </div>
       </main>
 
-      {/* Clean Metrics Ribbon - Z-Index: 20 (Bottom Overlay) */}
+      {/* Clean Metrics Ribbon - Z-Index: 10 (Bottom Overlay - Scenario-Driven) */}
       {hasCoords && planData && (
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
-          <div className="bg-zinc-950/80 backdrop-blur-xl border border-white/10 rounded-2xl px-8 py-4 shadow-2xl pointer-events-auto">
-            <div className="flex items-center gap-8">
+          <div className="bg-zinc-950/80 backdrop-blur-xl border border-zinc-800 rounded-2xl px-8 py-4 shadow-2xl pointer-events-auto transition-all duration-300">
+            <div className="flex items-center gap-12">
               {/* Zoning */}
-              <div className="flex flex-col items-center gap-1">
-                <span className="text-xs text-zinc-400 uppercase tracking-wider">Zoning</span>
-                <span className="text-2xl font-bold text-white">{planData.zoneCode || '—'}</span>
+              <div className="flex flex-col">
+                <span className="text-zinc-400 text-[10px] font-bold uppercase tracking-widest">Zoning</span>
+                <span className="text-white text-lg font-semibold mt-0.5">{scenarioMetrics.zoning}</span>
               </div>
 
-              <div className="h-12 w-px bg-white/10" />
+              <div className="w-px h-8 bg-zinc-800" />
 
               {/* Lot Size */}
-              <div className="flex flex-col items-center gap-1">
-                <span className="text-xs text-zinc-400 uppercase tracking-wider">Lot Size</span>
-                <span className="text-2xl font-bold text-white">
-                  {landSizeM2 ? `${landSizeM2.toLocaleString()}m²` : '—'}
+              <div className="flex flex-col">
+                <span className="text-zinc-400 text-[10px] font-bold uppercase tracking-widest">Lot Size</span>
+                <span className="text-white text-lg font-semibold mt-0.5">
+                  {scenarioMetrics.lotSize > 0 ? `${scenarioMetrics.lotSize.toLocaleString()} m²` : '—'}
                 </span>
               </div>
 
-              <div className="h-12 w-px bg-white/10" />
+              <div className="w-px h-8 bg-zinc-800" />
 
-              {/* Frontage (Turf.js Calculated) */}
-              <div className="flex flex-col items-center gap-1">
-                <span className="text-xs text-zinc-400 uppercase tracking-wider">Frontage</span>
-                <span className="text-2xl font-bold text-white">
-                  {aiInsight?.estimatedFrontage
-                    ? `${parseFloat(aiInsight.estimatedFrontage.replace(/[^0-9.]/g, '')).toFixed(1)}m`
-                    : '—'}
+              {/* Frontage */}
+              <div className="flex flex-col">
+                <span className="text-zinc-400 text-[10px] font-bold uppercase tracking-widest">Frontage</span>
+                <span className="text-white text-lg font-semibold mt-0.5">
+                  {scenarioMetrics.frontage > 0 ? `${scenarioMetrics.frontage.toFixed(1)} m` : '—'}
                 </span>
               </div>
 
-              <div className="h-12 w-px bg-white/10" />
+              <div className="w-px h-8 bg-zinc-800" />
 
               {/* Max Yield (Scenario-Based) */}
-              <div className="flex flex-col items-center gap-1">
-                <span className="text-xs text-zinc-400 uppercase tracking-wider">Max Yield</span>
-                <span className="text-2xl font-bold text-amber-400">
-                  {yieldData?.scenarios?.townhouse?.maxYield
-                    ? `${yieldData.scenarios.townhouse.maxYield} TH`
-                    : '—'}
-                </span>
+              <div className="flex flex-col">
+                <span className="text-zinc-400 text-[10px] font-bold uppercase tracking-widest">Max Yield</span>
+                <span className="text-blue-400 text-lg font-semibold mt-0.5">{scenarioMetrics.maxYield}</span>
               </div>
 
-              <div className="h-12 w-px bg-white/10" />
+              <div className="w-px h-8 bg-zinc-800" />
 
-              {/* Est. Value */}
-              <div className="flex flex-col items-center gap-1">
-                <span className="text-xs text-zinc-400 uppercase tracking-wider">Est. Value</span>
-                <span className="text-2xl font-bold text-white">
-                  {mergedMarketData.estimatedValue
-                    ? `$${(mergedMarketData.estimatedValue / 1000000).toFixed(2)}M`
+              {/* Est. Value (Scenario-Based) */}
+              <div className="flex flex-col">
+                <span className="text-zinc-400 text-[10px] font-bold uppercase tracking-widest">Est. Value</span>
+                <span className="text-green-400 text-lg font-semibold mt-0.5">
+                  {scenarioMetrics.estValue > 0
+                    ? `$${(scenarioMetrics.estValue / 1000000).toFixed(2)}M`
                     : '—'}
                 </span>
               </div>
