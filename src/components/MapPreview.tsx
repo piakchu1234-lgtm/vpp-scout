@@ -87,15 +87,21 @@ const STYLE_BY_VIEW: Record<ViewMode, string> = {
 };
 
 // Theme-aware style getter
+// CUSTOM MINIMAL BASEMAP: Once created in Mapbox Studio, set NEXT_PUBLIC_MAPBOX_STYLE_LIGHT
+// to your custom style URL (e.g., mapbox://styles/YOUR_USERNAME/YOUR_STYLE_ID)
 function getMapStyle(viewMode: ViewMode, theme: string | undefined): string {
   if (viewMode === 'satellite' || viewMode === 'hybrid') {
     return STYLE_BY_VIEW[viewMode];
   }
 
   // For 'plan' view, switch between light and dark based on theme
-  return theme === 'dark'
-    ? 'mapbox://styles/mapbox/dark-v11'
-    : 'mapbox://styles/mapbox/light-v11';
+  if (theme === 'dark') {
+    return 'mapbox://styles/mapbox/dark-v11';
+  }
+
+  // Use custom minimal style if configured, otherwise fall back to cleaner navigation style
+  const customLightStyle = process.env.NEXT_PUBLIC_MAPBOX_STYLE_LIGHT;
+  return customLightStyle || 'mapbox://styles/mapbox/streets-v12';
 }
 
 type LonLat = [number, number];
