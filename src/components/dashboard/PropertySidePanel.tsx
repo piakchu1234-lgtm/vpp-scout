@@ -10,7 +10,6 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, FileDown, Loader2, Search, Save } from 'lucide-react';
 import { UserButton } from '@clerk/nextjs';
-import { useLanguage } from '@/contexts/LanguageContext';
 import type { VicPlanData } from '@/lib/vicPlanApi';
 import * as turf from '@turf/turf';
 
@@ -69,7 +68,6 @@ export default function PropertySidePanel({
   propertyLat,
   propertyLng,
 }: PropertySidePanelProps) {
-  const { language } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
   const [overlaysExpanded, setOverlaysExpanded] = useState(true);
 
