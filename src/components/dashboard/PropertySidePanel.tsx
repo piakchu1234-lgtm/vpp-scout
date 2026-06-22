@@ -183,24 +183,56 @@ export default function PropertySidePanel({
           </div>
         </div>
 
-        {/* Scenario Selector */}
+        {/* Scenario Selector - Pill-Style Toggle */}
         {onScenarioChange && (
-          <div className="space-y-2">
-            <label className="text-zinc-400 text-xs font-semibold uppercase tracking-wider block">
-              {language === 'en' ? 'Development Scenario' : '开发场景'}
+          <div className="space-y-3">
+            <label className="text-zinc-400 text-xs font-bold uppercase tracking-widest block">
+              {language === 'en' ? 'Feasibility Scenario' : '可行性场景'}
             </label>
-            <select
-              value={activeScenario}
-              onChange={(e) => onScenarioChange(e.target.value as 'current' | 'ssd' | 'dual_occ' | 'townhouse')}
-              className="w-full bg-zinc-900 border border-zinc-700 text-white rounded-lg p-3 text-sm focus:ring-2 focus:ring-[#E9E778] focus:border-transparent outline-none transition-colors"
-            >
-              <option value="current">{language === 'en' ? 'Current Status' : '当前状态'}</option>
-              <option value="ssd">{language === 'en' ? 'Small Second Dwelling (60m²)' : '小型第二住宅 (60m²)'}</option>
-              <option value="dual_occ">{language === 'en' ? 'Dual Occupancy (2 Dwellings)' : '双户住宅 (2套)'}</option>
-              <option value="townhouse">{language === 'en' ? 'Townhouses (Max Yield)' : '联排别墅 (最大产量)'}</option>
-            </select>
+            <div className="bg-zinc-900 p-1 rounded-lg flex w-full">
+              <button
+                onClick={() => onScenarioChange('current')}
+                className={`flex-1 py-2 px-3 text-xs font-medium rounded-md transition-all ${
+                  activeScenario === 'current'
+                    ? 'bg-zinc-800 text-white shadow-md border border-zinc-700'
+                    : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                {language === 'en' ? 'Current' : '当前'}
+              </button>
+              <button
+                onClick={() => onScenarioChange('ssd')}
+                className={`flex-1 py-2 px-3 text-xs font-medium rounded-md transition-all ${
+                  activeScenario === 'ssd'
+                    ? 'bg-zinc-800 text-white shadow-md border border-zinc-700'
+                    : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                SSD
+              </button>
+              <button
+                onClick={() => onScenarioChange('dual_occ')}
+                className={`flex-1 py-2 px-3 text-xs font-medium rounded-md transition-all ${
+                  activeScenario === 'dual_occ'
+                    ? 'bg-zinc-800 text-white shadow-md border border-zinc-700'
+                    : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                {language === 'en' ? 'Dual Occ' : '双户'}
+              </button>
+              <button
+                onClick={() => onScenarioChange('townhouse')}
+                className={`flex-1 py-2 px-3 text-xs font-medium rounded-md transition-all ${
+                  activeScenario === 'townhouse'
+                    ? 'bg-zinc-800 text-white shadow-md border border-zinc-700'
+                    : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                {language === 'en' ? 'Townhouse' : '联排'}
+              </button>
+            </div>
             {scenarioLabel && (
-              <p className="text-xs text-zinc-500 italic mt-1">
+              <p className="text-xs text-zinc-500 italic">
                 {language === 'en' ? 'Active:' : '活跃:'} {scenarioLabel}
               </p>
             )}
@@ -248,6 +280,164 @@ export default function PropertySidePanel({
               </>
             )}
           </button>
+        </div>
+
+        {/* Planning Constraints - Progressive Disclosure */}
+        <div className="space-y-4">
+          <h2 className="text-xs font-bold uppercase tracking-widest text-zinc-400">
+            {language === 'en' ? 'Planning Constraints' : '规划限制'}
+          </h2>
+
+          {/* ZONING CARD */}
+          {zoneCode && (
+            <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <svg className="w-4 h-4 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+                <h3 className="text-white text-sm font-semibold uppercase tracking-wide">
+                  {language === 'en' ? 'Planning Zone' : '规划区'}
+                </h3>
+              </div>
+              <div className="inline-block px-3 py-1.5 bg-teal-500/10 text-teal-400 border border-teal-500/20 rounded-md text-sm font-bold">
+                {zoneCode} {zoneDescription && `- ${zoneDescription}`}
+              </div>
+              {zoneDescription && (
+                <p className="text-zinc-400 text-xs mt-3 leading-relaxed">
+                  {language === 'en'
+                    ? 'Encourages a diversity of housing types and housing growth particularly in locations offering good access to services and transport.'
+                    : '鼓励住房类型多样化和住房增长，特别是在交通和服务便利的地区。'}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* OVERLAYS CARD */}
+          {planData?.overlayRaw && planData.overlayRaw.length > 0 && (
+            <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <h3 className="text-white text-sm font-semibold uppercase tracking-wide">
+                  {language === 'en' ? 'Overlays' : '叠加层'}
+                </h3>
+              </div>
+              <div className="flex flex-col gap-2">
+                {planData.overlayRaw.slice(0, 3).map((overlay: any, idx: number) => (
+                  <div
+                    key={idx}
+                    className="inline-block px-3 py-1.5 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-md text-sm font-bold w-fit"
+                  >
+                    {overlay.ZONE_CODE || overlay.code || 'Unknown'}
+                  </div>
+                ))}
+                {planData.overlayRaw.length > 3 && (
+                  <span className="text-xs text-zinc-500">
+                    +{planData.overlayRaw.length - 3} more
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* DYNAMIC SCENARIO RULES CARD */}
+          {activeScenario && (
+            <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+                <h3 className="text-white text-sm font-semibold uppercase tracking-wide">
+                  {activeScenario === 'ssd'
+                    ? (language === 'en' ? 'SSD Requirements' : 'SSD 要求')
+                    : (language === 'en' ? 'Development Rules' : '开发规则')}
+                </h3>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                {activeScenario === 'ssd' && (
+                  <>
+                    <div className="flex justify-between items-center py-2 border-b border-zinc-800">
+                      <span className="text-zinc-400 text-xs font-semibold">
+                        {language === 'en' ? 'Max Height' : '最大高度'}
+                      </span>
+                      <span className="text-white text-sm font-medium">5.0 meters</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-zinc-800">
+                      <span className="text-zinc-400 text-xs font-semibold">
+                        {language === 'en' ? 'Min Garden Area' : '最小花园面积'}
+                      </span>
+                      <span className="text-white text-sm font-medium">35%</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2">
+                      <span className="text-zinc-400 text-xs font-semibold">
+                        {language === 'en' ? 'Permit Required' : '需要许可'}
+                      </span>
+                      <span className="text-green-400 text-sm font-bold">
+                        {language === 'en' ? 'No' : '否'}
+                      </span>
+                    </div>
+                  </>
+                )}
+                {activeScenario === 'dual_occ' && (
+                  <>
+                    <div className="flex justify-between items-center py-2 border-b border-zinc-800">
+                      <span className="text-zinc-400 text-xs font-semibold">
+                        {language === 'en' ? 'Max Units' : '最大单位'}
+                      </span>
+                      <span className="text-white text-sm font-medium">2 Dwellings</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-zinc-800">
+                      <span className="text-zinc-400 text-xs font-semibold">
+                        {language === 'en' ? 'Min Lot Size' : '最小地块面积'}
+                      </span>
+                      <span className="text-white text-sm font-medium">400m²</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2">
+                      <span className="text-zinc-400 text-xs font-semibold">
+                        {language === 'en' ? 'Permit Required' : '需要许可'}
+                      </span>
+                      <span className="text-amber-400 text-sm font-bold">
+                        {language === 'en' ? 'Yes' : '是'}
+                      </span>
+                    </div>
+                  </>
+                )}
+                {activeScenario === 'townhouse' && (
+                  <>
+                    <div className="flex justify-between items-center py-2 border-b border-zinc-800">
+                      <span className="text-zinc-400 text-xs font-semibold">
+                        {language === 'en' ? 'Min Frontage' : '最小临街面'}
+                      </span>
+                      <span className="text-white text-sm font-medium">15.0m</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-zinc-800">
+                      <span className="text-zinc-400 text-xs font-semibold">
+                        {language === 'en' ? 'Site Coverage' : '场地覆盖率'}
+                      </span>
+                      <span className="text-white text-sm font-medium">60% max</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2">
+                      <span className="text-zinc-400 text-xs font-semibold">
+                        {language === 'en' ? 'Permit Required' : '需要许可'}
+                      </span>
+                      <span className="text-amber-400 text-sm font-bold">
+                        {language === 'en' ? 'Yes' : '是'}
+                      </span>
+                    </div>
+                  </>
+                )}
+                {activeScenario === 'current' && (
+                  <p className="text-zinc-500 text-sm italic">
+                    {language === 'en'
+                      ? 'Select a development scenario to view specific requirements.'
+                      : '选择开发场景以查看具体要求。'}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
