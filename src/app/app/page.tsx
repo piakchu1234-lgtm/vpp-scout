@@ -7,6 +7,10 @@ import { UserButton } from '@clerk/nextjs';
 import GlobalControls from '@/components/GlobalControls';
 import { useLanguage } from '@/contexts/LanguageContext';
 import area from '@turf/area';
+import distance from '@turf/distance';
+import pointToLineDistance from '@turf/point-to-line-distance';
+import length from '@turf/length';
+import * as turf from '@turf/helpers';
 import StorefrontDrawer from '@/components/sidebar/StorefrontDrawer';
 import SuccessModal from '@/components/sidebar/SuccessModal';
 import { MarketBarChart } from '@/components/charts/MarketBarChart';
@@ -158,6 +162,7 @@ function AppCanvas() {
   // Geocoding state for top bar search
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [calculatedFrontageM, setCalculatedFrontageM] = useState<number | null>(null);
 
   const { language } = useLanguage();
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
@@ -191,7 +196,7 @@ function AppCanvas() {
     return () => clearTimeout(debounceTimer);
   }, [searchQuery]);
 
-  // Handler for address selection (flyTo)
+  // Handler for address selection (flyTo + auto parcel extraction)
   const handleSelectAddress = (feature: any) => {
     const [lng, lat] = feature.center;
     const selectedAddress = feature.place_name;
@@ -199,9 +204,13 @@ function AppCanvas() {
     // Update URL and trigger navigation
     router.push(`/app?address=${encodeURIComponent(selectedAddress)}`);
 
+    // Store coordinates for automatic parcel extraction after flyTo
+    const searchCoordinates = { lng, lat };
+
     // Fly camera to location with cinematic animation
     if (mapPreviewRef.current?.getMap) {
       const mapInstance = mapPreviewRef.current.getMap();
+
       mapInstance.flyTo({
         center: [lng, lat],
         zoom: 19,
@@ -210,10 +219,87 @@ function AppCanvas() {
         duration: 2500,
         essential: true,
       });
+
+      // Listen for flyTo animation completion, then trigger automatic parcel extraction
+      mapInstance.once('moveend', () => {
+        console.log('[Geocoding] flyTo complete, triggering automatic parcel extraction...');
+
+        // Simulate map click at center to trigger existing parcel extraction logic
+        // This reuses the existing MapPreview parcel fetch infrastructure
+        const centerPoint = mapInstance.project([lng, lat]);
+
+        // Fire a synthetic click event at the center coordinates
+        // MapPreview's onClick handler will catch this and fetch the parcel
+        if (mapPreviewRef.current?.handleClick) {
+          mapPreviewRef.current.handleClick({
+            lngLat: { lng, lat },
+            point: centerPoint,
+          });
+        }
+
+        console.log('[Geocoding] ✅ Automatic parcel extraction initiated at:', { lng, lat });
+      });
     }
 
     setSearchQuery(selectedAddress);
     setSearchResults([]);
+  };
+
+  // Calculate frontage using street-facing edge detection (Turf.js)
+  const calculateFrontageFromGeometry = (geometry: any, searchLng: number, searchLat: number): number | null => {
+    try {
+      if (!geometry || geometry.type !== 'Polygon') {
+        console.warn('[Frontage] Geometry is not a Polygon, skipping calculation');
+        return null;
+      }
+
+      // Extract the outer ring of the polygon (first array in coordinates)
+      const coordinates = geometry.coordinates[0];
+
+      if (coordinates.length < 3) {
+        console.warn('[Frontage] Insufficient coordinates for polygon');
+        return null;
+      }
+
+      // Reference point: the search coordinate (geocoded street access point)
+      const searchPoint = turf.point([searchLng, searchLat]);
+
+      let closestEdgeDistance = Infinity;
+      let streetFacingEdgeLength = 0;
+
+      // Iterate through all polygon edges
+      for (let i = 0; i < coordinates.length - 1; i++) {
+        const pt1 = coordinates[i];
+        const pt2 = coordinates[i + 1];
+
+        // Create a line segment for this edge
+        const edgeLine = turf.lineString([pt1, pt2]);
+
+        // Calculate distance from search point to this edge
+        const distanceToEdge = pointToLineDistance(searchPoint, edgeLine, { units: 'meters' });
+
+        // If this edge is closer to the search point, it's likely the street-facing edge
+        if (distanceToEdge < closestEdgeDistance) {
+          closestEdgeDistance = distanceToEdge;
+
+          // Calculate the length of this edge
+          streetFacingEdgeLength = length(edgeLine, { units: 'meters' }) * 1000; // Convert km to m
+        }
+      }
+
+      // Round to one decimal place
+      const frontageM = Math.round(streetFacingEdgeLength * 10) / 10;
+
+      console.log('[Frontage] ✅ Street-facing edge detected:', {
+        distanceFromSearch: closestEdgeDistance.toFixed(1) + 'm',
+        frontageLength: frontageM + 'm',
+      });
+
+      return frontageM;
+    } catch (error) {
+      console.error('[Frontage] Calculation failed:', error);
+      return null;
+    }
   };
 
   // Handler for PDF export
@@ -720,6 +806,25 @@ function AppCanvas() {
   const hasPrimaryLandSize =
     typeof landSizeM2 === 'number' && Number.isFinite(landSizeM2) && landSizeM2 > 0;
 
+  // Automatic frontage calculation when geometry and coordinates are available
+  useEffect(() => {
+    if (activeSiteGeometry && lat && lon) {
+      console.log('[Frontage] Calculating frontage from geometry...');
+      const frontage = calculateFrontageFromGeometry(activeSiteGeometry, lon, lat);
+
+      if (frontage !== null) {
+        setCalculatedFrontageM(frontage);
+        console.log('[Frontage] ✅ Calculated frontage:', frontage + 'm');
+      } else {
+        console.warn('[Frontage] ⚠️ Calculation returned null');
+        setCalculatedFrontageM(null);
+      }
+    } else {
+      // Clear frontage if geometry or coordinates are missing
+      setCalculatedFrontageM(null);
+    }
+  }, [activeSiteGeometry, lat, lon]);
+
   // Single source of truth: fetch agentic insight at the page level for
   // every address (Vicmap parcel data covers geometry only — beds/baths/
   // overview/hazards/etc. always come from the AI Auditor). Phase-3 plan
@@ -975,9 +1080,12 @@ function AppCanvas() {
 
   // Scenario Engine: Computed metrics based on active scenario
   const scenarioMetrics = useMemo(() => {
-    const frontage = aiInsight?.estimatedFrontage
-      ? parseFloat(aiInsight.estimatedFrontage.replace(/[^0-9.]/g, ''))
-      : null;
+    // Prioritize Turf.js calculated frontage over AI estimate
+    const frontage = calculatedFrontageM !== null
+      ? calculatedFrontageM
+      : aiInsight?.estimatedFrontage
+        ? parseFloat(aiInsight.estimatedFrontage.replace(/[^0-9.]/g, ''))
+        : null;
 
     const baseValue = mergedMarketData.estimatedValue || 0;
     const townhouseYield = yieldData?.scenarios?.townhouse?.maxYield || 0;
@@ -1020,6 +1128,7 @@ function AppCanvas() {
     activeScenario,
     planData?.zoneCode,
     landSizeM2,
+    calculatedFrontageM,
     aiInsight?.estimatedFrontage,
     mergedMarketData.estimatedValue,
     yieldData?.scenarios?.townhouse?.maxYield,
