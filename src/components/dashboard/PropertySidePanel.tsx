@@ -10,6 +10,7 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, FileDown, Loader2, Search, Save } from 'lucide-react';
 import { UserButton } from '@clerk/nextjs';
+import { useLanguage } from '@/contexts/LanguageContext';
 import type { VicPlanData } from '@/lib/vicPlanApi';
 import * as turf from '@turf/turf';
 
@@ -68,6 +69,7 @@ export default function PropertySidePanel({
   propertyLat,
   propertyLng,
 }: PropertySidePanelProps) {
+  const { language } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
   const [overlaysExpanded, setOverlaysExpanded] = useState(true);
 
@@ -207,12 +209,12 @@ export default function PropertySidePanel({
               {isSavingProject ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Saving...
+                  {language === 'en' ? 'Saving...' : '保存中...'}
                 </>
               ) : (
                 <>
                   <Save className="w-4 h-4" />
-                  Save
+                  {language === 'en' ? 'Save' : '保存'}
                 </>
               )}
             </button>
@@ -227,12 +229,12 @@ export default function PropertySidePanel({
             {isGeneratingPDF ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Generating PDF...
+                {language === 'en' ? 'Generating PDF...' : '生成PDF中...'}
               </>
             ) : (
               <>
                 <FileDown className="w-4 h-4" />
-                Export PDF
+                {language === 'en' ? 'Export PDF' : '导出PDF'}
               </>
             )}
           </button>
