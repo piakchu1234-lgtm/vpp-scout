@@ -1140,8 +1140,6 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
       }, 100);
       return () => clearInterval(interval);
     }, []);
-      setCursorCoords(null);
-    }
 
     function handleClick(e: MapMouseEvent) {
       // Measurement tools take precedence — clicks feed coordinates
