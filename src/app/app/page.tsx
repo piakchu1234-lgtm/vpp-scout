@@ -2,7 +2,7 @@
 
 import React, { Suspense, useEffect, useMemo, useRef, useState, memo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Download, Loader2, Map as MapIcon, FileText, FileDown } from 'lucide-react';
+import { ArrowLeft, Download, Loader2, Map as MapIcon, FileText, FileDown, Search, MapPin, FolderOpen } from 'lucide-react';
 import { UserButton } from '@clerk/nextjs';
 import GlobalControls from '@/components/GlobalControls';
 import { useLanguage } from '@/contexts/LanguageContext';
