@@ -74,11 +74,6 @@ export default function PropertySidePanel({
   onScenarioChange,
   scenarioLabel,
 }: PropertySidePanelProps) {
-  onToggleContours,
-  daData = [],
-  propertyLat,
-  propertyLng,
-}: PropertySidePanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [overlaysExpanded, setOverlaysExpanded] = useState(true);
 
