@@ -269,6 +269,8 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
 
     const mapRef = useRef<MapRef | null>(null);
     const [hover, setHover] = useState<{ lat: number; lon: number } | null>(null);
+    const cursorCoordsRef = useRef<{ lat: number; lon: number } | null>(null);
+    const [cursorCoords, setCursorCoords] = useState<{ lat: number; lon: number } | null>(null);
 
     // Calculate consolidated envelope for multi-parcel aggregation
     const consolidatedEnvelope = useMemo(() => {
@@ -279,7 +281,6 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
       // Simplified: use first parcel as representative envelope
       return selectedParcels[0].geometry;
     }, [selectedParcels]);
-    const [cursorCoords, setCursorCoords] = useState<{ lat: number; lon: number } | null>(null);
     const [cadastralParcels, setCadastralParcels] = useState<ParcelFeature[]>([]);
     const [highlightedParcel, setHighlightedParcel] = useState<ParcelFeature | null>(null);
     const parcelFetchRef = useRef<AbortController | null>(null);
@@ -1056,7 +1057,8 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
     const cursorClass = tool === 'pan' ? '' : 'crosshair';
 
     function handleMouseMove(e: MapMouseEvent) {
-      setCursorCoords({ lat: e.lngLat.lat, lon: e.lngLat.lng });
+      // PERFORMANCE: Update ref on every move (no re-render)
+      cursorCoordsRef.current = { lat: e.lngLat.lat, lon: e.lngLat.lng };
 
       const map = mapRef.current?.getMap();
       if (!map) return;
@@ -1066,7 +1068,7 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
         map.getCanvas().style.cursor = 'crosshair';
       }
 
-      // WAZE-STYLE HOVER: Highlight parcels on mouseover
+      // WAZE-STYLE HOVER: Highlight parcels on mouseover using native Mapbox feature state
       if (tool === 'pan') {
         const hit = e.features?.find(
           (f) => f.layer?.id === 'cadastral-parcels-fill'
@@ -1079,7 +1081,7 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
           // Extract PFI for feature state highlighting
           const pfi = hit.properties?.PARCEL_PFI;
           if (pfi) {
-            // Set feature state for dynamic styling
+            // PERFORMANCE: Use native Mapbox feature state (no React re-render)
             map.setFeatureState(
               { source: 'cadastral-parcels', id: pfi },
               { hover: true }
@@ -1091,13 +1093,19 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
         }
       }
 
-      // Original hover logic for property boundary
+      // PERFORMANCE OPTIMIZED: Only update state when hover changes (not on every pixel)
       if (polygon && hoverInfo && tool === 'pan') {
         const hit = e.features?.[0];
         if (hit && hit.layer?.id === 'property-boundary-fill') {
-          setHover({ lat: e.lngLat.lat, lon: e.lngLat.lng });
+          // Only update state if hover is currently null (entering hover zone)
+          if (hover === null) {
+            setHover({ lat: e.lngLat.lat, lon: e.lngLat.lng });
+          }
         } else {
-          setHover(null);
+          // Only update state if hover is currently active (leaving hover zone)
+          if (hover !== null) {
+            setHover(null);
+          }
         }
       }
     }
@@ -1121,6 +1129,17 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
         }
       }
       setHover(null);
+    }
+
+    // PERFORMANCE: Throttled cursor coords update for display (updates every 100ms max)
+    useEffect(() => {
+      const interval = setInterval(() => {
+        if (cursorCoordsRef.current) {
+          setCursorCoords(cursorCoordsRef.current);
+        }
+      }, 100);
+      return () => clearInterval(interval);
+    }, []);
       setCursorCoords(null);
     }
 
