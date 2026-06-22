@@ -1331,8 +1331,8 @@ function AppCanvas() {
 
       {/* Clean Metrics Ribbon - Z-Index: 20 (Bottom Overlay) */}
       {hasCoords && planData && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-          <div className="bg-zinc-950/80 backdrop-blur-xl border border-white/10 rounded-2xl px-6 py-4 shadow-2xl pointer-events-auto">
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+          <div className="bg-zinc-950/80 backdrop-blur-xl border border-white/10 rounded-2xl px-8 py-4 shadow-2xl pointer-events-auto">
             <div className="flex items-center gap-8">
               {/* Zoning */}
               <div className="flex flex-col items-center gap-1">
@@ -1352,27 +1352,37 @@ function AppCanvas() {
 
               <div className="h-12 w-px bg-white/10" />
 
-              {/* Est. Value */}
+              {/* Frontage (Turf.js Calculated) */}
               <div className="flex flex-col items-center gap-1">
-                <span className="text-xs text-zinc-400 uppercase tracking-wider">Est. Value</span>
+                <span className="text-xs text-zinc-400 uppercase tracking-wider">Frontage</span>
                 <span className="text-2xl font-bold text-white">
-                  {mergedMarketData.estimatedValue
-                    ? `$${(mergedMarketData.estimatedValue / 1000).toFixed(0)}k`
+                  {aiInsight?.estimatedFrontage
+                    ? `${parseFloat(aiInsight.estimatedFrontage.replace(/[^0-9.]/g, '')).toFixed(1)}m`
                     : '—'}
                 </span>
               </div>
 
               <div className="h-12 w-px bg-white/10" />
 
-              {/* SSD Eligibility */}
+              {/* Max Yield (Scenario-Based) */}
               <div className="flex flex-col items-center gap-1">
-                <span className="text-xs text-zinc-400 uppercase tracking-wider">SSD</span>
-                <span className={`text-2xl font-bold ${
-                  ssdFeasibility?.isEligible ? 'text-green-400' : 'text-zinc-500'
-                }`}>
-                  {ssdFeasibility?.isEligible
-                    ? `✓ ${ssdFeasibility.maxSsdSize}m²`
-                    : '✗'}
+                <span className="text-xs text-zinc-400 uppercase tracking-wider">Max Yield</span>
+                <span className="text-2xl font-bold text-amber-400">
+                  {yieldData?.scenarios?.townhouse?.maxYield
+                    ? `${yieldData.scenarios.townhouse.maxYield} TH`
+                    : '—'}
+                </span>
+              </div>
+
+              <div className="h-12 w-px bg-white/10" />
+
+              {/* Est. Value */}
+              <div className="flex flex-col items-center gap-1">
+                <span className="text-xs text-zinc-400 uppercase tracking-wider">Est. Value</span>
+                <span className="text-2xl font-bold text-white">
+                  {mergedMarketData.estimatedValue
+                    ? `$${(mergedMarketData.estimatedValue / 1000000).toFixed(2)}M`
+                    : '—'}
                 </span>
               </div>
             </div>
