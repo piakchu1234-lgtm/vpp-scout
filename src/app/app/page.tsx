@@ -1117,8 +1117,8 @@ function AppCanvas() {
 
   return (
     <div className="relative h-screen overflow-hidden bg-[#05060E]">
-      {/* Left Control Rail - Floating */}
-      <aside className="fixed left-4 top-4 bottom-4 w-20 z-50 bg-zinc-950/80 backdrop-blur-md border border-white/10 rounded-2xl flex flex-col items-center py-6 shadow-2xl">
+      {/* Left Control Rail - Z-Index: 50 (Floating UI) */}
+      <aside className="fixed left-4 top-4 bottom-4 w-20 z-50 bg-zinc-950/80 backdrop-blur-xl border border-white/10 rounded-2xl flex flex-col items-center py-6 shadow-2xl">
         {/* Logo at top */}
         <div className="mb-8">
           <div className="w-10 h-10 bg-[#E9E778] rounded-lg flex items-center justify-center">
@@ -1161,7 +1161,7 @@ function AppCanvas() {
         </div>
       </aside>
 
-      {/* Property Side Panel - Collapsible Floating Overlay */}
+      {/* Property Side Panel - Z-Index: 40 (Collapsible Floating Overlay) */}
       {hasCoords && (
         <>
           {/* Side Panel */}
@@ -1231,8 +1231,8 @@ function AppCanvas() {
         </>
       )}
 
-      {/* Main Content - Full-Screen Map (Hero) */}
-      <main className="absolute inset-0 w-screen h-screen">
+      {/* Main Content - Full-Screen Map (Hero) - Z-Index: 0 (Base Layer) */}
+      <main className="absolute inset-0 w-screen h-screen z-0">
         {/* Map Canvas */}
         <div className="absolute inset-0 w-full h-full">
           {hasCoords ? (
@@ -1329,7 +1329,7 @@ function AppCanvas() {
       </div>
       </main>
 
-      {/* Clean Metrics Ribbon - Bottom of Screen */}
+      {/* Clean Metrics Ribbon - Z-Index: 20 (Bottom Overlay) */}
       {hasCoords && planData && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
           <div className="bg-zinc-950/80 backdrop-blur-xl border border-white/10 rounded-2xl px-6 py-4 shadow-2xl pointer-events-auto">
