@@ -52,6 +52,8 @@ import {
   calculatePolygonArea,
   formatDistance,
   formatArea,
+  getBoundarySegments,
+  calculatePerimeter,
 } from '@/lib/map/measurementUtils';
 import { detectEasementConflict } from '@/lib/map/spatialConflict';
 import { captureMapboxCanvas } from '@/lib/mapCapture';
@@ -1338,15 +1340,42 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
                     'fill-opacity': 0.35, // Prevents satellite map obscuration
                   }}
                 />
-                {/* Lime highlight border */}
+                {/* ARCHISTAR-PARITY: Vibrant pink boundary outline */}
                 <Layer
                   id={`multi-parcel-line-${idx}`}
                   type="line"
                   paint={{
-                    'line-color': PARCEL_HIGHLIGHT_LIME,
-                    'line-width': 2,
+                    'line-color': '#ec4899', // Vibrant pink (Archistar-style)
+                    'line-width': 2.5,
                   }}
                 />
+                {/* ARCHISTAR-PARITY: Boundary dimension labels */}
+                <Source
+                  key={`boundary-labels-${parcel.properties.PARCEL_PFI}`}
+                  id={`boundary-labels-${idx}`}
+                  type="geojson"
+                  data={getBoundarySegments(parcel)}
+                >
+                  <Layer
+                    id={`boundary-label-text-${idx}`}
+                    type="symbol"
+                    layout={{
+                      'text-field': ['get', 'label'],
+                      'text-size': 12,
+                      'symbol-placement': 'point',
+                      'text-rotation-alignment': 'map',
+                      'text-rotate': ['get', 'textAngle'],
+                      'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
+                      'text-allow-overlap': false,
+                      'text-ignore-placement': false,
+                    }}
+                    paint={{
+                      'text-color': '#ec4899', // Match boundary color
+                      'text-halo-color': '#18181b', // Dark background for legibility
+                      'text-halo-width': 2,
+                    }}
+                  />
+                </Source>
                 {/* Zoning label at centroid */}
                 {zoneCode && (
                   <Layer

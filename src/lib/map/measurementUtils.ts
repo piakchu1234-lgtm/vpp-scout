@@ -3,10 +3,12 @@
  *
  * Turf.js-powered boundary dimension calculations and orientation analysis
  * for achieving Landchecker data parity.
+ *
+ * ARCHISTAR-PARITY: Cadastral dimension labeling with vibrant boundary visualization.
  */
 
 import * as turf from '@turf/turf';
-import { Position } from 'geojson';
+import { Position, Feature, Polygon, MultiPolygon, Point, FeatureCollection } from 'geojson';
 
 export interface BoundarySegment {
   start: Position;
@@ -255,5 +257,131 @@ export function formatArea(squareMeters: number): string {
   } else {
     return `${(squareMeters / 10000).toFixed(2)} hectares`;
   }
+}
+
+/**
+ * ARCHISTAR-PARITY: Generate boundary dimension labels for cadastral visualization
+ *
+ * Creates a FeatureCollection of Point features positioned at the midpoint of each
+ * boundary segment, with labels showing length and bearing (e.g., "19.36m @ 188.7°").
+ *
+ * @param polygonFeature - GeoJSON Polygon or MultiPolygon feature
+ * @returns FeatureCollection of Point features with dimension labels
+ */
+export function getBoundarySegments(
+  polygonFeature: Feature<Polygon | MultiPolygon>
+): FeatureCollection<Point> {
+  const labelFeatures: Feature<Point>[] = [];
+
+  const geometry = polygonFeature.geometry;
+
+  // Handle both Polygon and MultiPolygon
+  const rings = geometry.type === 'Polygon'
+    ? [geometry.coordinates[0]] // Only outer ring for cleaner labels
+    : geometry.coordinates.map(poly => poly[0]); // Outer ring of each polygon
+
+  // Process each ring
+  for (const ring of rings) {
+    // Skip if ring has fewer than 2 points
+    if (ring.length < 2) continue;
+
+    // Iterate through each line segment
+    for (let i = 0; i < ring.length - 1; i++) {
+      const point1 = ring[i];
+      const point2 = ring[i + 1];
+
+      // Skip invalid coordinates
+      if (!point1 || !point2) continue;
+
+      // Calculate segment length (in meters)
+      const from = turf.point(point1);
+      const to = turf.point(point2);
+      const segmentLength = turf.distance(from, to, { units: 'meters' });
+
+      // Skip very short segments (< 0.5m) to avoid label clutter
+      if (segmentLength < 0.5) continue;
+
+      // Calculate bearing (direction from point1 to point2)
+      const segmentBearing = turf.bearing(from, to);
+
+      // Normalize bearing to 0-360° range
+      const normalizedBearing = segmentBearing < 0
+        ? segmentBearing + 360
+        : segmentBearing;
+
+      // Calculate midpoint for label placement
+      const mid = turf.midpoint(from, to);
+
+      // Calculate text rotation angle
+      // Text should be parallel to the line, readable from bottom/left
+      let textAngle = normalizedBearing - 90;
+
+      // Flip text if it would be upside down (reading from right to left)
+      if (textAngle > 90 && textAngle < 270) {
+        textAngle += 180;
+      }
+
+      // Normalize text angle to -180 to 180 range (Mapbox convention)
+      if (textAngle > 180) {
+        textAngle -= 360;
+      }
+      if (textAngle < -180) {
+        textAngle += 360;
+      }
+
+      // Format label: "19.36m @ 188.7°"
+      const label = `${segmentLength.toFixed(2)}m @ ${normalizedBearing.toFixed(1)}°`;
+
+      // Create Point feature
+      labelFeatures.push({
+        type: 'Feature',
+        geometry: mid.geometry,
+        properties: {
+          label,
+          textAngle,
+          length: segmentLength,
+          bearing: normalizedBearing,
+        },
+      });
+    }
+  }
+
+  return {
+    type: 'FeatureCollection',
+    features: labelFeatures,
+  };
+}
+
+/**
+ * Calculate the perimeter of a polygon in meters.
+ *
+ * @param polygonFeature - GeoJSON Polygon or MultiPolygon feature
+ * @returns Total perimeter in meters
+ */
+export function calculatePerimeter(
+  polygonFeature: Feature<Polygon | MultiPolygon>
+): number {
+  const geometry = polygonFeature.geometry;
+
+  const rings = geometry.type === 'Polygon'
+    ? [geometry.coordinates[0]]
+    : geometry.coordinates.map(poly => poly[0]);
+
+  let totalPerimeter = 0;
+
+  for (const ring of rings) {
+    for (let i = 0; i < ring.length - 1; i++) {
+      const point1 = ring[i];
+      const point2 = ring[i + 1];
+
+      if (!point1 || !point2) continue;
+
+      const from = turf.point(point1);
+      const to = turf.point(point2);
+      totalPerimeter += turf.distance(from, to, { units: 'meters' });
+    }
+  }
+
+  return totalPerimeter;
 }
 
