@@ -1117,8 +1117,8 @@ function AppCanvas() {
 
   return (
     <div className="relative h-screen overflow-hidden bg-[#05060E]">
-      {/* Left Control Rail - Z-Index: 50 (Floating UI) */}
-      <aside className="fixed left-4 top-4 bottom-4 w-20 z-50 bg-zinc-950/80 backdrop-blur-xl border border-white/10 rounded-2xl flex flex-col items-center py-6 shadow-2xl">
+      {/* Left Control Rail - Z-Index: 50 (Icon-Only Dock) */}
+      <aside className="absolute left-0 top-0 h-full w-16 z-50 bg-zinc-950 border-r border-zinc-800 flex flex-col items-center py-6 shadow-2xl">
         {/* Logo at top */}
         <div className="mb-8">
           <div className="w-10 h-10 bg-[#E9E778] rounded-lg flex items-center justify-center">
@@ -1161,13 +1161,13 @@ function AppCanvas() {
         </div>
       </aside>
 
-      {/* Property Side Panel - Z-Index: 40 (Collapsible Floating Overlay) */}
+      {/* Property Side Panel - Z-Index: 40 (Right Side - Archistar Layout) */}
       {hasCoords && (
         <>
           {/* Side Panel */}
           <div
-            className={`fixed left-28 top-4 bottom-4 w-[400px] z-40 transition-transform duration-300 ease-in-out ${
-              isPanelOpen ? 'translate-x-0' : '-translate-x-[440px]'
+            className={`fixed right-0 top-0 h-full w-[400px] z-40 transition-transform duration-300 ease-in-out ${
+              isPanelOpen ? 'translate-x-0' : 'translate-x-full'
             }`}
           >
             <PropertySidePanel
@@ -1206,11 +1206,11 @@ function AppCanvas() {
         />
           </div>
 
-          {/* Toggle Button - Glassmorphic Chevron */}
+          {/* Toggle Button - Left Edge of Panel (Chevron) */}
           <button
             onClick={() => setIsPanelOpen(!isPanelOpen)}
-            className={`fixed top-1/2 -translate-y-1/2 z-50 w-8 h-16 bg-zinc-950/80 backdrop-blur-md border border-white/10 rounded-r-xl shadow-lg hover:bg-zinc-900/80 transition-all duration-300 flex items-center justify-center ${
-              isPanelOpen ? 'left-[444px]' : 'left-4'
+            className={`fixed top-1/2 -translate-y-1/2 z-50 w-10 h-16 bg-zinc-950/80 backdrop-blur-xl border border-zinc-800 border-r-0 rounded-l-xl shadow-lg hover:bg-zinc-900/80 transition-all duration-300 flex items-center justify-center ${
+              isPanelOpen ? 'right-[400px]' : 'right-0'
             }`}
             aria-label={isPanelOpen ? 'Collapse panel' : 'Expand panel'}
             title={isPanelOpen ? 'Collapse panel' : 'Expand panel'}
@@ -1222,9 +1222,9 @@ function AppCanvas() {
               viewBox="0 0 24 24"
             >
               {isPanelOpen ? (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              ) : (
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               )}
             </svg>
           </button>
