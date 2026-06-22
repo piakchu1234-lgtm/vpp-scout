@@ -1171,57 +1171,72 @@ function AppCanvas() {
 
   return (
     <div className="relative h-screen overflow-hidden bg-[#05060E]">
-      {/* Left Control Rail - Z-Index: 50 (Icon-Only Dock) */}
-      <aside className="absolute left-0 top-0 h-full w-16 z-50 bg-zinc-950 border-r border-zinc-800 flex flex-col items-center py-6 shadow-2xl">
-        {/* Logo at top */}
-        <div className="mb-8">
+      {/* Archistar-Style Floating Top Bar - Z-Index: 30 (Global Navigation) */}
+      <div className="absolute top-4 left-6 right-6 h-16 bg-zinc-950/80 backdrop-blur-xl border border-white/10 rounded-2xl z-30 flex items-center justify-between px-6 shadow-2xl">
+
+        {/* Brand */}
+        <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-[#E9E778] rounded-lg flex items-center justify-center">
             <MapIcon className="text-[#05060E] w-6 h-6" />
           </div>
+          <span className="text-white font-bold tracking-widest text-lg">SIMPLYSITE</span>
         </div>
 
-        {/* Primary Navigation Icons - Center */}
-        <nav className="flex-1 flex flex-col items-center gap-6 mt-8">
+        {/* Global Search Omni-box */}
+        <div className="relative w-1/3">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+          <input
+            type="text"
+            placeholder={language === 'en' ? 'Search any property address...' : '搜索任何房产地址...'}
+            value={addressParam || ''}
+            onChange={(e) => {
+              const newAddress = e.target.value;
+              router.push(`/app?address=${encodeURIComponent(newAddress)}`);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const newAddress = (e.target as HTMLInputElement).value;
+                router.push(`/app?address=${encodeURIComponent(newAddress)}`);
+              }
+            }}
+            className="w-full bg-zinc-900/50 border border-zinc-700 text-white rounded-full pl-12 pr-6 py-2 text-sm focus:ring-2 focus:ring-[#E9E778] outline-none transition-all placeholder:text-zinc-500"
+          />
+        </div>
+
+        {/* Global Controls */}
+        <div className="flex items-center gap-6">
           <button
             onClick={() => router.push('/')}
-            className="w-12 h-12 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors group"
-            aria-label="Back to search"
-            title="Search"
+            className="text-zinc-400 hover:text-white transition-colors"
+            title={language === 'en' ? 'Back to search' : '返回搜索'}
           >
-            <ArrowLeft className="w-5 h-5 text-zinc-400 group-hover:text-[#E9E778]" />
+            <ArrowLeft size={20} />
           </button>
-
           <button
             onClick={() => setShowDocumentConfigurator(true)}
-            className="w-12 h-12 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors group"
-            aria-label="View report"
-            title="Report"
+            className="text-zinc-400 hover:text-white transition-colors"
+            title={language === 'en' ? 'View report' : '查看报告'}
           >
-            <FileText className="w-5 h-5 text-zinc-400 group-hover:text-[#E9E778]" />
+            <FileText size={20} />
           </button>
-        </nav>
-
-        {/* Bottom Controls */}
-        <div className="flex flex-col items-center gap-4">
           <GlobalControls />
-          <div className="h-px w-8 bg-zinc-700" />
           <UserButton
             appearance={{
               elements: {
-                avatarBox: "w-10 h-10 rounded-lg border border-zinc-700 hover:border-[#E9E778] transition-colors"
+                avatarBox: "w-8 h-8 rounded-full border border-zinc-700 hover:border-[#E9E778] transition-colors"
               }
             }}
           />
         </div>
-      </aside>
+      </div>
 
-      {/* Property Side Panel - Z-Index: 40 (Right Side - Archistar Layout) */}
+      {/* Property Side Panel - Z-Index: 40 (Right Side - Adjusted for Top Bar) */}
       {hasCoords && (
         <>
           {/* Side Panel */}
           <div
-            className={`fixed right-0 top-0 h-full w-[400px] z-40 transition-transform duration-300 ease-in-out ${
-              isPanelOpen ? 'translate-x-0' : 'translate-x-full'
+            className={`fixed right-6 top-24 bottom-6 w-[400px] z-40 transition-transform duration-300 ease-in-out rounded-2xl ${
+              isPanelOpen ? 'translate-x-0' : 'translate-x-[110%]'
             }`}
           >
             <PropertySidePanel
@@ -1266,8 +1281,8 @@ function AppCanvas() {
           {/* Toggle Button - Left Edge of Panel (Chevron) */}
           <button
             onClick={() => setIsPanelOpen(!isPanelOpen)}
-            className={`fixed top-1/2 -translate-y-1/2 z-50 w-10 h-16 bg-zinc-950/80 backdrop-blur-xl border border-zinc-800 border-r-0 rounded-l-xl shadow-lg hover:bg-zinc-900/80 transition-all duration-300 flex items-center justify-center ${
-              isPanelOpen ? 'right-[400px]' : 'right-0'
+            className={`fixed top-1/2 -translate-y-1/2 z-50 w-10 h-16 bg-zinc-950/80 backdrop-blur-xl border border-white/10 border-r-0 rounded-l-xl shadow-lg hover:bg-zinc-900/80 transition-all duration-300 flex items-center justify-center ${
+              isPanelOpen ? 'right-[424px]' : 'right-6'
             }`}
             aria-label={isPanelOpen ? 'Collapse panel' : 'Expand panel'}
             title={isPanelOpen ? 'Collapse panel' : 'Expand panel'}
@@ -1386,9 +1401,9 @@ function AppCanvas() {
       </div>
       </main>
 
-      {/* Clean Metrics Ribbon - Z-Index: 10 (Bottom Overlay - Scenario-Driven) */}
+      {/* Clean Metrics Ribbon - Z-Index: 20 (Bottom Overlay - Below Top Bar) */}
       {hasCoords && planData && (
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
           <div className="bg-zinc-950/80 backdrop-blur-xl border border-zinc-800 rounded-2xl px-8 py-4 shadow-2xl pointer-events-auto transition-all duration-300">
             <div className="flex items-center gap-12">
               {/* Zoning */}
