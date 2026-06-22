@@ -154,11 +154,67 @@ function AppCanvas() {
   const [isStorefrontOpen, setIsStorefrontOpen] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(true); // Collapsible side panel state
   const [activeScenario, setActiveScenario] = useState<'current' | 'ssd' | 'dual_occ' | 'townhouse'>('current'); // Scenario Engine
+
+  // Geocoding state for top bar search
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+
   const { language } = useLanguage();
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isSavingProject, setIsSavingProject] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [capturedMapSnapshot, setCapturedMapSnapshot] = useState<string | null>(null);
+
+  // Geocoding API fetch with debounce
+  useEffect(() => {
+    if (searchQuery.length < 3) {
+      setSearchResults([]);
+      return;
+    }
+
+    const fetchAddresses = async () => {
+      const endpoint = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
+        searchQuery
+      )}.json?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}&country=au&types=address&limit=5`;
+
+      try {
+        const response = await fetch(endpoint);
+        const data = await response.json();
+        setSearchResults(data.features || []);
+      } catch (error) {
+        console.error('[Geocoding] Failed to fetch addresses:', error);
+        setSearchResults([]);
+      }
+    };
+
+    const debounceTimer = setTimeout(fetchAddresses, 300);
+    return () => clearTimeout(debounceTimer);
+  }, [searchQuery]);
+
+  // Handler for address selection (flyTo)
+  const handleSelectAddress = (feature: any) => {
+    const [lng, lat] = feature.center;
+    const selectedAddress = feature.place_name;
+
+    // Update URL and trigger navigation
+    router.push(`/app?address=${encodeURIComponent(selectedAddress)}`);
+
+    // Fly camera to location with cinematic animation
+    if (mapPreviewRef.current?.getMap) {
+      const mapInstance = mapPreviewRef.current.getMap();
+      mapInstance.flyTo({
+        center: [lng, lat],
+        zoom: 19,
+        pitch: 60,
+        bearing: 0,
+        duration: 2500,
+        essential: true,
+      });
+    }
+
+    setSearchQuery(selectedAddress);
+    setSearchResults([]);
+  };
 
   // Handler for PDF export
   const handleExportPdf = async () => {
@@ -1188,19 +1244,33 @@ function AppCanvas() {
           <input
             type="text"
             placeholder={language === 'en' ? 'Search any property address...' : '搜索任何房产地址...'}
-            value={addressParam || ''}
-            onChange={(e) => {
-              const newAddress = e.target.value;
-              router.push(`/app?address=${encodeURIComponent(newAddress)}`);
-            }}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                const newAddress = (e.target as HTMLInputElement).value;
-                router.push(`/app?address=${encodeURIComponent(newAddress)}`);
+              if (e.key === 'Enter' && searchResults.length > 0) {
+                handleSelectAddress(searchResults[0]);
+              } else if (e.key === 'Escape') {
+                setSearchResults([]);
               }
             }}
             className="w-full bg-zinc-900/50 border border-zinc-700 text-white rounded-full pl-12 pr-6 py-2 text-sm focus:ring-2 focus:ring-[#E9E778] outline-none transition-all placeholder:text-zinc-500"
           />
+
+          {/* Custom Autocomplete Dropdown */}
+          {searchResults.length > 0 && (
+            <div className="absolute top-14 left-0 w-full bg-zinc-900/95 backdrop-blur-xl border border-zinc-700 rounded-xl shadow-2xl overflow-hidden z-50 max-h-[300px] overflow-y-auto">
+              {searchResults.map((feature) => (
+                <button
+                  key={feature.id}
+                  onClick={() => handleSelectAddress(feature)}
+                  className="flex items-center text-left w-full px-4 py-3 hover:bg-zinc-800 transition-colors border-b border-zinc-800/50 last:border-0"
+                >
+                  <MapPin size={16} className="text-zinc-500 mr-3 shrink-0" />
+                  <span className="text-zinc-200 text-sm truncate">{feature.place_name}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Global Controls */}
