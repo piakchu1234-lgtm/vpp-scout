@@ -53,7 +53,6 @@ import {
   formatDistance,
   formatArea,
   getBoundarySegments,
-  calculatePerimeter,
 } from '@/lib/map/measurementUtils';
 import { detectEasementConflict } from '@/lib/map/spatialConflict';
 import { captureMapboxCanvas } from '@/lib/mapCapture';

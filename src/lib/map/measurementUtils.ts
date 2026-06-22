@@ -352,36 +352,3 @@ export function getBoundarySegments(
   };
 }
 
-/**
- * Calculate the perimeter of a polygon in meters.
- *
- * @param polygonFeature - GeoJSON Polygon or MultiPolygon feature
- * @returns Total perimeter in meters
- */
-export function calculatePerimeter(
-  polygonFeature: Feature<Polygon | MultiPolygon>
-): number {
-  const geometry = polygonFeature.geometry;
-
-  const rings = geometry.type === 'Polygon'
-    ? [geometry.coordinates[0]]
-    : geometry.coordinates.map(poly => poly[0]);
-
-  let totalPerimeter = 0;
-
-  for (const ring of rings) {
-    for (let i = 0; i < ring.length - 1; i++) {
-      const point1 = ring[i];
-      const point2 = ring[i + 1];
-
-      if (!point1 || !point2) continue;
-
-      const from = turf.point(point1);
-      const to = turf.point(point2);
-      totalPerimeter += turf.distance(from, to, { units: 'meters' });
-    }
-  }
-
-  return totalPerimeter;
-}
-
