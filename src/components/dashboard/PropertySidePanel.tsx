@@ -121,7 +121,7 @@ export default function PropertySidePanel({
   }, [daData, propertyLat, propertyLng]);
 
   return (
-    <div className="fixed left-20 top-0 h-screen w-[380px] bg-[#0A0A0A] border-r border-zinc-800 overflow-y-auto z-40">
+    <div className="h-full bg-zinc-950/80 backdrop-blur-md border border-zinc-800 rounded-2xl overflow-y-auto shadow-2xl">
       {/* Header Section */}
       <div className="sticky top-0 bg-[#0A0A0A]/95 backdrop-blur-xl border-b border-zinc-800 p-6 z-10 space-y-4">
         {/* User Account - Top Right */}

@@ -1347,13 +1347,13 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
                 type="geojson"
                 data={parcel}
               >
-                {/* Dynamic zoning fill with 0.35 opacity */}
+                {/* ARCHISTAR-PARITY: Solid teal/cyan fill */}
                 <Layer
                   id={`multi-parcel-zone-fill-${idx}`}
                   type="fill"
                   paint={{
-                    'fill-color': fillColor,
-                    'fill-opacity': 0.35, // Prevents satellite map obscuration
+                    'fill-color': '#6bc4c5', // Archistar teal/cyan
+                    'fill-opacity': 0.6, // Solid enough to pop, transparent enough to see basemap
                   }}
                 />
                 {/* ARCHISTAR-PARITY: Vibrant pink boundary outline */}
@@ -1362,7 +1362,7 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
                   type="line"
                   paint={{
                     'line-color': '#ec4899', // Vibrant pink (Archistar-style)
-                    'line-width': 2.5,
+                    'line-width': 3, // Bolder for better visibility
                   }}
                 />
                 {/* ARCHISTAR-PARITY: Boundary dimension labels */}
@@ -1377,17 +1377,19 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
                     type="symbol"
                     layout={{
                       'text-field': ['get', 'label'],
-                      'text-size': 12,
+                      'text-size': 11,
                       'symbol-placement': 'point',
                       'text-rotation-alignment': 'map',
                       'text-rotate': ['get', 'textAngle'],
+                      'text-anchor': 'bottom', // Anchor to bottom so offset pushes text up
+                      'text-offset': [0, -1], // Push text above the boundary line
                       'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
                       'text-allow-overlap': false,
                       'text-ignore-placement': false,
                     }}
                     paint={{
-                      'text-color': '#ec4899', // Match boundary color
-                      'text-halo-color': '#18181b', // Dark background for legibility
+                      'text-color': '#18181b', // Dark grey/black for light basemap
+                      'text-halo-color': '#ffffff', // White halo for contrast
                       'text-halo-width': 2,
                     }}
                   />

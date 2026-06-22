@@ -1115,9 +1115,9 @@ function AppCanvas() {
 
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#05060E]">
-      {/* Left Control Rail */}
-      <aside className="fixed left-0 top-0 h-full w-20 z-50 bg-[#05060E]/70 backdrop-blur-md border-r border-white/10 flex flex-col items-center py-6">
+    <div className="relative h-screen overflow-hidden bg-[#05060E]">
+      {/* Left Control Rail - Floating */}
+      <aside className="fixed left-4 top-4 bottom-4 w-20 z-50 bg-zinc-950/80 backdrop-blur-md border border-white/10 rounded-2xl flex flex-col items-center py-6 shadow-2xl">
         {/* Logo at top */}
         <div className="mb-8">
           <div className="w-10 h-10 bg-[#E9E778] rounded-lg flex items-center justify-center">
@@ -1160,18 +1160,19 @@ function AppCanvas() {
         </div>
       </aside>
 
-      {/* Property Side Panel - Next to Control Rail */}
+      {/* Property Side Panel - Floating Overlay Left Side */}
       {hasCoords && (
-        <PropertySidePanel
-          address={address}
-          language={language}
-          zoneCode={planData?.zoneCode || null}
-          zoneDescription={planData?.zoneDescription || null}
-          planData={planData}
-          onExportPDF={handleExportPdf}
-          isGeneratingPDF={isGeneratingPdf}
-          onSaveProject={() => setShowSaveModal(true)}
-          isSavingProject={isSavingProject}
+        <div className="fixed left-28 top-4 bottom-4 w-[400px] z-40">
+          <PropertySidePanel
+            address={address}
+            language={language}
+            zoneCode={planData?.zoneCode || null}
+            zoneDescription={planData?.zoneDescription || null}
+            planData={planData}
+            onExportPDF={handleExportPdf}
+            isGeneratingPDF={isGeneratingPdf}
+            onSaveProject={() => setShowSaveModal(true)}
+            isSavingProject={isSavingProject}
           onTestAgent={async () => {
             setIsTestingAgent(true);
             try {
@@ -1196,10 +1197,11 @@ function AppCanvas() {
           propertyLat={lat}
           propertyLng={lon}
         />
+        </div>
       )}
 
-      {/* Main Content - Full-Bleed Map */}
-      <main className="flex-1 ml-[480px] relative">
+      {/* Main Content - Full-Screen Map (Hero) */}
+      <main className="absolute inset-0 w-screen h-screen">
         {/* Map Canvas */}
         <div className="absolute inset-0 w-full h-full">
           {hasCoords ? (
