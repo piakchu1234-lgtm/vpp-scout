@@ -121,9 +121,9 @@ export default function PropertySidePanel({
   }, [daData, propertyLat, propertyLng]);
 
   return (
-    <div className="h-full bg-zinc-950/80 backdrop-blur-md border border-zinc-800 rounded-2xl overflow-y-auto shadow-2xl">
+    <div className="h-full bg-zinc-950/70 backdrop-blur-xl border border-white/10 rounded-2xl overflow-y-auto shadow-2xl">
       {/* Header Section */}
-      <div className="sticky top-0 bg-[#0A0A0A]/95 backdrop-blur-xl border-b border-zinc-800 p-6 z-10 space-y-4">
+      <div className="sticky top-0 bg-zinc-950/80 backdrop-blur-xl border-b border-white/10 p-6 z-10 space-y-4">
         {/* User Account - Top Right */}
         <div className="flex items-center justify-between">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
@@ -172,7 +172,7 @@ export default function PropertySidePanel({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={handleSearchKeyDown}
-              className="w-full pl-10 pr-4 py-2 bg-[#241F21] border border-zinc-700 rounded-lg text-white text-sm placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-[#E9E778] focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2 bg-zinc-900/50 border border-white/10 rounded-lg text-white text-sm placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-[#E9E778] focus:border-transparent"
             />
           </div>
         </div>
@@ -197,12 +197,12 @@ export default function PropertySidePanel({
 
         {/* Action Buttons */}
         <div className="grid grid-cols-2 gap-3">
-          {/* Save Project Button */}
+          {/* Save Project Button - Subtle Outlined */}
           {onSaveProject && (
             <button
               onClick={onSaveProject}
               disabled={isSavingProject || !address}
-              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-700 disabled:cursor-not-allowed text-white font-semibold rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+              className="px-4 py-2.5 border border-zinc-600 hover:bg-zinc-800 disabled:border-zinc-700 disabled:bg-zinc-900 disabled:cursor-not-allowed text-white font-semibold rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
             >
               {isSavingProject ? (
                 <>
@@ -218,7 +218,7 @@ export default function PropertySidePanel({
             </button>
           )}
 
-          {/* Export PDF Button */}
+          {/* Export PDF Button - Primary CTA */}
           <button
             onClick={onExportPDF}
             disabled={isGeneratingPDF || !address}
@@ -289,7 +289,7 @@ export default function PropertySidePanel({
 
         {/* Map Layers Section */}
         <div className="bg-[#05060E]/80 backdrop-blur-xl border border-white/10 rounded-xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-zinc-800">
+          <div className="px-4 py-3 border-b border-white/10">
             <h3 className="text-sm font-semibold text-white">Map Layers</h3>
           </div>
           <div className="px-4 py-3 space-y-3">

@@ -1298,9 +1298,9 @@ function AppCanvas() {
       </div>
       </main>
 
-      {/* 4-Card Floating Bottom Array */}
+      {/* 4-Card Floating Bottom Array - Centered & Responsive */}
       {hasCoords && (
-        <div className="absolute bottom-8 left-[500px] right-8 flex justify-between gap-4 z-20 pointer-events-none">
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-wrap justify-center gap-4 w-full max-w-7xl px-4 z-20 pointer-events-none">
           {/* Card 1: Development Assessment */}
           <div className="flex-1 min-w-[280px] max-w-[350px] bg-zinc-950/80 backdrop-blur-md border border-zinc-800 rounded-xl p-4 shadow-2xl pointer-events-auto">
             <div className="flex items-center justify-between mb-3">
