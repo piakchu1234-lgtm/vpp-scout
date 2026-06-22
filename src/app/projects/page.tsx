@@ -8,7 +8,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2, FolderOpen, Search, Filter } from 'lucide-react';
+import { ArrowLeft, Loader2, FolderOpen, Search, Filter, MapPin } from 'lucide-react';
+import { UserButton } from '@clerk/nextjs';
 import ProjectCard from '@/components/dashboard/ProjectCard';
 
 interface SavedProject {
@@ -96,7 +97,7 @@ export default function ProjectsPage() {
       {/* Header */}
       <header className="sticky top-0 z-40 bg-[#241F21]/95 backdrop-blur-md border-b border-zinc-800">
         <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-4">
               <button
                 onClick={() => router.push('/app')}
@@ -106,19 +107,31 @@ export default function ProjectsPage() {
                 <ArrowLeft className="w-5 h-5" />
               </button>
               <div>
-                <h1 className="text-2xl font-bold">My Projects</h1>
-                <p className="text-sm text-zinc-400">
-                  {projects.length} saved project{projects.length !== 1 ? 's' : ''}
+                <h1 className="text-3xl font-bold text-white">Your Projects</h1>
+                <p className="text-sm text-zinc-400 mt-1">
+                  {projects.length} saved {projects.length !== 1 ? 'projects' : 'project'}
                 </p>
               </div>
             </div>
 
-            <button
-              onClick={() => router.push('/app')}
-              className="px-4 py-2 bg-[#E9E778] hover:bg-[#E9E778]/90 text-zinc-900 font-semibold rounded-lg transition-colors"
-            >
-              New Project
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => router.push('/app')}
+                className="px-4 py-2 bg-[#E9E778] hover:bg-[#d4d265] text-black font-semibold rounded-lg transition-colors"
+              >
+                New Project
+              </button>
+              <UserButton
+                appearance={{
+                  elements: {
+                    avatarBox: 'w-10 h-10',
+                    userButtonPopoverCard: 'bg-zinc-900 border border-zinc-800',
+                    userButtonPopoverActionButton: 'hover:bg-zinc-800',
+                    userButtonPopoverActionButtonText: 'text-zinc-300',
+                  },
+                }}
+              />
+            </div>
           </div>
 
           {/* Filters */}
@@ -166,25 +179,33 @@ export default function ProjectsPage() {
             <p className="text-zinc-400">Loading projects...</p>
           </div>
         ) : filteredProjects.length === 0 ? (
-          // Empty state
-          <div className="flex flex-col items-center justify-center py-20">
-            <div className="p-6 bg-zinc-900/50 rounded-full mb-6">
-              <FolderOpen className="w-16 h-16 text-zinc-700" />
+          // Empty state - Enhanced
+          <div className="flex flex-col items-center justify-center py-20 px-6">
+            {/* Icon */}
+            <div className="w-24 h-24 mb-6 rounded-full bg-zinc-900/50 backdrop-blur-xl border border-white/10 flex items-center justify-center">
+              <FolderOpen className="w-12 h-12 text-zinc-600" />
             </div>
-            <h2 className="text-2xl font-bold mb-2">
-              {projects.length === 0 ? 'No projects yet' : 'No results found'}
+
+            {/* Heading */}
+            <h2 className="text-2xl font-bold text-white mb-3">
+              {projects.length === 0 ? 'No Projects Yet' : 'No Matching Projects'}
             </h2>
-            <p className="text-zinc-400 mb-6 text-center max-w-md">
+
+            {/* Description */}
+            <p className="text-zinc-400 text-center max-w-md mb-8 leading-relaxed">
               {projects.length === 0
-                ? 'Start by analyzing a property and saving your first project.'
+                ? 'Start analyzing Victorian properties with automated SSD compliance, 3D massing, and ROI calculations. Save scenarios to compare options side-by-side.'
                 : 'Try adjusting your search or filter criteria.'}
             </p>
+
+            {/* CTA Button */}
             {projects.length === 0 && (
               <button
                 onClick={() => router.push('/app')}
-                className="px-6 py-3 bg-[#E9E778] hover:bg-[#E9E778]/90 text-zinc-900 font-semibold rounded-lg transition-colors"
+                className="px-6 py-3 bg-[#E9E778] hover:bg-[#d4d265] text-black font-bold rounded-lg transition-colors flex items-center gap-2 shadow-lg"
               >
-                Create First Project
+                <MapPin className="w-5 h-5" />
+                Start New Feasibility Study
               </button>
             )}
             {projects.length > 0 && filteredProjects.length === 0 && (

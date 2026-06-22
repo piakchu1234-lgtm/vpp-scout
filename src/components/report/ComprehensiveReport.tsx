@@ -6,6 +6,8 @@ import type { MergedMarketData } from '@/lib/agentMarketIntegration';
 import type { MassingResult, FinancialAnalysis } from '@/lib/massingEngine';
 import { DataSourceBadge } from '@/components/ui/DataSourceBadge';
 import { describeOverlayCode } from '@/components/sidebar/PlanningConstraintsTab';
+import type { SpatialRiskAssessment } from '@/lib/spatialIntersection';
+import { generateRiskReport } from '@/lib/spatialIntersection';
 
 // ResCode / NCC 2026 screening constants — duplicated from
 // SSDFeasibilityWidget. Keep in sync until extracted to src/lib/ssd.ts.
@@ -35,6 +37,8 @@ export interface ComprehensiveReportProps {
   generatedMassing?: MassingResult | null;
   /** Financial analysis (ROI calculations) */
   financialAnalysis?: FinancialAnalysis | null;
+  /** Spatial risk assessment from overlay intersection analysis */
+  spatialRisk?: SpatialRiskAssessment | null;
 }
 
 const formatDate = (d: Date) =>
@@ -65,6 +69,7 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
       mapSnapshot,
       generatedMassing,
       financialAnalysis,
+      spatialRisk,
     },
     ref,
   ) {
@@ -503,6 +508,89 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
               <p className="text-xs italic text-gray-500">No disqualifying overlays detected.</p>
             )}
           </div>
+
+          {/* Spatial Risk Assessment */}
+          {spatialRisk && spatialRisk.verdict !== 'clear' && (
+            <div className="mb-4">
+              <div className="text-[10px] uppercase tracking-[0.25em] text-gray-600 font-bold mb-2">
+                {language === 'zh' ? '空间风险分析' : 'Spatial Risk Analysis'}
+              </div>
+              <div
+                className={`border rounded p-3 ${
+                  spatialRisk.verdict === 'permit_mandatory'
+                    ? 'border-red-400 bg-red-50'
+                    : 'border-amber-400 bg-amber-50'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] uppercase tracking-wider font-bold text-gray-600">
+                    {language === 'zh' ? '风险等级' : 'Risk Level'}
+                  </span>
+                  <span
+                    className={`text-xs font-bold ${
+                      spatialRisk.verdict === 'permit_mandatory'
+                        ? 'text-red-700'
+                        : 'text-amber-700'
+                    }`}
+                  >
+                    {spatialRisk.verdict === 'permit_mandatory'
+                      ? language === 'zh'
+                        ? '强制许可'
+                        : 'PERMIT MANDATORY'
+                      : language === 'zh'
+                        ? '需审查'
+                        : 'REVIEW REQUIRED'}
+                  </span>
+                </div>
+
+                {/* Intersection Summary */}
+                {spatialRisk.intersections.length > 0 && (
+                  <div className="mb-3">
+                    <p className="text-[10px] text-gray-600 mb-2">
+                      {language === 'zh'
+                        ? `检测到 ${spatialRisk.intersections.length} 个覆盖区相交:`
+                        : `${spatialRisk.intersections.length} overlay intersection(s) detected:`}
+                    </p>
+                    <div className="space-y-1.5">
+                      {spatialRisk.intersections.map((intersection, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between text-xs border-l-2 pl-2"
+                          style={{
+                            borderColor:
+                              intersection.risk === 'high'
+                                ? '#ef4444'
+                                : intersection.risk === 'medium'
+                                  ? '#f59e0b'
+                                  : '#3b82f6',
+                          }}
+                        >
+                          <div>
+                            <span className="font-bold text-black">{intersection.overlayCode}</span>
+                            <span className="text-gray-600 ml-2">— {intersection.overlayName}</span>
+                          </div>
+                          <span className="font-mono text-[10px] text-gray-700">
+                            {intersection.footprintAffectedPercent.toFixed(1)}%
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Risk Warnings */}
+                {spatialRisk.warnings[language].length > 0 && (
+                  <div className="space-y-2 text-xs text-black leading-relaxed">
+                    {spatialRisk.warnings[language].map((warning, idx) => (
+                      <p key={idx} className="border-t border-gray-300 pt-2">
+                        {warning}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Hazards */}
           <div>

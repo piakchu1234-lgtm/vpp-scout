@@ -9,6 +9,10 @@ import FeasibilityCard from '@/components/dashboard/FeasibilityCard';
 import DocumentStorefront from '@/components/dashboard/DocumentStorefront';
 import ScenarioComparison from '@/components/dashboard/ScenarioComparison';
 import DemographicPanel from '@/components/dashboard/DemographicPanel';
+import GardenAreaCard from '@/components/cards/GardenAreaCard';
+import ParkingDeductionCard from '@/components/cards/ParkingDeductionCard';
+import HighestBestUseCard from '@/components/cards/HighestBestUseCard';
+import SSDComplianceCard from '@/components/cards/SSDComplianceCard';
 import { Skeleton, SkeletonAttribute } from '@/components/ui/Skeleton';
 import { useUserPlan } from '@/contexts/UserPlanContext';
 import { FileText } from 'lucide-react';
@@ -19,6 +23,10 @@ import type { YieldData } from '@/lib/yieldEngine';
 import type { PlanningOverlay } from '@/components/dashboard/PlanningCard';
 import type { MergedMarketData } from '@/lib/agentMarketIntegration';
 import { DataSourceBadge } from '@/components/ui/DataSourceBadge';
+import type { DwellingCount } from '@/lib/vppCompliance';
+import type { OverlayGeometry } from '@/lib/overlayService';
+import type { MassingResult } from '@/lib/massingEngine';
+import type { Polygon } from 'geojson';
 
 type Lang = 'en' | 'zh';
 
@@ -41,6 +49,8 @@ type InsightPanelProps = {
   yieldData: YieldData;
   effectiveLandSizeM2: number | null;
   onViewReport?: () => void;
+  overlayGeometries?: OverlayGeometry[];
+  generatedMassing?: MassingResult | null;
 };
 
 const LABELS = {
@@ -97,6 +107,8 @@ export default function InsightPanel({
   yieldData,
   effectiveLandSizeM2,
   onViewReport,
+  overlayGeometries = [],
+  generatedMassing = null,
 }: InsightPanelProps) {
   // Tab state for advanced analysis sections
   const [activeTab, setActiveTab] = useState<TabId>('property');
@@ -106,6 +118,12 @@ export default function InsightPanel({
 
   // Debug panel state (hidden by default, toggle with Ctrl+Shift+D)
   const [showDebug, setShowDebug] = useState(false);
+
+  // VPP Compliance state - dwelling count for parking deduction
+  const [proposedDwellingCount, setProposedDwellingCount] = useState<DwellingCount>(2);
+
+  // SSD Compliance state
+  const [ssdModeEnabled, setSsdModeEnabled] = useState(false);
 
   // Keyboard shortcut to toggle debug panel
   React.useEffect(() => {
@@ -494,6 +512,52 @@ export default function InsightPanel({
           <div role="tabpanel" id="tab-panel-feasibility" aria-labelledby="tab-feasibility">
             {/* FEASIBILITY TAB: AI Intelligence + SSD Compliance */}
             <div className="space-y-4">
+              {/* SSD COMPLIANCE CHECKER - 2026 Victorian Reforms */}
+              {effectiveLandSizeM2 && effectiveLandSizeM2 > 0 && planData?.zoneCode && (
+                <SSDComplianceCard
+                  enabled={ssdModeEnabled}
+                  onToggle={setSsdModeEnabled}
+                  lotSizeM2={effectiveLandSizeM2}
+                  existingDwellingFootprintM2={aiInsight?.isVacantLand ? 0 : effectiveLandSizeM2 * 0.3}
+                  proposedSSDFootprintM2={60}
+                  zoneCode={planData.zoneCode}
+                  overlays={planData.overlayRaw || []}
+                  language={language}
+                  buildingFootprintGeometry={generatedMassing?.footprint || undefined}
+                  overlayGeometries={overlayGeometries}
+                />
+              )}
+
+              {/* HIGHEST & BEST USE - AI Development Strategy */}
+              {aiInsight?.highestBestUse && (
+                <HighestBestUseCard
+                  highestBestUse={aiInsight.highestBestUse}
+                  language={language}
+                />
+              )}
+
+              {/* VPP COMPLIANCE CARDS - ResCode Enforcement (only show if NOT in SSD mode) */}
+              {!ssdModeEnabled && effectiveLandSizeM2 && effectiveLandSizeM2 > 0 && (
+                <>
+                  {/* Garden Area Compliance */}
+                  <GardenAreaCard
+                    lotSizeM2={effectiveLandSizeM2}
+                    existingCoverageM2={aiInsight?.isVacantLand ? 0 : effectiveLandSizeM2 * 0.3}
+                    proposedFootprintM2={60}
+                    language={language}
+                  />
+
+                  {/* Parking Deduction Calculator */}
+                  <ParkingDeductionCard
+                    dwellingCount={proposedDwellingCount}
+                    bedroomsPerDwelling={3}
+                    grossLotSizeM2={effectiveLandSizeM2}
+                    language={language}
+                    onDwellingCountChange={setProposedDwellingCount}
+                  />
+                </>
+              )}
+
               {/* AI FEASIBILITY CARD - New AI Analyst Integration */}
               <FeasibilityCard
                 yieldData={yieldData}

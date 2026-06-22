@@ -32,6 +32,7 @@ import {
   type VicPlanData,
 } from '@/lib/vicPlanApi';
 import { fetchLgaForPoint } from '@/lib/lgaApi';
+import { fetchOverlaysNearPoint, type OverlayGeometry } from '@/lib/overlayService';
 import { reverseGeocodeNearest } from '@/lib/geocoding';
 import { calculateYield, emptyYield, type YieldData } from '@/lib/yieldEngine';
 import { mergeParcelGeometries } from '@/lib/spatialAnalysis';
@@ -66,6 +67,7 @@ export type AIInsightData = {
   insightSummary: string;
   executiveSummary: string;
   targetDemographicPitch?: string;
+  highestBestUse?: string;
   ssdFeasibility: {
     isEligible: boolean;
     reasoning: string;
@@ -114,7 +116,9 @@ const MapPreviewMemoized = memo(
       prevProps.drawnArea === nextProps.drawnArea &&
       prevProps.zoneCode === nextProps.zoneCode &&
       prevProps.overlayCodes === nextProps.overlayCodes &&
-      prevProps.vppAuditResult === nextProps.vppAuditResult
+      prevProps.vppAuditResult === nextProps.vppAuditResult &&
+      prevProps.overlayGeometries === nextProps.overlayGeometries &&
+      prevProps.showOverlays === nextProps.showOverlays
     );
   }
 );
@@ -145,6 +149,7 @@ function AppCanvas() {
   const [parcelMessage, setParcelMessage] = useState<string | null>(null);
   const [planData, setPlanData] = useState<VicPlanData | null>(null);
   const [liveCouncil, setLiveCouncil] = useState<string | null>(null);
+  const [overlayGeometries, setOverlayGeometries] = useState<OverlayGeometry[]>([]);
   const [isStorefrontOpen, setIsStorefrontOpen] = useState(false);
   const [language, setLanguage] = useState<Lang>('en');
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
@@ -605,6 +610,20 @@ function AppCanvas() {
         if (stale) return;
         console.warn('[AppCanvas] LGA fetch failed', err);
         setLiveCouncil(null);
+      });
+
+    // Fetch overlay geometries for spatial intersection analysis
+    // Buffer radius: 100m covers typical parcel + surroundings for accurate risk detection
+    fetchOverlaysNearPoint(lon, lat, 100, VICMAP_TIMEOUT_MS)
+      .then((overlays) => {
+        if (stale) return;
+        setOverlayGeometries(overlays);
+        console.log(`[AppCanvas] Fetched ${overlays.length} overlay geometries for spatial analysis`);
+      })
+      .catch((err: unknown) => {
+        if (stale) return;
+        console.warn('[AppCanvas] Overlay geometry fetch failed', err);
+        setOverlayGeometries([]);
       });
 
     return () => {
@@ -1214,6 +1233,8 @@ function AppCanvas() {
                 onSpatialConflict={setSpatialConflict}
                 show3DMassing={show3DMassing}
                 generatedMassing={generatedMassing}
+                overlayGeometries={overlayGeometries}
+                showOverlays={overlayGeometries.length > 0}
                 className="h-full w-full"
               />
               <MapControlsToolbar

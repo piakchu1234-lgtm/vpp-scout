@@ -202,27 +202,7 @@ export default function LandingPage() {
         <nav className="flex items-center gap-2" onMouseLeave={() => setHoveredNav(null)}>
           <Show when="signed-out">
             <SignInButton mode="modal">
-              <div
-                onMouseEnter={() => setHoveredNav('Sign In')}
-                className="relative px-4 py-2 cursor-pointer transition-colors z-10"
-              >
-                {hoveredNav === 'Sign In' && (
-                  <motion.div
-                    layoutId="nav-pill"
-                    className="absolute inset-0 bg-white/10 rounded-full -z-10"
-                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                  />
-                )}
-                <span className={`relative z-20 text-sm font-medium ${hoveredNav === 'Sign In' ? 'text-[#E9E778]' : 'text-zinc-300'}`}>
-                  Sign In
-                </span>
-              </div>
-            </SignInButton>
-          </Show>
-
-          <Show when="signed-out">
-            <SignInButton mode="modal">
-              <button className="ml-4 px-5 py-2 bg-[#E9E778] text-[#241F21] text-sm font-bold rounded-full hover:bg-[#d4d262] transition-colors">
+              <button className="px-5 py-2 bg-[#E9E778] text-[#241F21] text-sm font-bold rounded-full hover:bg-[#d4d262] transition-colors">
                 Try for free
               </button>
             </SignInButton>

@@ -7,7 +7,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Calendar, MapPin, TrendingUp, DollarSign, Trash2, ExternalLink } from 'lucide-react';
+import { Calendar, MapPin, TrendingUp, TrendingDown, DollarSign, Trash2, ExternalLink } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface ProjectCardProps {
@@ -89,9 +89,9 @@ export default function ProjectCard({ project, onDelete }: ProjectCardProps) {
   };
 
   return (
-    <div className="group relative bg-zinc-900/50 backdrop-blur-md border border-zinc-800 rounded-lg overflow-hidden hover:border-zinc-700 transition-all duration-300 hover:shadow-2xl hover:shadow-[#E9E778]/10">
+    <div className="group relative bg-zinc-900/50 backdrop-blur-xl border border-white/10 hover:border-[#E9E778]/30 rounded-xl overflow-hidden shadow-2xl transition-all duration-300 hover:scale-[1.02]">
       {/* Thumbnail */}
-      <div className="relative aspect-video bg-zinc-800 overflow-hidden">
+      <div className="relative aspect-[16/10] bg-zinc-800 overflow-hidden">
         {project.mapSnapshot ? (
           <img
             src={project.mapSnapshot}
@@ -104,15 +104,17 @@ export default function ProjectCard({ project, onDelete }: ProjectCardProps) {
           </div>
         )}
 
-        {/* Overlay gradient on hover */}
-        <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-transparent to-transparent opacity-60" />
+        {/* Gradient overlay for text readability */}
+        <div className="absolute inset-0 bg-gradient-to-t from-zinc-900/80 via-transparent to-transparent" />
 
-        {/* ROI Badge */}
+        {/* ROI Badge - Enhanced */}
         {project.roiData.roi !== undefined && (
-          <div className="absolute top-3 right-3 px-2 py-1 bg-black/80 backdrop-blur-sm rounded text-xs font-bold">
-            <span className={getRoiColor(project.roiData.roi)}>
-              {project.roiData.roi.toFixed(1)}% ROI
-            </span>
+          <div className={`absolute top-3 right-3 px-2.5 py-1.5 backdrop-blur-md rounded-lg text-xs font-bold ${
+            project.roiData.roi >= 20 ? 'bg-green-500/20 border border-green-500/30 text-green-400' :
+            project.roiData.roi >= 10 ? 'bg-amber-500/20 border border-amber-500/30 text-amber-400' :
+            'bg-red-500/20 border border-red-500/30 text-red-400'
+          }`}>
+            {project.roiData.roi.toFixed(1)}% ROI
           </div>
         )}
       </div>
@@ -159,17 +161,21 @@ export default function ProjectCard({ project, onDelete }: ProjectCardProps) {
             </div>
           </div>
 
-          {/* Profit */}
+          {/* Profit - Enhanced with Trend Icon */}
           {project.roiData.profit !== undefined && (
             <div className="p-2 bg-zinc-800/50 rounded">
               <div className="flex items-center gap-1 text-xs text-zinc-500 mb-0.5">
-                <TrendingUp className="w-3 h-3" />
+                {project.roiData.profit >= 0 ? (
+                  <TrendingUp className="w-3 h-3 text-green-400" />
+                ) : (
+                  <TrendingDown className="w-3 h-3 text-red-400" />
+                )}
                 Profit
               </div>
-              <div className={`text-sm font-semibold ${
-                project.roiData.profit >= 0 ? 'text-green-500' : 'text-red-500'
+              <div className={`text-sm font-bold ${
+                project.roiData.profit >= 0 ? 'text-green-400' : 'text-red-400'
               }`}>
-                {formatCurrency(project.roiData.profit)}
+                {formatCurrency(Math.abs(project.roiData.profit))}
               </div>
             </div>
           )}

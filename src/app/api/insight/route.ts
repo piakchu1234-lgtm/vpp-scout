@@ -215,11 +215,25 @@ Example format:
 Sentence 1: Investment thesis - Land cost vs GRV with realistic margin/timeline
 Sentence 2: Define exact buyer demographic + recommended dwelling type with specific features + realistic price point
 
+**HIGHEST & BEST USE (HBU) ANALYSIS REQUIREMENT:**
+You MUST generate a 'highestBestUse' field that acts as a Development Strategist. This is NOT just a repeat of targetDemographicPitch — it must analyze the PHYSICAL site constraints (lot size, buildable envelope from garden area rules, realistic parking deduction) and MARKET context (suburb trends, comparable sales, buyer demand) to recommend the OPTIMAL product mix.
+
+Format: 2-3 sentences maximum.
+- Sentence 1: State the recommended product type and justify based on lot geometry + zone + market
+- Sentence 2: Quantify the financial outcome (construction cost range, GRV, profit margin)
+- Sentence 3 (optional): Note any critical constraints that affect feasibility
+
+Example HBU outputs:
+- "This 700m² GRZ1 site in Malvern East should be developed as two luxury 4-bedroom townhouses rather than three standard 3-bedroom units. Current market comparables show 4-bed townhouses selling at $1.8M vs 3-bed at $1.2M, and the 350m² buildable envelope (after 35% garden area deduction) favors two larger footprints over three smaller ones. Total construction $1.4M, GRV $3.6M, developer margin 38%."
+- "For this 450m² NRZ lot in Hawthorn, the optimal play is single luxury architectural home rather than dual occupancy. The suburb's heritage character and $2M+ median house price reward high-quality single dwellings, and the constrained 225m² buildable area (after 30% garden + 40m² parking deduction) cannot economically support two separate dwellings. Build cost $850K, sale price $2.2M, margin 32%."
+- "Commercial mixed-use is the highest-value outcome for this 850m² C1Z site on Chapel Street. Ground-floor retail (150m² at $850/m²/year lease) plus 8 two-bedroom apartments above generates $4.8M GRV. Total development cost $3.2M including car-stacker parking, achieving 28% profit margin with strong pre-sale demand from young professionals."
+
 After searching, return ONLY a valid JSON object matching this exact schema (no markdown fences, no prose):
 {
   "insightSummary": "3 short bullet points covering neighborhood context and development potential. No markdown, no asterisks.",
   "executiveSummary": "A highly analytical, 2-sentence executive summary of the site's development potential based on its zoning. Do not quote raw VPP legislation.",
   "targetDemographicPitch": "A 2-sentence tactical pitch defining the ideal end-buyer demographic and most profitable dwelling type for this site based on zoning, size, and amenities.",
+  "highestBestUse": "A 2-3 sentence strategic recommendation analyzing the optimal development product for maximum profitability, considering lot size, zone, buildable area constraints, and local market comparables. Must include quantified financial outcomes (construction cost, GRV, margin).",
   "ssdFeasibility": {
     "isEligible": true,
     "reasoning": "Lot size is 650 m² (exceeds 300 m² threshold) and zoning is GRZ1 (General Residential Zone), which permits Small Second Dwellings under the 2026 SSD reforms."

@@ -9,6 +9,7 @@
 
 import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, FileDown, Loader2, Search, Save } from 'lucide-react';
+import { UserButton } from '@clerk/nextjs';
 import type { VicPlanData } from '@/lib/vicPlanApi';
 import * as turf from '@turf/turf';
 
@@ -123,6 +124,24 @@ export default function PropertySidePanel({
     <div className="fixed left-20 top-0 h-screen w-[380px] bg-[#0A0A0A] border-r border-zinc-800 overflow-y-auto z-40">
       {/* Header Section */}
       <div className="sticky top-0 bg-[#0A0A0A]/95 backdrop-blur-xl border-b border-zinc-800 p-6 z-10 space-y-4">
+        {/* User Account - Top Right */}
+        <div className="flex items-center justify-between">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+            Property Analysis
+          </h2>
+          <UserButton
+            appearance={{
+              elements: {
+                avatarBox: 'w-8 h-8',
+                userButtonPopoverCard: 'bg-zinc-900 border border-zinc-800',
+                userButtonPopoverActionButton: 'hover:bg-zinc-800',
+                userButtonPopoverActionButtonText: 'text-zinc-300',
+                userButtonPopoverFooter: 'hidden',
+              },
+            }}
+          />
+        </div>
+
         {/* Address */}
         <div>
           <h1 className="text-lg font-bold text-white mb-2 line-clamp-2">

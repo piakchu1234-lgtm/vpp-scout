@@ -36,6 +36,7 @@ import {
   type ParcelGeometry,
 } from '@/lib/vicPlanApi';
 import type { EasementData } from '@/lib/easementApi';
+import type { OverlayGeometry } from '@/lib/overlayService';
 import { tpzRadiusM } from '@/lib/tpz';
 import {
   buildZoningFillLayer,
@@ -147,6 +148,8 @@ type Props = {
   onSpatialConflict?: (conflict: { hasConflict: boolean; message?: string }) => void;
   show3DMassing?: boolean;
   generatedMassing?: MassingResult | null;
+  overlayGeometries?: OverlayGeometry[];
+  showOverlays?: boolean;
 };
 
 export type MapPreviewHandle = {
@@ -254,6 +257,8 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
       onSpatialConflict,
       show3DMassing = false,
       generatedMassing = null,
+      overlayGeometries = [],
+      showOverlays = false,
     },
     ref,
   ) {
@@ -1662,6 +1667,108 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
               visible={showEasements}
               onEasementsLoaded={handleEasementsLoaded}
             />
+          )}
+
+          {/* Overlay Risk Visualization Layer */}
+          {showOverlays && overlayGeometries.length > 0 && (
+            <>
+              <Source
+                id="overlay-risk-source"
+                type="geojson"
+                data={{
+                  type: 'FeatureCollection',
+                  features: overlayGeometries.map((overlay) => ({
+                    type: 'Feature',
+                    properties: {
+                      code: overlay.code,
+                      name: overlay.name,
+                      risk: overlay.risk,
+                    },
+                    geometry: overlay.geometry,
+                  })),
+                }}
+              >
+                {/* High-risk overlay fill (BMO, HO, LSIO, SBO) */}
+                <Layer
+                  id="overlay-risk-fill-high"
+                  type="fill"
+                  filter={['==', ['get', 'risk'], 'high']}
+                  paint={{
+                    'fill-color': '#ef4444',
+                    'fill-opacity': 0.2,
+                  }}
+                />
+                <Layer
+                  id="overlay-risk-outline-high"
+                  type="line"
+                  filter={['==', ['get', 'risk'], 'high']}
+                  paint={{
+                    'line-color': '#ef4444',
+                    'line-width': 2,
+                    'line-opacity': 0.6,
+                  }}
+                />
+
+                {/* Medium-risk overlay fill (DDO, EMO) */}
+                <Layer
+                  id="overlay-risk-fill-medium"
+                  type="fill"
+                  filter={['==', ['get', 'risk'], 'medium']}
+                  paint={{
+                    'fill-color': '#f59e0b',
+                    'fill-opacity': 0.15,
+                  }}
+                />
+                <Layer
+                  id="overlay-risk-outline-medium"
+                  type="line"
+                  filter={['==', ['get', 'risk'], 'medium']}
+                  paint={{
+                    'line-color': '#f59e0b',
+                    'line-width': 1.5,
+                    'line-opacity': 0.5,
+                  }}
+                />
+
+                {/* Low-risk overlay fill */}
+                <Layer
+                  id="overlay-risk-fill-low"
+                  type="fill"
+                  filter={['==', ['get', 'risk'], 'low']}
+                  paint={{
+                    'fill-color': '#3b82f6',
+                    'fill-opacity': 0.1,
+                  }}
+                />
+                <Layer
+                  id="overlay-risk-outline-low"
+                  type="line"
+                  filter={['==', ['get', 'risk'], 'low']}
+                  paint={{
+                    'line-color': '#3b82f6',
+                    'line-width': 1,
+                    'line-opacity': 0.4,
+                  }}
+                />
+
+                {/* Overlay labels */}
+                <Layer
+                  id="overlay-risk-labels"
+                  type="symbol"
+                  layout={{
+                    'text-field': ['get', 'code'],
+                    'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+                    'text-size': 11,
+                    'text-anchor': 'center',
+                  }}
+                  paint={{
+                    'text-color': '#ffffff',
+                    'text-halo-color': '#000000',
+                    'text-halo-width': 1.5,
+                  }}
+                />
+              </Source>
+            </>
           )}
 
           {/* 3D Building Massing Layer */}
