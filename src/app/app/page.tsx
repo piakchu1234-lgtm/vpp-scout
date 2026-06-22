@@ -152,6 +152,7 @@ function AppCanvas() {
   const [liveCouncil, setLiveCouncil] = useState<string | null>(null);
   const [overlayGeometries, setOverlayGeometries] = useState<OverlayGeometry[]>([]);
   const [isStorefrontOpen, setIsStorefrontOpen] = useState(false);
+  const [isPanelOpen, setIsPanelOpen] = useState(true); // Collapsible side panel state
   const { language } = useLanguage();
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isSavingProject, setIsSavingProject] = useState(false);
@@ -1160,35 +1161,41 @@ function AppCanvas() {
         </div>
       </aside>
 
-      {/* Property Side Panel - Floating Overlay Left Side */}
+      {/* Property Side Panel - Collapsible Floating Overlay */}
       {hasCoords && (
-        <div className="fixed left-28 top-4 bottom-4 w-[400px] z-40">
-          <PropertySidePanel
-            address={address}
-            language={language}
-            zoneCode={planData?.zoneCode || null}
-            zoneDescription={planData?.zoneDescription || null}
-            planData={planData}
-            onExportPDF={handleExportPdf}
-            isGeneratingPDF={isGeneratingPdf}
-            onSaveProject={() => setShowSaveModal(true)}
-            isSavingProject={isSavingProject}
-          onTestAgent={async () => {
-            setIsTestingAgent(true);
-            try {
-              const testAddress = addressParam || '45 Kooyong Road, Armadale VIC 3143';
-              console.log('🤖 [TEST AGENT] Starting agentic search for:', testAddress);
-              const result = await fetchAgentMarketData(testAddress);
-              console.log('🤖 [TEST AGENT] ✅ SUCCESS! Result:', result);
-            } catch (error) {
-              console.error('🤖 [TEST AGENT] ❌ FAILED:', error);
-            } finally {
-              setIsTestingAgent(false);
-            }
-          }}
-          isTestingAgent={isTestingAgent}
-          showEasements={showEasements}
-          onToggleEasements={setShowEasements}
+        <>
+          {/* Side Panel */}
+          <div
+            className={`fixed left-28 top-4 bottom-4 w-[400px] z-40 transition-transform duration-300 ease-in-out ${
+              isPanelOpen ? 'translate-x-0' : '-translate-x-[440px]'
+            }`}
+          >
+            <PropertySidePanel
+              address={address}
+              language={language}
+              zoneCode={planData?.zoneCode || null}
+              zoneDescription={planData?.zoneDescription || null}
+              planData={planData}
+              onExportPDF={handleExportPdf}
+              isGeneratingPDF={isGeneratingPdf}
+              onSaveProject={() => setShowSaveModal(true)}
+              isSavingProject={isSavingProject}
+            onTestAgent={async () => {
+              setIsTestingAgent(true);
+              try {
+                const testAddress = addressParam || '45 Kooyong Road, Armadale VIC 3143';
+                console.log('🤖 [TEST AGENT] Starting agentic search for:', testAddress);
+                const result = await fetchAgentMarketData(testAddress);
+                console.log('🤖 [TEST AGENT] ✅ SUCCESS! Result:', result);
+              } catch (error) {
+                console.error('🤖 [TEST AGENT] ❌ FAILED:', error);
+              } finally {
+                setIsTestingAgent(false);
+              }
+            }}
+            isTestingAgent={isTestingAgent}
+            showEasements={showEasements}
+            onToggleEasements={setShowEasements}
           showDAs={showDAs}
           onToggleDAs={setShowDAs}
           show3DMassing={show3DMassing}
@@ -1197,7 +1204,31 @@ function AppCanvas() {
           propertyLat={lat}
           propertyLng={lon}
         />
-        </div>
+          </div>
+
+          {/* Toggle Button - Glassmorphic Chevron */}
+          <button
+            onClick={() => setIsPanelOpen(!isPanelOpen)}
+            className={`fixed top-1/2 -translate-y-1/2 z-50 w-8 h-16 bg-zinc-950/80 backdrop-blur-md border border-white/10 rounded-r-xl shadow-lg hover:bg-zinc-900/80 transition-all duration-300 flex items-center justify-center ${
+              isPanelOpen ? 'left-[444px]' : 'left-4'
+            }`}
+            aria-label={isPanelOpen ? 'Collapse panel' : 'Expand panel'}
+            title={isPanelOpen ? 'Collapse panel' : 'Expand panel'}
+          >
+            <svg
+              className="w-4 h-4 text-zinc-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              {isPanelOpen ? (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              )}
+            </svg>
+          </button>
+        </>
       )}
 
       {/* Main Content - Full-Screen Map (Hero) */}
@@ -1298,246 +1329,53 @@ function AppCanvas() {
       </div>
       </main>
 
-      {/* 4-Card Floating Bottom Array - Centered & Responsive */}
-      {hasCoords && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-wrap justify-center gap-4 w-full max-w-7xl px-4 z-20 pointer-events-none">
-          {/* Card 1: Development Assessment */}
-          <div className="flex-1 min-w-[280px] max-w-[350px] bg-zinc-950/80 backdrop-blur-md border border-zinc-800 rounded-xl p-4 shadow-2xl pointer-events-auto">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs font-semibold tracking-wider uppercase text-zinc-400">
-                Development Assessment
-              </h3>
-              {planData && landSizeM2 && (
-                <SsdBadge
-                  eligible={
-                    landSizeM2 >= 300 &&
-                    ['GRZ', 'NRZ', 'RGZ', 'MUZ', 'TZ'].some((zone) =>
-                      planData.zoneCode?.toUpperCase().startsWith(zone)
-                    ) &&
-                    !planData.overlayRaw?.some((o) =>
-                      ['HO', 'BMO', 'LSIO', 'SBO', 'BFO'].some((prefix) =>
-                        o.toUpperCase().startsWith(prefix)
-                      )
-                    )
-                  }
-                  reason={
-                    landSizeM2 < 300
-                      ? 'Lot size below 300m² minimum'
-                      : planData.overlayRaw?.some((o) =>
-                          ['HO', 'BMO', 'LSIO', 'SBO', 'BFO'].some((prefix) =>
-                            o.toUpperCase().startsWith(prefix)
-                          )
-                        )
-                      ? 'Restrictive overlays present'
-                      : 'SSD fast-track pathway available'
-                  }
-                />
-              )}
+      {/* Clean Metrics Ribbon - Bottom of Screen */}
+      {hasCoords && planData && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+          <div className="bg-zinc-950/80 backdrop-blur-xl border border-white/10 rounded-2xl px-6 py-4 shadow-2xl pointer-events-auto">
+            <div className="flex items-center gap-8">
+              {/* Zoning */}
+              <div className="flex flex-col items-center gap-1">
+                <span className="text-xs text-zinc-400 uppercase tracking-wider">Zoning</span>
+                <span className="text-2xl font-bold text-white">{planData.zoneCode || '—'}</span>
+              </div>
+
+              <div className="h-12 w-px bg-white/10" />
+
+              {/* Lot Size */}
+              <div className="flex flex-col items-center gap-1">
+                <span className="text-xs text-zinc-400 uppercase tracking-wider">Lot Size</span>
+                <span className="text-2xl font-bold text-white">
+                  {landSizeM2 ? `${landSizeM2.toLocaleString()}m²` : '—'}
+                </span>
+              </div>
+
+              <div className="h-12 w-px bg-white/10" />
+
+              {/* Est. Value */}
+              <div className="flex flex-col items-center gap-1">
+                <span className="text-xs text-zinc-400 uppercase tracking-wider">Est. Value</span>
+                <span className="text-2xl font-bold text-white">
+                  {mergedMarketData.estimatedValue
+                    ? `$${(mergedMarketData.estimatedValue / 1000).toFixed(0)}k`
+                    : '—'}
+                </span>
+              </div>
+
+              <div className="h-12 w-px bg-white/10" />
+
+              {/* SSD Eligibility */}
+              <div className="flex flex-col items-center gap-1">
+                <span className="text-xs text-zinc-400 uppercase tracking-wider">SSD</span>
+                <span className={`text-2xl font-bold ${
+                  ssdFeasibility?.isEligible ? 'text-green-400' : 'text-zinc-500'
+                }`}>
+                  {ssdFeasibility?.isEligible
+                    ? `✓ ${ssdFeasibility.maxSsdSize}m²`
+                    : '✗'}
+                </span>
+              </div>
             </div>
-            {yieldData ? (
-              <RegulatoryRadarChart yieldData={yieldData} />
-            ) : (
-              <div className="h-[160px] flex items-center justify-center text-sm text-zinc-500">
-                Processing compliance data...
-              </div>
-            )}
-          </div>
-
-          {/* Card 2: Site Parameters */}
-          <div className="flex-1 min-w-[280px] max-w-[350px] bg-zinc-950/80 backdrop-blur-md border border-zinc-800 rounded-xl p-4 shadow-2xl pointer-events-auto">
-            <h3 className="text-xs font-semibold tracking-wider uppercase text-zinc-400 mb-3">
-              Site Parameters
-            </h3>
-            {landSizeM2 ? (
-              <SpatialPieChart landSize={landSizeM2} effectiveLandSize={effectiveLandSizeM2} />
-            ) : (
-              <div className="h-[160px] flex items-center justify-center text-sm text-zinc-500">
-                Loading spatial data...
-              </div>
-            )}
-          </div>
-
-          {/* Card 3: Market Performance */}
-          <div className="flex-1 min-w-[280px] max-w-[350px] bg-zinc-950/80 backdrop-blur-md border border-zinc-800 rounded-xl p-4 shadow-2xl pointer-events-auto">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs font-semibold tracking-wider uppercase text-zinc-400">
-                Market Performance
-              </h3>
-              {mergedMarketData.source !== 'none' && !isLoadingAgent && !isLoadingMarket && (
-                <DataSourceBadge source={mergedMarketData.source} language={language} />
-              )}
-            </div>
-            {isLoadingAgent || isLoadingMarket ? (
-              <div className="h-[160px] flex items-center justify-center text-sm text-zinc-500">
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                Aggregating...
-              </div>
-            ) : mergedMarketData.bedrooms !== null || mergedMarketData.estimatedValue !== null ? (
-              <div className="space-y-2 pt-2">
-                {mergedMarketData.bedrooms !== null && (
-                  <div className="flex justify-between items-center py-2 border-b border-zinc-700">
-                    <span className="text-xs text-zinc-400 uppercase tracking-wider">Beds / Baths</span>
-                    <span className="text-sm font-semibold text-white">
-                      {mergedMarketData.bedrooms} / {mergedMarketData.bathrooms ?? 0}
-                    </span>
-                  </div>
-                )}
-                {mergedMarketData.estimatedValue && (
-                  <div className="flex justify-between items-center py-2 border-b border-zinc-700">
-                    <span className="text-xs text-zinc-400 uppercase tracking-wider">Est. Value</span>
-                    <span className="text-sm font-semibold text-white">
-                      ${mergedMarketData.estimatedValue.toLocaleString('en-AU')}
-                    </span>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="h-[160px] flex items-center justify-center text-sm text-zinc-500">
-                No market data
-              </div>
-            )}
-          </div>
-
-          {/* Card 4: SSD Feasibility */}
-          <div className="flex-1 min-w-[280px] max-w-[350px] bg-zinc-950/80 backdrop-blur-md border border-zinc-800 rounded-xl p-4 shadow-2xl pointer-events-auto">
-            <h3 className="text-xs font-semibold tracking-wider uppercase text-zinc-400 mb-3">
-              SSD Feasibility
-            </h3>
-            {ssdFeasibility ? (
-              <div className="space-y-2 pt-2">
-                {/* Eligibility Status */}
-                <div className="flex justify-between items-center py-2 border-b border-zinc-700">
-                  <span className="text-xs text-zinc-400 uppercase tracking-wider">Eligible</span>
-                  <span className={`text-sm font-semibold ${
-                    ssdFeasibility.isEligible ? 'text-green-400' : 'text-red-400'
-                  }`}>
-                    {ssdFeasibility.isEligible ? 'Yes' : 'No'}
-                  </span>
-                </div>
-
-                {/* Max SSD Size */}
-                {ssdFeasibility.isEligible && (
-                  <div className="flex justify-between items-center py-2 border-b border-zinc-700">
-                    <span className="text-xs text-zinc-400 uppercase tracking-wider">Max SSD Size</span>
-                    <span className="text-sm font-semibold text-white">
-                      {ssdFeasibility.maxSsdSize}m²
-                    </span>
-                  </div>
-                )}
-
-                {/* Required Garden Area */}
-                <div className="flex justify-between items-center py-2 border-b border-zinc-700">
-                  <span className="text-xs text-zinc-400 uppercase tracking-wider">Garden Req.</span>
-                  <span className="text-sm font-semibold text-white">
-                    {ssdFeasibility.requiredGardenArea}m²
-                  </span>
-                </div>
-
-                {/* Site Coverage */}
-                <div className="flex justify-between items-center py-2 border-b border-zinc-700">
-                  <span className="text-xs text-zinc-400 uppercase tracking-wider">Max Coverage</span>
-                  <span className="text-sm font-semibold text-white">
-                    {Math.round(ssdFeasibility.maxSiteCoverage * 100)}%
-                  </span>
-                </div>
-
-                {/* Key Flag */}
-                {ssdFeasibility.flags.length > 0 && (
-                  <div className="mt-3 pt-2 border-t border-zinc-700">
-                    <p className={`text-xs ${
-                      ssdFeasibility.isEligible ? 'text-green-400' : 'text-amber-400'
-                    }`}>
-                      {ssdFeasibility.flags[0]}
-                    </p>
-                  </div>
-                )}
-
-                {/* Spatial Conflict Warning */}
-                {spatialConflict.hasConflict && (
-                  <div className="mt-3 pt-2 border-t border-zinc-700">
-                    <div className="flex items-start gap-2 px-3 py-2.5 bg-red-500/10 border border-red-500/30 rounded-lg">
-                      <span className="text-red-400 text-base font-bold mt-0.5">⚠️</span>
-                      <div className="flex-1">
-                        <p className="text-xs text-red-400 font-bold mb-1">
-                          Spatial Conflict Detected
-                        </p>
-                        <p className="text-xs text-red-300 leading-relaxed">
-                          Proposed footprint geometry overlaps an active easement. Clearance or alternative siting required under VPP Clause 52.02 (Easements) and Clause 56.03 (Site Layout).
-                          {spatialConflict.message && (
-                            <span className="block mt-1 text-red-200">
-                              {spatialConflict.message.replace('⚠️ Spatial Conflict: ', '')}
-                            </span>
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Financial Analysis (3D Massing) */}
-                {generatedMassing && financialAnalysis && (
-                  <div className="mt-3 pt-3 border-t border-zinc-700">
-                    <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
-                      Financial Analysis
-                    </h4>
-                    <div className="space-y-2">
-                      {/* Generated Floor Area */}
-                      <div className="flex justify-between items-center py-1.5">
-                        <span className="text-xs text-zinc-400">Generated Envelope</span>
-                        <span className="text-sm font-semibold text-white">
-                          {generatedMassing.floorArea.toFixed(1)}m²
-                        </span>
-                      </div>
-
-                      {/* Construction Cost */}
-                      <div className="flex justify-between items-center py-1.5">
-                        <span className="text-xs text-zinc-400">Est. Construction</span>
-                        <span className="text-sm font-semibold text-amber-400">
-                          {formatCurrency(financialAnalysis.constructionCost)}
-                        </span>
-                      </div>
-
-                      {/* ROI (if market data available) */}
-                      {financialAnalysis.roi !== undefined && (
-                        <>
-                          <div className="flex justify-between items-center py-1.5">
-                            <span className="text-xs text-zinc-400">Est. End Value</span>
-                            <span className="text-sm font-semibold text-white">
-                              {formatCurrency(financialAnalysis.endValue || 0)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center py-1.5">
-                            <span className="text-xs text-zinc-400">Est. Profit</span>
-                            <span className={`text-sm font-bold ${
-                              (financialAnalysis.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'
-                            }`}>
-                              {formatCurrency(financialAnalysis.profit || 0)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center py-1.5 bg-zinc-800/50 px-2 rounded">
-                            <span className="text-xs font-semibold text-zinc-300">ROI</span>
-                            <span className={`text-base font-bold ${
-                              financialAnalysis.isViable ? 'text-green-400' : 'text-red-400'
-                            }`}>
-                              {formatROI(financialAnalysis.roi)}
-                            </span>
-                          </div>
-                        </>
-                      )}
-
-                      {/* Cost per sqm note */}
-                      <p className="text-xs text-zinc-500 italic mt-2">
-                        Based on ${financialAnalysis.costPerSqm}/m² construction cost
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="h-[160px] flex items-center justify-center text-sm text-zinc-500">
-                Calculating feasibility...
-              </div>
-            )}
           </div>
         </div>
       )}

@@ -177,24 +177,6 @@ export default function PropertySidePanel({
           </div>
         </div>
 
-        {/* Test Agent Button (Dev Mode) */}
-        {onTestAgent && (
-          <button
-            onClick={onTestAgent}
-            disabled={isTestingAgent}
-            className="w-full px-4 py-2 bg-zinc-800 hover:bg-zinc-700 disabled:bg-zinc-900 disabled:cursor-not-allowed text-zinc-300 font-semibold rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
-          >
-            {isTestingAgent ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Testing Agent...
-              </>
-            ) : (
-              '🤖 TEST AGENT'
-            )}
-          </button>
-        )}
-
         {/* Action Buttons */}
         <div className="grid grid-cols-2 gap-3">
           {/* Save Project Button - Subtle Outlined */}
