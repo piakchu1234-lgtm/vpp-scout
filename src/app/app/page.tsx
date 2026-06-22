@@ -28,6 +28,8 @@ import DADetailsModal from '@/components/modal/DADetailsModal';
 import SaveProjectModal from '@/components/modal/SaveProjectModal';
 import { describeOverlayCode, type PlanningOverlay } from '@/components/dashboard/PlanningCard';
 import CollapsibleSidebar from '@/components/dashboard/CollapsibleSidebar';
+import FeasibilityReportTemplate from '@/components/FeasibilityReportTemplate';
+import html2pdf from 'html2pdf.js';
 import { usePropertyData } from '@/hooks/usePropertyData';
 import {
   fetchVicParcelForPoint,
@@ -302,68 +304,58 @@ function AppCanvas() {
     }
   };
 
-  // Handler for PDF export
+  // Handler for PDF export (client-side with html2pdf.js)
   const handleExportPdf = async () => {
-    if (!address || !planData || isGeneratingPdf) return;
+    if (!address || isGeneratingPdf) return;
 
     setIsGeneratingPdf(true);
     try {
-      // Capture map snapshot
-      const mapSnapshot = await mapPreviewRef.current?.getSnapshot();
+      console.log('[PDF Export] Starting client-side PDF generation...');
 
-      // Store snapshot for report rendering
-      if (mapSnapshot) {
-        setCapturedMapSnapshot(mapSnapshot);
-        console.log('[PDF Export] ✅ Map snapshot captured');
-      } else {
-        console.warn('[PDF Export] ⚠️ Map snapshot failed');
+      // 1. Capture Mapbox WebGL canvas snapshot
+      const mapInstance = mapPreviewRef.current?.getMap();
+      if (!mapInstance) {
+        console.error('[PDF Export] Map instance not available');
+        setIsGeneratingPdf(false);
+        return;
       }
 
-      // Small delay to let React update the report component with the snapshot
-      await new Promise(resolve => setTimeout(resolve, 100));
+      const mapCanvas = mapInstance.getCanvas();
+      const mapSnapshot = mapCanvas.toDataURL('image/jpeg', 0.9);
+      console.log('[PDF Export] ✅ Map snapshot captured');
 
-      // Gather payload
-      const payload = {
-        address,
-        zoneCode: planData.zoneCode,
-        lotSize: landSizeM2 || 0,
-        frontage: null, // TODO: Calculate from geometry
-        overlays: planData.overlayRaw || [],
-        auditResult: {
-          isFastTrackEligible:
-            (landSizeM2 || 0) >= 300 &&
-            ['GRZ', 'NRZ', 'RGZ', 'MUZ', 'TZ'].some(zone => planData.zoneCode?.toUpperCase().startsWith(zone)) &&
-            !planData.overlayRaw?.some(o => ['HO', 'BMO', 'LSIO', 'SBO', 'BFO'].some(prefix => o.toUpperCase().startsWith(prefix))),
-          tier: yieldData?.isFeasible ? 'Standard' : 'Complex',
-          noThirdPartyAppeals: false,
-          developerSummary: '',
-          maxDeemedDwellings: yieldData?.scenarios?.townhouse?.maxYield || 0,
-        },
-        financialProforma: {
-          tdc: 0,
-          grv: 0,
-          profit: 0,
-          profitMarginPercent: 0,
-        },
-        language: language === 'zh' ? 'zh' : 'en',
+      // 2. Update state to inject snapshot into hidden template
+      setCapturedMapSnapshot(mapSnapshot);
+
+      // 3. Wait for React to render the snapshot into the template
+      await new Promise(resolve => setTimeout(resolve, 150));
+
+      // 4. Find the hidden PDF template element
+      const reportElement = document.getElementById('pdf-report-container');
+      if (!reportElement) {
+        console.error('[PDF Export] Report template element not found');
+        setIsGeneratingPdf(false);
+        return;
+      }
+
+      // 5. Configure html2pdf options
+      const filename = `Feasibility_${address.replace(/\s+/g, '_')}_${language}.pdf`;
+      const opt = {
+        margin: 0,
+        filename: filename,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
       };
 
-      // Call API
-      const response = await fetch('/api/generate-report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      console.log('[PDF Export] Generating PDF:', filename);
 
-      if (!response.ok) throw new Error('PDF generation failed');
+      // 6. Generate and download PDF
+      await html2pdf().set(opt).from(reportElement).save();
 
-      const data = await response.json();
-
-      // TODO: Download PDF blob
-      console.log('[PDF Export] Report generated:', data);
-
+      console.log('[PDF Export] ✅ PDF generated successfully');
     } catch (error) {
-      console.error('[PDF Export] Error:', error);
+      console.error('[PDF Export] Failed:', error);
     } finally {
       setIsGeneratingPdf(false);
     }
@@ -1714,6 +1706,31 @@ function AppCanvas() {
           address && planData?.zoneCode
             ? generateProjectName(address, planData.zoneCode)
             : ''
+        }
+      />
+
+      {/* Hidden PDF Report Template (Client-Side) */}
+      <FeasibilityReportTemplate
+        language={language}
+        address={address || 'N/A'}
+        mapSnapshot={capturedMapSnapshot}
+        zoneCode={planData?.zoneCode || null}
+        zoneDescription={planData?.zoneDescription || null}
+        lotSize={scenarioMetrics.lotSize}
+        frontage={scenarioMetrics.frontage}
+        maxYield={scenarioMetrics.maxYield}
+        estValue={scenarioMetrics.estValue}
+        activeScenario={activeScenario}
+        scenarioLabel={scenarioMetrics.label}
+        overlays={planData?.overlayRaw?.slice(0, 5).map(o => o.ZONE_CODE || o) || []}
+        ssdRules={
+          activeScenario === 'ssd'
+            ? {
+                maxHeight: '5.0 meters',
+                minGarden: '35%',
+                permitRequired: language === 'en' ? 'No' : '否',
+              }
+            : undefined
         }
       />
     </div>
