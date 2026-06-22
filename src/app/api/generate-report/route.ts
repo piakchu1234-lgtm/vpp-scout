@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { getDict, type Language } from '@/lib/dictionaries';
 
 export const runtime = 'nodejs';
 
@@ -61,15 +62,19 @@ export async function POST(req: Request) {
       );
     }
 
+    // Get bilingual dictionary based on language preference
+    const primaryLang: Language = language === 'zh' ? 'zh' : 'en';
+    const dict = getDict(primaryLang);
+
     // Initialize Anthropic client
     const anthropic = new Anthropic({
       apiKey: process.env.ANTHROPIC_API_KEY,
     });
 
-    // Build the report generation prompt
-    const reportPrompt = buildReportPrompt(body);
+    // Build the report generation prompt with dictionary
+    const reportPrompt = buildReportPrompt(body, dict);
 
-    console.log('[generate-report] Generating bilingual report for:', address);
+    console.log('[generate-report] Generating bilingual report for:', address, 'Language:', language);
 
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
@@ -94,6 +99,7 @@ export async function POST(req: Request) {
       address,
       generatedAt: new Date().toISOString(),
       language,
+      dictionary: dict, // Include dictionary for client-side rendering
     });
 
   } catch (error: unknown) {
@@ -109,7 +115,7 @@ export async function POST(req: Request) {
 /**
  * Build comprehensive report generation prompt for Claude.
  */
-function buildReportPrompt(data: ReportRequest): string {
+function buildReportPrompt(data: ReportRequest, dict: ReturnType<typeof getDict>): string {
   const {
     address,
     zoneCode,
@@ -127,29 +133,43 @@ function buildReportPrompt(data: ReportRequest): string {
     language === 'zh' ? 'Generate the report in MANDARIN CHINESE (简体中文) ONLY.' :
     'Generate the report in BOTH ENGLISH AND MANDARIN CHINESE (dual-language format).';
 
+  // Use dictionary for structured terminology
+  const sectionHeaders = {
+    propertyDetails: language === 'zh' ? dict.propertyDetails : 'Property Details',
+    financialMetrics: language === 'zh' ? dict.metrics : 'Financial Metrics',
+    compliance: language === 'zh' ? dict.resCode : 'Statutory Compliance',
+    overlayRisk: language === 'zh' ? dict.overlayRisk : 'Planning Overlay Risk Assessment',
+  };
+
   return `You are a Senior Victorian Town Planner and Property Investment Analyst generating a production-grade development feasibility report.
 
 PROPERTY DETAILS:
-- Address: ${address}
-- Zone: ${zoneCode || 'Unknown'}
-- Lot Size: ${lotSize.toFixed(0)} m²
-- Street Frontage: ${frontage ? frontage.toFixed(1) + 'm' : 'Unknown'}
-- Overlays: ${overlays.length > 0 ? overlays.join(', ') : 'None'}
+- ${dict.address}: ${address}
+- ${dict.zoning}: ${zoneCode || 'Unknown'}
+- ${dict.lotSize}: ${lotSize.toFixed(0)} ${dict.sqm}
+- ${dict.frontage}: ${frontage ? frontage.toFixed(1) + dict.meters : 'Unknown'}
+- ${dict.overlays}: ${overlays.length > 0 ? overlays.join(', ') : 'None'}
 
 FAST-TRACK AUDIT RESULTS (2026 VPP Reforms):
 - Fast-Track Eligible: ${auditResult.isFastTrackEligible ? 'YES ✅' : 'NO'}
 - Approval Tier: ${auditResult.tier}
-- No Third-Party Appeals: ${auditResult.noThirdPartyAppeals ? 'YES (Deemed-to-Comply)' : 'NO'}
+- No Third-Party Appeals: ${auditResult.noThirdPartyAppeals ? `YES (${dict.deemedToComply})` : 'NO'}
 - Maximum Dwellings: ${auditResult.maxDeemedDwellings}
 - Summary: ${auditResult.developerSummary}
 
-FINANCIAL PROFORMA (Developer Returns):
-- Total Development Cost (TDC): $${(financialProforma.tdc / 1000000).toFixed(2)}M
-- Gross Realization Value (GRV): $${(financialProforma.grv / 1000000).toFixed(2)}M
-- Developer Profit: $${(financialProforma.profit / 1000000).toFixed(2)}M
-- Profit Margin: ${financialProforma.profitMarginPercent.toFixed(1)}%
+FINANCIAL PROFORMA (${dict.metrics}):
+- Total Development Cost (TDC): ${dict.aud}${(financialProforma.tdc / 1000000).toFixed(2)}M
+- Gross Realization Value (GRV): ${dict.aud}${(financialProforma.grv / 1000000).toFixed(2)}M
+- ${dict.netProfit}: ${dict.aud}${(financialProforma.profit / 1000000).toFixed(2)}M
+- ${dict.profitMargin}: ${financialProforma.profitMarginPercent.toFixed(1)}${dict.percent}
 
 ${highestBestUse ? `AI RECOMMENDATION:\n- Highest & Best Use: ${highestBestUse}\n` : ''}
+
+STATUTORY COMPLIANCE REQUIREMENTS (USE THESE EXACT TERMS):
+${dict.ssdRequirements.map((req, i) => `${i + 1}. ${req}`).join('\n')}
+
+PLANNING OVERLAY TERMINOLOGY (USE THESE TRANSLATIONS):
+${Object.entries(dict.overlayTypes).map(([code, name]) => `- ${code}: ${name}`).join('\n')}
 
 REPORT REQUIREMENTS:
 ${languageInstruction}
