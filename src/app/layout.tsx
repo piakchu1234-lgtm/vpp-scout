@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import { ClerkProvider } from '@clerk/nextjs';
 import { UserButton } from '@clerk/nextjs';
 import { UserPlanProvider } from '@/contexts/UserPlanContext';
+import { LanguageProvider } from '@/contexts/LanguageContext';
 import { ThemeProvider } from '@/components/theme-provider';
 import GlobalControls from '@/components/GlobalControls';
 import "./globals.css";
@@ -55,11 +56,13 @@ export default function RootLayout({
           </a>
 
           <ThemeProvider>
-            <UserPlanProvider>
-              <main id="main-content" tabIndex={-1} className="flex-1">
-                {children}
-              </main>
-            </UserPlanProvider>
+            <LanguageProvider>
+              <UserPlanProvider>
+                <main id="main-content" tabIndex={-1} className="flex-1">
+                  {children}
+                </main>
+              </UserPlanProvider>
+            </LanguageProvider>
           </ThemeProvider>
         </body>
       </html>

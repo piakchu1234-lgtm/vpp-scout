@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Download, Loader2, Map as MapIcon, FileText, FileDown } from 'lucide-react';
 import { UserButton } from '@clerk/nextjs';
 import GlobalControls from '@/components/GlobalControls';
+import { useLanguage } from '@/contexts/LanguageContext';
 import area from '@turf/area';
 import StorefrontDrawer from '@/components/sidebar/StorefrontDrawer';
 import SuccessModal from '@/components/sidebar/SuccessModal';
@@ -151,7 +152,7 @@ function AppCanvas() {
   const [liveCouncil, setLiveCouncil] = useState<string | null>(null);
   const [overlayGeometries, setOverlayGeometries] = useState<OverlayGeometry[]>([]);
   const [isStorefrontOpen, setIsStorefrontOpen] = useState(false);
-  const [language, setLanguage] = useState<Lang>('en');
+  const { language } = useLanguage();
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isSavingProject, setIsSavingProject] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);

@@ -17,10 +17,11 @@ import { Sun, Moon, Languages, FolderOpen } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { UserButton } from '@clerk/nextjs';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function GlobalControls() {
   const { theme, setTheme } = useTheme();
-  const [language, setLanguage] = useState<'en' | 'zh'>('en');
+  const { language, toggleLanguage } = useLanguage();
   const [mounted, setMounted] = useState(false);
   const router = useRouter();
 
@@ -39,10 +40,6 @@ export default function GlobalControls() {
       </div>
     );
   }
-
-  const toggleLanguage = () => {
-    setLanguage(prev => prev === 'en' ? 'zh' : 'en');
-  };
 
   const toggleTheme = () => {
     setTheme(theme === 'dark' ? 'light' : 'dark');
