@@ -8,7 +8,7 @@
 
 import type { AIMarketResponse } from '@/types/property';
 
-export type DataSource = 'agent' | 'domain' | 'mock' | 'none';
+export type DataSource = 'agent' | 'domain' | 'mock' | 'none' | 'calculated';
 
 export type SuburbMarketTrends = {
   suburbMedianPrice: number | null;
@@ -88,6 +88,10 @@ export function formatDataSource(source: DataSource, language: 'en' | 'zh'): str
       en: 'No Data',
       zh: '无数据',
     },
+    calculated: {
+      en: 'Estimated',
+      zh: '估算',
+    },
   };
 
   return labels[source][language];
@@ -101,6 +105,7 @@ export function getSourceConfidence(source: DataSource): 'high' | 'medium' | 'lo
     case 'agent':
     case 'domain':
       return 'high';
+    case 'calculated':
     case 'mock':
       return 'medium';
     case 'none':

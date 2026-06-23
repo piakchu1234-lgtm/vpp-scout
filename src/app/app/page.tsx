@@ -3,7 +3,7 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState, memo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Download, Loader2, Map as MapIcon, FileText, FileDown, Search, MapPin, FolderOpen } from 'lucide-react';
-import { UserButton } from '@clerk/nextjs';
+import { UserButton, useAuth, useUser } from '@clerk/nextjs';
 import GlobalControls from '@/components/GlobalControls';
 import { useLanguage } from '@/contexts/LanguageContext';
 import area from '@turf/area';
@@ -29,7 +29,6 @@ import SaveProjectModal from '@/components/modal/SaveProjectModal';
 import { describeOverlayCode, type PlanningOverlay } from '@/components/dashboard/PlanningCard';
 import CollapsibleSidebar from '@/components/dashboard/CollapsibleSidebar';
 import FeasibilityReportTemplate from '@/components/FeasibilityReportTemplate';
-import html2pdf from 'html2pdf.js';
 import { usePropertyData } from '@/hooks/usePropertyData';
 import {
   fetchVicParcelForPoint,
@@ -62,6 +61,10 @@ import {
 } from '@/lib/massingEngine';
 import { prepareProjectState, generateProjectName } from '@/lib/projectPersistence';
 import type { AIMarketResponse } from '@/types/property';
+import { detectSchoolZones } from '@/lib/schoolZoneDetection';
+import { getCrimeStatsForLGA } from '@/lib/crimeStats';
+import { calculateEstimatedValue, formatEstimatedValue } from '@/lib/valuationCalculator';
+
 
 const MELBOURNE_FALLBACK = { lat: -37.8136, lon: 144.9631 };
 const VICMAP_TIMEOUT_MS = 15000;
@@ -134,6 +137,8 @@ MapPreviewMemoized.displayName = 'MapPreviewMemoized';
 function AppCanvas() {
   const params = useSearchParams();
   const router = useRouter();
+  const { userId } = useAuth();
+  const { user } = useUser();
   const addressParam = params.get('address');
   const latParam = params.get('lat');
   const lonParam = params.get('lon');
@@ -160,6 +165,14 @@ function AppCanvas() {
   const [isStorefrontOpen, setIsStorefrontOpen] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(true); // Collapsible side panel state
   const [activeScenario, setActiveScenario] = useState<'current' | 'ssd' | 'dual_occ' | 'townhouse'>('current'); // Scenario Engine
+
+  // School zone and crime stats state
+  const [schoolZones, setSchoolZones] = useState<Array<{ schoolName: string; type: 'primary' | 'secondary' }>>([]);
+  const [crimeStats, setCrimeStats] = useState<{ incidents: number; ratePer100k: number } | null>(null);
+
+  // Real user tier from Clerk metadata (replaces simulated state)
+  const isPro = user?.publicMetadata?.plan === 'pro';
+  const userTier = isPro ? 'pro' : 'free';
 
   // Geocoding state for top bar search
   const [searchQuery, setSearchQuery] = useState('');
@@ -284,8 +297,10 @@ function AppCanvas() {
         if (distanceToEdge < closestEdgeDistance) {
           closestEdgeDistance = distanceToEdge;
 
-          // Calculate the length of this edge
-          streetFacingEdgeLength = length(edgeLine, { units: 'meters' }) * 1000; // Convert km to m
+          // Calculate the length of this edge using @turf/distance for accuracy
+          const pt1Point = turf.point(pt1);
+          const pt2Point = turf.point(pt2);
+          streetFacingEdgeLength = distance(pt1Point, pt2Point, { units: 'meters' });
         }
       }
 
@@ -308,9 +323,18 @@ function AppCanvas() {
   const handleExportPdf = async () => {
     if (!address || isGeneratingPdf) return;
 
+    // Paywall: Block PDF export for free users
+    if (userTier === 'free') {
+      alert('Upgrade to Pro to generate professional PDF feasibility reports.');
+      return;
+    }
+
     setIsGeneratingPdf(true);
     try {
       console.log('[PDF Export] Starting client-side PDF generation...');
+
+      // Dynamically import html2pdf (client-side only library)
+      const html2pdf = (await import('html2pdf.js')).default;
 
       // 1. Capture Mapbox WebGL canvas snapshot
       const mapInstance = mapPreviewRef.current?.getMap();
@@ -401,8 +425,8 @@ function AppCanvas() {
         overlays: planData.overlayRaw || [],
         lat,
         lng: lon,
-        estimatedValue: mergedMarketData?.estimatedValue ?? undefined,
-        marketDataSource: mergedMarketData?.source || undefined,
+        estimatedValue: enhancedMarketData?.estimatedValue ?? undefined,
+        marketDataSource: enhancedMarketData?.source || undefined,
         generatedMassing,
         financialAnalysis,
         mapCenter: mapState.center as [number, number],
@@ -735,20 +759,6 @@ function AppCanvas() {
         setPlanData(null);
       });
 
-    // Deterministic LGA lookup — Vicmap_Admin layer 0. Authoritative,
-    // free, and doesn't depend on the AI Auditor returning successfully.
-    // Council display in the sidebar prefers this over aiInsight.localCouncil.
-    fetchLgaForPoint(lon, lat)
-      .then((name) => {
-        if (stale) return;
-        setLiveCouncil(name);
-      })
-      .catch((err: unknown) => {
-        if (stale) return;
-        console.warn('[AppCanvas] LGA fetch failed', err);
-        setLiveCouncil(null);
-      });
-
     // Fetch overlay geometries for spatial intersection analysis
     // Buffer radius: 100m covers typical parcel + surroundings for accurate risk detection
     fetchOverlaysNearPoint(lon, lat, 100, VICMAP_TIMEOUT_MS)
@@ -761,6 +771,47 @@ function AppCanvas() {
         if (stale) return;
         console.warn('[AppCanvas] Overlay geometry fetch failed', err);
         setOverlayGeometries([]);
+      });
+
+    // School zone detection using Turf.js spatial intersection
+    detectSchoolZones(lon, lat)
+      .then((zones) => {
+        if (stale) return;
+        setSchoolZones(zones);
+        console.log(`[AppCanvas] Detected ${zones.length} school zone(s):`, zones);
+      })
+      .catch((err: unknown) => {
+        if (stale) return;
+        console.warn('[AppCanvas] School zone detection failed', err);
+        setSchoolZones([]);
+      });
+
+    // Crime statistics lookup for LGA (fetched after LGA name is available)
+    // We'll chain this after fetchLgaForPoint resolves
+    fetchLgaForPoint(lon, lat)
+      .then(async (lgaName) => {
+        if (stale) return;
+        setLiveCouncil(lgaName);
+
+        // Fetch crime stats for this LGA
+        if (lgaName) {
+          try {
+            const stats = await getCrimeStatsForLGA(lgaName);
+            if (!stale && stats) {
+              setCrimeStats(stats);
+              console.log(`[AppCanvas] Crime stats for ${lgaName}:`, stats);
+            }
+          } catch (err) {
+            console.warn('[AppCanvas] Crime stats fetch failed', err);
+            setCrimeStats(null);
+          }
+        }
+      })
+      .catch((err: unknown) => {
+        if (stale) return;
+        console.warn('[AppCanvas] LGA fetch failed', err);
+        setLiveCouncil(null);
+        setCrimeStats(null);
       });
 
     return () => {
@@ -797,6 +848,26 @@ function AppCanvas() {
 
   const hasPrimaryLandSize =
     typeof landSizeM2 === 'number' && Number.isFinite(landSizeM2) && landSizeM2 > 0;
+
+  // Enhanced market data with dynamic valuation fallback
+  const enhancedMarketData: MergedMarketData = useMemo(() => {
+    // If agent/domain provided a value, use it
+    if (mergedMarketData.estimatedValue) {
+      return mergedMarketData;
+    }
+
+    // Fallback: Calculate dynamic value based on lot size and zoning
+    if (landSizeM2 && planData?.zoneCode) {
+      const dynamicValue = calculateEstimatedValue(landSizeM2, planData.zoneCode);
+      return {
+        ...mergedMarketData,
+        estimatedValue: dynamicValue,
+        source: 'calculated',
+      };
+    }
+
+    return mergedMarketData;
+  }, [mergedMarketData, landSizeM2, planData?.zoneCode]);
 
   // Automatic frontage calculation when geometry and coordinates are available
   useEffect(() => {
@@ -1079,15 +1150,24 @@ function AppCanvas() {
         ? parseFloat(aiInsight.estimatedFrontage.replace(/[^0-9.]/g, ''))
         : null;
 
-    const baseValue = mergedMarketData.estimatedValue || 0;
+    const baseValue = enhancedMarketData.estimatedValue || 0;
     const townhouseYield = yieldData?.scenarios?.townhouse?.maxYield || 0;
+
+    // Check if zone is commercial/CBD
+    const zoneCode = planData?.zoneCode || '';
+    const isCommercialZone = zoneCode.startsWith('CCZ') || zoneCode.startsWith('C1Z') || zoneCode.startsWith('C2Z');
+
+    // Calculate commercial land value if applicable
+    const commercialValue = isCommercialZone && landSizeM2 > 0
+      ? landSizeM2 * 12000
+      : 0;
 
     // Scenario data dictionary
     const scenarios = {
       current: {
         label: 'Current Status',
-        maxYield: '1 Dwelling',
-        estValue: baseValue,
+        maxYield: isCommercialZone ? 'High-Density Commercial/Mixed-Use' : '1 Dwelling',
+        estValue: isCommercialZone && commercialValue > 0 ? commercialValue : baseValue,
       },
       ssd: {
         label: 'Small Second Dwelling (60m²)',
@@ -1122,7 +1202,7 @@ function AppCanvas() {
     landSizeM2,
     calculatedFrontageM,
     aiInsight?.estimatedFrontage,
-    mergedMarketData.estimatedValue,
+    enhancedMarketData.estimatedValue,
     yieldData?.scenarios?.townhouse?.maxYield,
     ssdFeasibility,
   ]);
@@ -1157,7 +1237,7 @@ function AppCanvas() {
     if (!generatedMassing) return null;
 
     // Use market data estimated value if available
-    const estimatedValue = mergedMarketData?.estimatedValue ?? undefined;
+    const estimatedValue = enhancedMarketData?.estimatedValue ?? undefined;
 
     return calculateFinancialAnalysis(
       generatedMassing.floorArea,
@@ -1165,7 +1245,7 @@ function AppCanvas() {
       estimatedValue,
       15 // 15% ROI threshold
     );
-  }, [generatedMassing, mergedMarketData]);
+  }, [generatedMassing, enhancedMarketData]);
 
   // DA modal state
   const [selectedDA, setSelectedDA] = useState<any>(null);
@@ -1313,7 +1393,7 @@ function AppCanvas() {
         carspaces: marketData?.carspaces ?? aiInsight?.carspaces ?? null,
         lastSold: marketData?.lastSoldPrice ?? aiInsight?.estimatedLastSoldPrice ?? null,
         aiSummary: aiInsight?.insightSummary ?? 'No AI analysis available',
-        overlays: planData?.overlayRaw ?? [],
+        overlays: [...new Set(planData?.overlayRaw ?? [])],
         language,
         config,
         splitZoneData,
@@ -1374,30 +1454,48 @@ function AppCanvas() {
           )}
         </div>
 
-        {/* Global Controls */}
-        <div className="flex items-center gap-6">
-          <button
-            onClick={() => router.push('/')}
-            className="text-zinc-400 hover:text-white transition-colors"
-            title={language === 'en' ? 'Back to search' : '返回搜索'}
-          >
-            <ArrowLeft size={20} />
-          </button>
-          <button
-            onClick={() => setShowDocumentConfigurator(true)}
-            className="text-zinc-400 hover:text-white transition-colors"
-            title={language === 'en' ? 'View report' : '查看报告'}
-          >
-            <FileText size={20} />
-          </button>
+        {/* Right Section: SaaS Monetization + Global Controls */}
+        <div className="flex items-center gap-4">
+          {/* Tier Badge - Dynamic based on user tier */}
+          {userTier === 'free' ? (
+            <>
+              {/* Free Tier Badge */}
+              <div className="flex flex-col items-end mr-2">
+                <span className="text-[10px] text-zinc-400 uppercase tracking-widest">TIER</span>
+                <span className="text-sm font-bold text-emerald-400">FREE</span>
+              </div>
+
+              {/* Upgrade Button */}
+              <button
+                onClick={() => {
+                  const STRIPE_CHECKOUT_URL = 'https://buy.stripe.com/test_your_product_link';
+                  const finalCheckoutUrl = userId
+                    ? `${STRIPE_CHECKOUT_URL}?client_reference_id=${userId}`
+                    : STRIPE_CHECKOUT_URL;
+                  window.open(finalCheckoutUrl, '_blank');
+                }}
+                className="bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold px-4 py-1.5 rounded-full transition-colors text-sm shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+              >
+                {language === 'en' ? 'Upgrade' : '升级'}
+              </button>
+            </>
+          ) : (
+            <>
+              {/* Pro Tier Badge */}
+              <div className="flex items-center gap-2 px-4 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-full">
+                <svg className="w-3.5 h-3.5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                <span className="text-sm font-bold text-emerald-400 uppercase tracking-wide">PRO</span>
+              </div>
+            </>
+          )}
+
+          {/* Divider */}
+          <div className="w-px h-8 bg-zinc-700/50" />
+
+          {/* Utility Icons */}
           <GlobalControls />
-          <UserButton
-            appearance={{
-              elements: {
-                avatarBox: "w-8 h-8 rounded-full border border-zinc-700 hover:border-[#E9E778] transition-colors"
-              }
-            }}
-          />
         </div>
       </div>
 
@@ -1446,6 +1544,11 @@ function AppCanvas() {
           daData={daData}
           propertyLat={lat}
           propertyLng={lon}
+          schoolZones={schoolZones}
+          crimeStats={crimeStats}
+          userTier={userTier}
+          lotSize={scenarioMetrics.lotSize > 0 ? `${scenarioMetrics.lotSize.toLocaleString()}m²` : '—'}
+          frontage={scenarioMetrics.frontage > 0 ? `${scenarioMetrics.frontage.toFixed(1)}m` : '—'}
         />
           </div>
 
@@ -1574,9 +1677,8 @@ function AppCanvas() {
 
       {/* Clean Metrics Ribbon - Z-Index: 20 (Bottom Overlay - Below Top Bar) */}
       {hasCoords && planData && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-          <div className="bg-zinc-950/80 backdrop-blur-xl border border-zinc-800 rounded-2xl px-8 py-4 shadow-2xl pointer-events-auto transition-all duration-300">
-            <div className="flex items-center gap-12">
+        <div className="absolute bottom-6 left-6 z-30 bg-zinc-950/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl px-6 py-4 flex items-center justify-start space-x-8 overflow-x-auto max-w-[calc(100vw-420px)] custom-scrollbar pointer-events-auto transition-all duration-300">
+          <div className="flex items-center gap-12">
               {/* Zoning */}
               <div className="flex flex-col">
                 <span className="text-zinc-400 text-[10px] font-bold uppercase tracking-widest">Zoning</span>
@@ -1624,7 +1726,6 @@ function AppCanvas() {
               </div>
             </div>
           </div>
-        </div>
       )}
 
       {/* Document Configurator Modal */}
@@ -1662,8 +1763,19 @@ function AppCanvas() {
                 onClick={handlePrint}
                 className="flex items-center gap-2 px-6 py-2 rounded-lg bg-[#E9E778] text-[#241F21] text-sm font-bold uppercase tracking-wider hover:bg-[#d4d262] transition-colors"
               >
-                <Download className="w-4 h-4" />
-                Print / Save PDF
+                {userTier === 'free' ? (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    Print / Save PDF
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    Print / Save PDF
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -1680,11 +1792,13 @@ function AppCanvas() {
               planData={planData}
               aiInsight={aiInsight}
               liveCouncil={liveCouncil}
-              mergedMarketData={mergedMarketData}
+              mergedMarketData={enhancedMarketData}
               language={language}
               mapSnapshot={capturedMapSnapshot}
               generatedMassing={generatedMassing}
               financialAnalysis={financialAnalysis}
+              schoolZones={schoolZones}
+              crimeStats={crimeStats}
             />
           </div>
         </div>
@@ -1722,7 +1836,7 @@ function AppCanvas() {
         estValue={scenarioMetrics.estValue}
         activeScenario={activeScenario}
         scenarioLabel={scenarioMetrics.label}
-        overlays={planData?.overlayRaw?.slice(0, 5).map(o => o.ZONE_CODE || o) || []}
+        overlays={planData?.overlayRaw?.slice(0, 5) || []}
         ssdRules={
           activeScenario === 'ssd'
             ? {

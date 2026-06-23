@@ -8,6 +8,7 @@ import { DataSourceBadge } from '@/components/ui/DataSourceBadge';
 import { describeOverlayCode } from '@/components/sidebar/PlanningConstraintsTab';
 import type { SpatialRiskAssessment } from '@/lib/spatialIntersection';
 import { generateRiskReport } from '@/lib/spatialIntersection';
+import { getOverlayDescription } from '@/lib/planningDictionary';
 
 // ResCode / NCC 2026 screening constants — duplicated from
 // SSDFeasibilityWidget. Keep in sync until extracted to src/lib/ssd.ts.
@@ -39,6 +40,10 @@ export interface ComprehensiveReportProps {
   financialAnalysis?: FinancialAnalysis | null;
   /** Spatial risk assessment from overlay intersection analysis */
   spatialRisk?: SpatialRiskAssessment | null;
+  /** School zone data from DataVic 2027 */
+  schoolZones?: Array<{ schoolName: string; type: 'primary' | 'secondary' }>;
+  /** LGA crime statistics (Year Ending March 2026) */
+  crimeStats?: { incidents: number; ratePer100k: number } | null;
 }
 
 const formatDate = (d: Date) =>
@@ -70,6 +75,8 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
       generatedMassing,
       financialAnalysis,
       spatialRisk,
+      schoolZones = [],
+      crimeStats = null,
     },
     ref,
   ) {
@@ -102,11 +109,11 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
       aiOverlays.length > 0
         ? aiOverlays.map((o) => ({
             code: o.code,
-            description: o.description?.trim() || describeOverlayCode(o.code),
+            description: o.description?.trim() || getOverlayDescription(o.code),
           }))
         : liveOverlayCodes.map((code) => ({
             code,
-            description: describeOverlayCode(code),
+            description: getOverlayDescription(code),
           }));
 
     const hazards = (aiInsight?.hazards ?? []).filter((h) => h && h.trim().length > 0);
@@ -508,6 +515,59 @@ const ComprehensiveReport = forwardRef<HTMLDivElement, ComprehensiveReportProps>
               <p className="text-xs italic text-gray-500">No disqualifying overlays detected.</p>
             )}
           </div>
+
+          {/* School Catchment */}
+          {schoolZones.length > 0 && (
+            <div className="mb-4">
+              <div className="text-[10px] uppercase tracking-[0.25em] text-gray-600 font-bold mb-2">
+                {language === 'zh' ? '学校学区' : 'School Catchment'}
+              </div>
+              <div className="border border-gray-300 rounded p-3 bg-white">
+                {schoolZones.map((zone, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between py-2 border-b border-gray-200 last:border-0"
+                  >
+                    <span className="text-xs font-semibold text-gray-600 uppercase">
+                      {zone.type === 'primary'
+                        ? (language === 'zh' ? '小学' : 'Primary')
+                        : (language === 'zh' ? '中学' : 'Secondary')}
+                    </span>
+                    <span className="text-xs text-black font-medium text-right">
+                      {zone.schoolName}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* LGA Crime Statistics */}
+          {crimeStats && (
+            <div className="mb-4">
+              <div className="text-[10px] uppercase tracking-[0.25em] text-gray-600 font-bold mb-2">
+                {language === 'zh' ? '地方政府区域安全' : 'LGA Safety Statistics'}
+              </div>
+              <div className="border border-gray-300 rounded p-3 bg-white">
+                <div className="flex items-center justify-between py-2 border-b border-gray-200">
+                  <span className="text-xs font-semibold text-gray-600">
+                    {language === 'zh' ? '事件数（截至2026年3月）' : 'Incidents (YE Mar 2026)'}
+                  </span>
+                  <span className="text-xs text-black font-medium">
+                    {crimeStats.incidents.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-2">
+                  <span className="text-xs font-semibold text-gray-600">
+                    {language === 'zh' ? '每10万人比率' : 'Rate per 100,000'}
+                  </span>
+                  <span className="text-xs text-black font-bold">
+                    {crimeStats.ratePer100k.toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Spatial Risk Assessment */}
           {spatialRisk && spatialRisk.verdict !== 'clear' && (

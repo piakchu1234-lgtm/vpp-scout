@@ -29,6 +29,7 @@ export function DataSourceBadge({ source, language, className = '' }: DataSource
     domain: '📊',
     mock: '📋',
     none: '—',
+    calculated: '🧮',
   };
 
   if (source === 'none') {

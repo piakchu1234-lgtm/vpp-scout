@@ -8,10 +8,11 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, FileDown, Loader2, Search, Save } from 'lucide-react';
-import { UserButton } from '@clerk/nextjs';
+import { ChevronDown, ChevronUp, FileDown, Loader2, Search, Save, Lock } from 'lucide-react';
+import { useUser } from '@clerk/nextjs';
 import type { VicPlanData } from '@/lib/vicPlanApi';
 import * as turf from '@turf/turf';
+import { getOverlayDescription } from '@/lib/planningDictionary';
 
 type PropertySidePanelProps = {
   address: string | null;
@@ -42,6 +43,11 @@ type PropertySidePanelProps = {
   activeScenario?: 'current' | 'ssd' | 'dual_occ' | 'townhouse';
   onScenarioChange?: (scenario: 'current' | 'ssd' | 'dual_occ' | 'townhouse') => void;
   scenarioLabel?: string;
+  schoolZones?: Array<{ schoolName: string; type: 'primary' | 'secondary' }>;
+  crimeStats?: { incidents: number; ratePer100k: number } | null;
+  userTier?: 'free' | 'pro';
+  lotSize?: string;
+  frontage?: string;
 };
 
 export default function PropertySidePanel({
@@ -73,9 +79,19 @@ export default function PropertySidePanel({
   activeScenario = 'current',
   onScenarioChange,
   scenarioLabel,
+  schoolZones = [],
+  crimeStats = null,
+  userTier = 'free',
+  lotSize,
+  frontage,
 }: PropertySidePanelProps) {
+  // Get real user plan from Clerk metadata
+  const { user } = useUser();
+  const isPro = user?.publicMetadata?.plan === 'pro';
+
   const [searchQuery, setSearchQuery] = useState('');
   const [overlaysExpanded, setOverlaysExpanded] = useState(true);
+  const [activeTab, setActiveTab] = useState<'overview' | 'planning' | 'feasibility'>('overview');
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && searchQuery.trim()) {
@@ -130,22 +146,11 @@ export default function PropertySidePanel({
     <div className="h-full bg-zinc-950/70 backdrop-blur-xl border border-white/10 rounded-2xl overflow-y-auto shadow-2xl">
       {/* Header Section */}
       <div className="sticky top-0 bg-zinc-950/80 backdrop-blur-xl border-b border-white/10 p-6 z-10 space-y-4">
-        {/* User Account - Top Right */}
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+        {/* Header */}
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">
             Property Analysis
           </h2>
-          <UserButton
-            appearance={{
-              elements: {
-                avatarBox: 'w-8 h-8',
-                userButtonPopoverCard: 'bg-zinc-900 border border-zinc-800',
-                userButtonPopoverActionButton: 'hover:bg-zinc-800',
-                userButtonPopoverActionButtonText: 'text-zinc-300',
-                userButtonPopoverFooter: 'hidden',
-              },
-            }}
-          />
         </div>
 
         {/* Address */}
@@ -165,24 +170,407 @@ export default function PropertySidePanel({
           )}
         </div>
 
-        {/* Search Property Input */}
-        <div className="space-y-2">
-          <label className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-            Search Property
-          </label>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-zinc-500" />
-            <input
-              type="text"
-              placeholder="Enter address..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={handleSearchKeyDown}
-              className="w-full pl-10 pr-4 py-2 bg-zinc-900/50 border border-white/10 rounded-lg text-white text-sm placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-[#E9E778] focus:border-transparent"
-            />
-          </div>
+        {/* Tab Navigation - 3 Pills */}
+        <div className="flex w-full bg-zinc-900 p-1 rounded-lg">
+          <button
+            onClick={() => setActiveTab('overview')}
+            className={`flex-1 py-2 px-3 text-xs font-bold uppercase tracking-wide rounded-md transition-all ${
+              activeTab === 'overview'
+                ? 'bg-zinc-800 text-white shadow-md border border-zinc-700'
+                : 'text-zinc-500 hover:text-zinc-300'
+            }`}
+          >
+            {language === 'en' ? 'Overview' : '概览'}
+          </button>
+          <button
+            onClick={() => setActiveTab('planning')}
+            className={`flex-1 py-2 px-3 text-xs font-bold uppercase tracking-wide rounded-md transition-all ${
+              activeTab === 'planning'
+                ? 'bg-zinc-800 text-white shadow-md border border-zinc-700'
+                : 'text-zinc-500 hover:text-zinc-300'
+            }`}
+          >
+            {language === 'en' ? 'Planning' : '规划'}
+          </button>
+          <button
+            onClick={() => setActiveTab('feasibility')}
+            className={`flex-1 py-2 px-3 text-xs font-bold uppercase tracking-wide rounded-md transition-all ${
+              activeTab === 'feasibility'
+                ? 'bg-zinc-800 text-white shadow-md border border-zinc-700'
+                : 'text-zinc-500 hover:text-zinc-300'
+            }`}
+          >
+            {language === 'en' ? 'Feasibility' : '可行性'}
+          </button>
         </div>
+      </div>
 
+      {/* Tab Content Area - No Scroll, Fixed Height */}
+      <div className="p-6 space-y-4 h-[calc(100vh-280px)] overflow-hidden">
+
+        {/* OVERVIEW TAB */}
+        {activeTab === 'overview' && (
+          <div className="space-y-4">
+            {/* Site Summary Card */}
+            <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <svg className="w-4 h-4 text-[#E9E778]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                </svg>
+                <h3 className="text-white text-sm font-semibold uppercase tracking-wide">
+                  {language === 'en' ? 'Site Summary' : '场地概要'}
+                </h3>
+              </div>
+              <div className="flex flex-col gap-3">
+                <div className="flex justify-between items-center py-2 border-b border-zinc-800">
+                  <span className="text-zinc-400 text-xs font-semibold">
+                    {language === 'en' ? 'Lot Size' : '地块面积'}
+                  </span>
+                  <span className="text-white text-sm font-bold">
+                    {lotSize || '—'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-zinc-400 text-xs font-semibold">
+                    {language === 'en' ? 'Frontage' : '临街面'}
+                  </span>
+                  <span className="text-white text-sm font-bold">
+                    {frontage || '—'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* School Catchment Card */}
+            {schoolZones.length > 0 && (
+              <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5 relative">
+                <div className="flex items-center gap-2 mb-4">
+                  <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                  </svg>
+                  <h3 className="text-white text-sm font-semibold uppercase tracking-wide">
+                    {language === 'en' ? 'School Catchment' : '学校学区'}
+                  </h3>
+                </div>
+                <div className={`flex flex-col gap-3 ${!isPro ? 'blur-sm' : ''}`}>
+                  {schoolZones.map((zone, idx) => (
+                    <div key={idx} className="flex justify-between items-center py-2 border-b border-zinc-800 last:border-0">
+                      <span className="text-zinc-400 text-xs font-semibold">
+                        {zone.type === 'primary'
+                          ? (language === 'en' ? 'Primary' : '小学')
+                          : (language === 'en' ? 'Secondary' : '中学')}
+                      </span>
+                      <span className="text-white text-sm font-medium text-right max-w-[200px] truncate" title={zone.schoolName}>
+                        {zone.schoolName}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Paywall Overlay for Free Users */}
+                {!isPro && (
+                  <button
+                    onClick={() => alert('Redirecting to Checkout...')}
+                    className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900/90 backdrop-blur-sm rounded-xl border border-emerald-500/30 hover:bg-zinc-900/95 transition-all cursor-pointer group"
+                  >
+                    <Lock className="w-6 h-6 text-emerald-400 mb-2 group-hover:scale-110 transition-transform" />
+                    <span className="text-sm font-bold text-emerald-400 uppercase tracking-wide">
+                      {language === 'en' ? 'Pro Feature' : '专业版功能'}
+                    </span>
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* LGA Safety Card */}
+            {crimeStats && (
+              <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5 relative">
+                <div className="flex items-center gap-2 mb-4">
+                  <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                  <h3 className="text-white text-sm font-semibold uppercase tracking-wide">
+                    {language === 'en' ? 'LGA Safety' : '地方政府区域安全'}
+                  </h3>
+                </div>
+                <div className={`flex flex-col gap-3 ${!isPro ? 'blur-sm' : ''}`}>
+                  <div className="flex justify-between items-center py-2 border-b border-zinc-800">
+                    <span className="text-zinc-400 text-xs font-semibold">
+                      {language === 'en' ? 'Incidents (YE Mar 2026)' : '事件数（截至2026年3月）'}
+                    </span>
+                    <span className="text-white text-sm font-medium">
+                      {crimeStats.incidents.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-zinc-400 text-xs font-semibold">
+                      {language === 'en' ? 'Rate per 100,000' : '每10万人比率'}
+                    </span>
+                    <span className="text-emerald-400 text-sm font-bold">
+                      {crimeStats.ratePer100k.toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Paywall Overlay for Free Users */}
+                {!isPro && (
+                  <button
+                    onClick={() => alert('Redirecting to Checkout...')}
+                    className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900/90 backdrop-blur-sm rounded-xl border border-emerald-500/30 hover:bg-zinc-900/95 transition-all cursor-pointer group"
+                  >
+                    <Lock className="w-6 h-6 text-emerald-400 mb-2 group-hover:scale-110 transition-transform" />
+                    <span className="text-sm font-bold text-emerald-400 uppercase tracking-wide">
+                      {language === 'en' ? 'Pro Feature' : '专业版功能'}
+                    </span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* PLANNING TAB */}
+        {activeTab === 'planning' && (
+          <div className="space-y-4">
+            {/* ZONING CARD */}
+            {zoneCode && (
+              <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <svg className="w-4 h-4 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                  <h3 className="text-white text-sm font-semibold uppercase tracking-wide">
+                    {language === 'en' ? 'Planning Zone' : '规划区'}
+                  </h3>
+                </div>
+                <div className="inline-block px-3 py-1.5 bg-teal-500/10 text-teal-400 border border-teal-500/20 rounded-md text-sm font-bold">
+                  {zoneCode} {zoneDescription && `- ${zoneDescription.substring(0, 30)}...`}
+                </div>
+              </div>
+            )}
+
+            {/* OVERLAYS CARD */}
+            {planData?.overlayRaw && planData.overlayRaw.length > 0 && (
+              <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                    </svg>
+                    <h3 className="text-white text-sm font-semibold uppercase tracking-wide">
+                      {language === 'en' ? 'Overlays' : '叠加层'}
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => setOverlaysExpanded(!overlaysExpanded)}
+                    className="text-zinc-400 hover:text-white transition-colors"
+                  >
+                    {overlaysExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                  </button>
+                </div>
+                {overlaysExpanded && (() => {
+                  // Deduplicate overlays
+                  const uniqueOverlays = Array.from(new Set(planData.overlayRaw.map((overlay: any) =>
+                    overlay.ZONE_CODE || overlay.code || overlay
+                  )));
+
+                  return (
+                    <div className="flex flex-wrap gap-2">
+                      {uniqueOverlays.slice(0, 3).map((overlayCode: string, idx: number) => {
+                        const overlayDescription = getOverlayDescription(overlayCode);
+
+                        return (
+                          <div
+                            key={idx}
+                            className="inline-block px-3 py-1.5 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-md text-sm font-bold w-fit"
+                            title={overlayDescription}
+                          >
+                            {overlayCode}
+                          </div>
+                        );
+                      })}
+                      {uniqueOverlays.length > 3 && (
+                        <div className="inline-block px-3 py-1.5 bg-zinc-800 text-zinc-400 border border-zinc-700 rounded-md text-xs font-medium">
+                          +{uniqueOverlays.length - 3} more
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* FEASIBILITY TAB */}
+        {activeTab === 'feasibility' && (
+          <div className="space-y-4">
+            {/* Scenario Selector */}
+            {onScenarioChange && (
+              <div className="space-y-3">
+                <label className="text-zinc-400 text-xs font-bold uppercase tracking-widest block">
+                  {language === 'en' ? 'Feasibility Scenario' : '可行性场景'}
+                </label>
+                <div className="bg-zinc-900 p-1 rounded-lg flex w-full">
+                  <button
+                    onClick={() => onScenarioChange('current')}
+                    className={`flex-1 py-2 px-3 text-xs font-medium rounded-md transition-all ${
+                      activeScenario === 'current'
+                        ? 'bg-zinc-800 text-white shadow-md border border-zinc-700'
+                        : 'text-zinc-500 hover:text-zinc-300'
+                    }`}
+                  >
+                    {language === 'en' ? 'Current' : '当前'}
+                  </button>
+                  <button
+                    onClick={() => onScenarioChange('ssd')}
+                    className={`flex-1 py-2 px-3 text-xs font-medium rounded-md transition-all ${
+                      activeScenario === 'ssd'
+                        ? 'bg-zinc-800 text-white shadow-md border border-zinc-700'
+                        : 'text-zinc-500 hover:text-zinc-300'
+                    }`}
+                  >
+                    {language === 'en' ? 'SSD' : '单户'}
+                  </button>
+                  <button
+                    onClick={() => onScenarioChange('dual_occ')}
+                    className={`flex-1 py-2 px-3 text-xs font-medium rounded-md transition-all ${
+                      activeScenario === 'dual_occ'
+                        ? 'bg-zinc-800 text-white shadow-md border border-zinc-700'
+                        : 'text-zinc-500 hover:text-zinc-300'
+                    }`}
+                  >
+                    {language === 'en' ? 'Dual Occ' : '双户'}
+                  </button>
+                  <button
+                    onClick={() => onScenarioChange('townhouse')}
+                    className={`flex-1 py-2 px-3 text-xs font-medium rounded-md transition-all ${
+                      activeScenario === 'townhouse'
+                        ? 'bg-zinc-800 text-white shadow-md border border-zinc-700'
+                        : 'text-zinc-500 hover:text-zinc-300'
+                    }`}
+                  >
+                    {language === 'en' ? 'Townhouse' : '联排'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* DYNAMIC SCENARIO RULES CARD */}
+            {activeScenario && (
+              <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                  <h3 className="text-white text-sm font-semibold uppercase tracking-wide">
+                    {activeScenario === 'ssd'
+                      ? (language === 'en' ? 'SSD Requirements' : 'SSD 要求')
+                      : (language === 'en' ? 'Development Rules' : '开发规则')}
+                  </h3>
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  {activeScenario === 'ssd' && (
+                    <>
+                      <div className="flex justify-between items-center py-2 border-b border-zinc-800">
+                        <span className="text-zinc-400 text-xs font-semibold">
+                          {language === 'en' ? 'Max Height' : '最大高度'}
+                        </span>
+                        <span className="text-white text-sm font-medium">5.0 meters</span>
+                      </div>
+                      <div className="flex justify-between items-center py-2 border-b border-zinc-800">
+                        <span className="text-zinc-400 text-xs font-semibold">
+                          {language === 'en' ? 'Min Garden Area' : '最小花园面积'}
+                        </span>
+                        <span className="text-white text-sm font-medium">35%</span>
+                      </div>
+                      <div className="flex justify-between items-center py-2">
+                        <span className="text-zinc-400 text-xs font-semibold">
+                          {language === 'en' ? 'Permit Required' : '需要许可'}
+                        </span>
+                        <span className="text-green-400 text-sm font-bold">
+                          {language === 'en' ? 'No' : '否'}
+                        </span>
+                      </div>
+                    </>
+                  )}
+                  {activeScenario === 'dual_occ' && (
+                    <>
+                      <div className="flex justify-between items-center py-2 border-b border-zinc-800">
+                        <span className="text-zinc-400 text-xs font-semibold">
+                          {language === 'en' ? 'Max Units' : '最大单位'}
+                        </span>
+                        <span className="text-white text-sm font-medium">2 Dwellings</span>
+                      </div>
+                      <div className="flex justify-between items-center py-2 border-b border-zinc-800">
+                        <span className="text-zinc-400 text-xs font-semibold">
+                          {language === 'en' ? 'Min Lot Size' : '最小地块面积'}
+                        </span>
+                        <span className="text-white text-sm font-medium">400m²</span>
+                      </div>
+                      <div className="flex justify-between items-center py-2">
+                        <span className="text-zinc-400 text-xs font-semibold">
+                          {language === 'en' ? 'Permit Required' : '需要许可'}
+                        </span>
+                        <span className="text-amber-400 text-sm font-bold">
+                          {language === 'en' ? 'Yes' : '是'}
+                        </span>
+                      </div>
+                    </>
+                  )}
+                  {activeScenario === 'townhouse' && (
+                    <>
+                      <div className="flex justify-between items-center py-2 border-b border-zinc-800">
+                        <span className="text-zinc-400 text-xs font-semibold">
+                          {language === 'en' ? 'Max Yield' : '最大收益'}
+                        </span>
+                        <span className="text-white text-sm font-medium">Variable</span>
+                      </div>
+                      <div className="flex justify-between items-center py-2 border-b border-zinc-800">
+                        <span className="text-zinc-400 text-xs font-semibold">
+                          {language === 'en' ? 'Site Coverage' : '场地覆盖率'}
+                        </span>
+                        <span className="text-white text-sm font-medium">60% Max</span>
+                      </div>
+                      <div className="flex justify-between items-center py-2">
+                        <span className="text-zinc-400 text-xs font-semibold">
+                          {language === 'en' ? 'Permit Required' : '需要许可'}
+                        </span>
+                        <span className="text-amber-400 text-sm font-bold">
+                          {language === 'en' ? 'Yes' : '是'}
+                        </span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Export PDF Button */}
+            <button
+              onClick={onExportPDF}
+              disabled={isGeneratingPDF}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#E9E778] hover:bg-[#d4d262] text-[#05060E] font-bold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isGeneratingPDF ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  {language === 'en' ? 'Generating PDF...' : '生成 PDF 中...'}
+                </>
+              ) : (
+                <>
+                  <FileDown className="w-4 h-4" />
+                  {language === 'en' ? 'Export PDF Report' : '导出 PDF 报告'}
+                </>
+              )}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Old content - DELETE THIS ENTIRE BLOCK */}
+      <div className="hidden">
         {/* Scenario Selector - Pill-Style Toggle */}
         {onScenarioChange && (
           <div className="space-y-3">
@@ -324,20 +712,112 @@ export default function PropertySidePanel({
                 </h3>
               </div>
               <div className="flex flex-col gap-2">
-                {planData.overlayRaw.slice(0, 3).map((overlay: any, idx: number) => (
-                  <div
-                    key={idx}
-                    className="inline-block px-3 py-1.5 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-md text-sm font-bold w-fit"
-                  >
-                    {overlay.ZONE_CODE || overlay.code || 'Unknown'}
-                  </div>
-                ))}
+                {planData.overlayRaw.slice(0, 3).map((overlay: any, idx: number) => {
+                  const overlayCode = overlay.ZONE_CODE || overlay.code || 'Unknown';
+                  const overlayDescription = getOverlayDescription(overlayCode);
+
+                  return (
+                    <div
+                      key={idx}
+                      className="inline-block px-3 py-1.5 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-md text-sm font-bold w-fit"
+                      title={overlayDescription}
+                    >
+                      {overlayCode}
+                    </div>
+                  );
+                })}
                 {planData.overlayRaw.length > 3 && (
                   <span className="text-xs text-zinc-500">
                     +{planData.overlayRaw.length - 3} more
                   </span>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* SCHOOL CATCHMENT CARD */}
+          {schoolZones.length > 0 && (
+            <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5 relative">
+              <div className="flex items-center gap-2 mb-4">
+                <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                </svg>
+                <h3 className="text-white text-sm font-semibold uppercase tracking-wide">
+                  {language === 'en' ? 'School Catchment' : '学校学区'}
+                </h3>
+              </div>
+              <div className={`flex flex-col gap-3 ${userTier === 'free' ? 'blur-sm' : ''}`}>
+                {schoolZones.map((zone, idx) => (
+                  <div key={idx} className="flex justify-between items-center py-2 border-b border-zinc-800 last:border-0">
+                    <span className="text-zinc-400 text-xs font-semibold">
+                      {zone.type === 'primary'
+                        ? (language === 'en' ? 'Primary' : '小学')
+                        : (language === 'en' ? 'Secondary' : '中学')}
+                    </span>
+                    <span className="text-white text-sm font-medium text-right max-w-[200px] truncate" title={zone.schoolName}>
+                      {zone.schoolName}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Paywall Overlay for Free Users */}
+              {userTier === 'free' && (
+                <button
+                  onClick={() => alert('Redirecting to Checkout...')}
+                  className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900/90 backdrop-blur-sm rounded-xl border border-emerald-500/30 hover:bg-zinc-900/95 transition-all cursor-pointer group"
+                >
+                  <Lock className="w-6 h-6 text-emerald-400 mb-2 group-hover:scale-110 transition-transform" />
+                  <span className="text-sm font-bold text-emerald-400 uppercase tracking-wide">
+                    {language === 'en' ? 'Pro Feature' : '专业版功能'}
+                  </span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* LGA SAFETY CARD */}
+          {crimeStats && (
+            <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5 relative">
+              <div className="flex items-center gap-2 mb-4">
+                <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+                <h3 className="text-white text-sm font-semibold uppercase tracking-wide">
+                  {language === 'en' ? 'LGA Safety' : '地方政府区域安全'}
+                </h3>
+              </div>
+              <div className={`flex flex-col gap-3 ${userTier === 'free' ? 'blur-sm' : ''}`}>
+                <div className="flex justify-between items-center py-2 border-b border-zinc-800">
+                  <span className="text-zinc-400 text-xs font-semibold">
+                    {language === 'en' ? 'Incidents (YE Mar 2026)' : '事件数（截至2026年3月）'}
+                  </span>
+                  <span className="text-white text-sm font-medium">
+                    {crimeStats.incidents.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-zinc-400 text-xs font-semibold">
+                    {language === 'en' ? 'Rate per 100,000' : '每10万人比率'}
+                  </span>
+                  <span className="text-emerald-400 text-sm font-bold">
+                    {crimeStats.ratePer100k.toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                  </span>
+                </div>
+              </div>
+
+              {/* Paywall Overlay for Free Users */}
+              {userTier === 'free' && (
+                <button
+                  onClick={() => alert('Redirecting to Checkout...')}
+                  className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900/90 backdrop-blur-sm rounded-xl border border-emerald-500/30 hover:bg-zinc-900/95 transition-all cursor-pointer group"
+                >
+                  <Lock className="w-6 h-6 text-emerald-400 mb-2 group-hover:scale-110 transition-transform" />
+                  <span className="text-sm font-bold text-emerald-400 uppercase tracking-wide">
+                    {language === 'en' ? 'Pro Feature' : '专业版功能'}
+                  </span>
+                </button>
+              )}
             </div>
           )}
 
@@ -641,6 +1121,7 @@ export default function PropertySidePanel({
           Additional statutory data sections will appear here.
         </div>
       </div>
+      {/* End hidden old content */}
     </div>
   );
 }

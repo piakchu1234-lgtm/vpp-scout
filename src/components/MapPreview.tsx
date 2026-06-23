@@ -837,6 +837,85 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
       };
     }, [overlayFeatures, activeLayerIds]);
 
+    // School Zone layers - load GeoJSON and add subtle blue boundaries
+    // Positioned below property boundary to avoid obstructing user focus
+    useEffect(() => {
+      const map = mapRef.current?.getMap();
+      if (!map) return;
+
+      const schoolZoneSources = [
+        { id: 'school-primary', url: '/data/schools/Primary_Integrated_2027.geojson' },
+        { id: 'school-secondary', url: '/data/schools/Secondary_Integrated_Year7_2027.geojson' },
+      ];
+
+      function attachSchoolZones() {
+        const m = mapRef.current?.getMap();
+        if (!m || !m.isStyleLoaded()) return;
+
+        schoolZoneSources.forEach(({ id, url }) => {
+          // Check if source already exists
+          if (m.getSource(id)) return;
+
+          // Fetch and add source
+          fetch(url)
+            .then(res => res.json())
+            .then(geojson => {
+              if (!m.getSource(id)) {
+                m.addSource(id, {
+                  type: 'geojson',
+                  data: geojson,
+                });
+
+                // Add fill layer (very subtle blue)
+                m.addLayer({
+                  id: `${id}-fill`,
+                  type: 'fill',
+                  source: id,
+                  paint: {
+                    'fill-color': '#3b82f6',
+                    'fill-opacity': 0.1,
+                  },
+                }, 'property-boundary-fill'); // Insert below property boundary
+
+                // Add dashed boundary line
+                m.addLayer({
+                  id: `${id}-line`,
+                  type: 'line',
+                  source: id,
+                  paint: {
+                    'line-color': '#3b82f6',
+                    'line-width': 1,
+                    'line-dasharray': [2, 2],
+                  },
+                }, 'property-boundary-fill'); // Insert below property boundary
+
+                console.log(`[MapPreview] School zone layer added: ${id}`);
+              }
+            })
+            .catch(err => {
+              console.warn(`[MapPreview] Failed to load school zone: ${id}`, err);
+            });
+        });
+      }
+
+      // Attach on mount and after style changes
+      attachSchoolZones();
+      map.on('styledata', attachSchoolZones);
+
+      return () => {
+        map.off('styledata', attachSchoolZones);
+        try {
+          schoolZoneSources.forEach(({ id }) => {
+            if (map.getLayer(`${id}-line`)) map.removeLayer(`${id}-line`);
+            if (map.getLayer(`${id}-fill`)) map.removeLayer(`${id}-fill`);
+            if (map.getSource(id)) map.removeSource(id);
+          });
+        } catch {
+          // Map teardown - sources already removed
+        }
+      };
+    }, []);
+
     // Property-boundary source/layers are attached imperatively via
     // map.addSource / map.addLayer rather than through react-map-gl JSX.
     // The two are equivalent at runtime (the JSX wrapper compiles down to
@@ -1879,64 +1958,6 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
             {cursorCoords.lat.toFixed(6)}°, {cursorCoords.lon.toFixed(6)}°
           </div>
         )}
-
-        {/* Planning overlay layer toggles — HO / BMO / FO. */}
-        <div className="absolute bottom-4 left-2 flex flex-col gap-1 rounded-sm bg-[#241F21] p-1.5 shadow-lg">
-          <span className="px-1 pb-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
-            {lang === 'en' ? 'Overlays' : '规划覆盖区'}
-          </span>
-          {(
-            [
-              {
-                id: 'HO',
-                label: lang === 'en' ? 'Heritage Overlay' : '遗产覆盖区 (HO)',
-                swatch: '#E6C280',
-              },
-              {
-                id: 'BMO',
-                label: lang === 'en' ? 'Bushfire Overlay' : '山火管理覆盖区 (BMO)',
-                swatch: '#E9A078',
-              },
-              {
-                id: 'FO',
-                label:
-                  lang === 'en' ? 'Flood Overlay (LSIO / SBO)' : '淹水覆盖区 (FO / LSIO / SBO)',
-                swatch: '#78A0E9',
-              },
-            ] as const
-          ).map((opt) => {
-            const isActive = activeLayerIds.has(opt.id);
-            return (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() =>
-                  setActiveLayerIds((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(opt.id)) next.delete(opt.id);
-                    else next.add(opt.id);
-                    return next;
-                  })
-                }
-                aria-pressed={isActive}
-                className={`flex items-center gap-2 rounded-sm border px-2 py-1 text-left transition-colors ${
-                  isActive
-                    ? 'border-[#E9E778] bg-[#E9E778]/10 text-zinc-100'
-                    : 'border-zinc-700 text-zinc-300 hover:border-zinc-500'
-                }`}
-              >
-                <span
-                  className="inline-block size-2.5 rounded-sm border border-black/30"
-                  style={{ backgroundColor: opt.swatch }}
-                  aria-hidden
-                />
-                <span className="text-[10px] font-medium tracking-wide">
-                  {opt.label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
 
       </div>
     );

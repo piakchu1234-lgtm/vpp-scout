@@ -12,11 +12,11 @@
 
 'use client';
 
+import React, { useState, useEffect } from 'react';
 import { useTheme } from 'next-themes';
 import { Sun, Moon, Languages, FolderOpen } from 'lucide-react';
-import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { UserButton } from '@clerk/nextjs';
+import { UserButton, useUser } from '@clerk/nextjs';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function GlobalControls() {
@@ -24,6 +24,7 @@ export default function GlobalControls() {
   const { language, toggleLanguage } = useLanguage();
   const [mounted, setMounted] = useState(false);
   const router = useRouter();
+  const { user, isLoaded } = useUser();
 
   // Avoid hydration mismatch
   useEffect(() => {
@@ -56,16 +57,34 @@ export default function GlobalControls() {
   return (
     <>
       {/* User Profile Button (Clerk) */}
+      {/* Note: Sign-out redirect URL is configured in Clerk Dashboard > Paths */}
       <div className="flex items-center">
-        <UserButton
-          appearance={{
-            elements: {
-              avatarBox: 'w-10 h-10',
-              userButtonPopoverCard: 'bg-zinc-900 border border-zinc-800',
-              userButtonPopoverActionButton: 'hover:bg-zinc-800',
-            }
-          }}
-        />
+        {isLoaded && user ? (
+          <UserButton
+            appearance={{
+              elements: {
+                avatarBox: 'w-10 h-10 rounded-lg',
+                userButtonPopoverCard: 'bg-zinc-900 border border-zinc-800',
+                userButtonPopoverActionButton: 'hover:bg-zinc-800 text-zinc-300',
+                userButtonPopoverActionButtonText: 'text-zinc-300',
+                userButtonPopoverFooter: 'hidden',
+              }
+            }}
+          />
+        ) : isLoaded ? (
+          <a
+            href="/sign-in"
+            className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E9E778] text-zinc-300 hover:text-white font-medium text-sm"
+            aria-label="Sign in to your account"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+            Sign In
+          </a>
+        ) : (
+          <div className="w-10 h-10 bg-zinc-800 border border-zinc-700 rounded-lg animate-pulse" />
+        )}
       </div>
 
       {/* Projects Button */}
