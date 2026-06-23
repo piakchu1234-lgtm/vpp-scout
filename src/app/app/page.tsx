@@ -1468,7 +1468,7 @@ function AppCanvas() {
               {/* Upgrade Button */}
               <button
                 onClick={() => {
-                  const STRIPE_CHECKOUT_URL = 'https://buy.stripe.com/test_your_product_link';
+                  const STRIPE_CHECKOUT_URL = process.env.NEXT_PUBLIC_STRIPE_CHECKOUT_URL || 'https://buy.stripe.com/test_your_product_link';
                   const finalCheckoutUrl = userId
                     ? `${STRIPE_CHECKOUT_URL}?client_reference_id=${userId}`
                     : STRIPE_CHECKOUT_URL;
