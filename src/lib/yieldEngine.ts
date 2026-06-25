@@ -137,11 +137,21 @@ function formatM2(value: number): string {
  * @returns ParkingReduction modifier
  */
 function calculateParkingReduction(
-  overlays: string[],
+  overlays: string[] | string | null | undefined,
   zoneCode: string,
 ): ParkingReduction {
+  // Normalize overlays to array
+  let overlayArray: string[] = [];
+
+  if (Array.isArray(overlays)) {
+    overlayArray = overlays;
+  } else if (typeof overlays === 'string') {
+    // Handle comma-separated string (e.g., "HO123,BMO")
+    overlayArray = overlays.split(',').map(s => s.trim()).filter(Boolean);
+  }
+
   // Check for Parking Overlay triggers
-  const hasParkingOverlay = overlays.some(o => /PO\d+/i.test(o) || /parking/i.test(o));
+  const hasParkingOverlay = overlayArray.some(o => /PO\d+/i.test(o) || /parking/i.test(o));
 
   // PPTN zones: High-frequency public transport corridors
   // Approximation: RGZ, C1Z, MUZ, CCZ are typically within PPTN catchments
@@ -355,13 +365,21 @@ export function emptyYield(reason = 'Awaiting parcel geometry…'): YieldData {
 export function calculateYield(
   landSizeM2: number,
   zoneCode: string,
-  overlays: string[] = [],
+  overlays: string[] | string | null | undefined = [],
 ): YieldData {
   if (!Number.isFinite(landSizeM2) || landSizeM2 <= 0) {
     return emptyYield();
   }
 
   const zone = (zoneCode ?? '').trim().toUpperCase();
+
+  // Normalize overlays to array
+  let overlayArray: string[] = [];
+  if (Array.isArray(overlays)) {
+    overlayArray = overlays;
+  } else if (typeof overlays === 'string') {
+    overlayArray = overlays.split(',').map(s => s.trim()).filter(Boolean);
+  }
 
   const ssdFeasible = landSizeM2 >= 300;
   const duplexFeasible = landSizeM2 >= 500;
@@ -435,8 +453,8 @@ export function calculateYield(
   // Calculate multi-archetype scenarios
   const scenarios = {
     townhouse: calculateTownhouseScenario(landSizeM2),
-    apartment: calculateApartmentScenario(landSizeM2, zone, overlays),
-    commercial: calculateCommercialMixedUseScenario(landSizeM2, zone, overlays),
+    apartment: calculateApartmentScenario(landSizeM2, zone, overlayArray),
+    commercial: calculateCommercialMixedUseScenario(landSizeM2, zone, overlayArray),
   };
 
   return {

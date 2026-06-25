@@ -31,6 +31,13 @@ export default function GlobalControls() {
     setMounted(true);
   }, []);
 
+  // Debug: log theme changes
+  useEffect(() => {
+    if (mounted) {
+      console.log('[GlobalControls] Current theme:', theme);
+    }
+  }, [theme, mounted]);
+
   if (!mounted) {
     // Return placeholder while mounting to prevent layout shift
     return (
@@ -43,7 +50,9 @@ export default function GlobalControls() {
   }
 
   const toggleTheme = () => {
-    setTheme(theme === 'dark' ? 'light' : 'dark');
+    const newTheme = theme === 'dark' ? 'light' : 'dark';
+    console.log('[GlobalControls] Toggling theme from', theme, 'to', newTheme);
+    setTheme(newTheme);
   };
 
   // Keyboard support (WCAG 2.1.1)

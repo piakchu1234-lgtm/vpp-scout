@@ -61,6 +61,11 @@ import EasementMapLayer from '@/components/map/EasementMapLayer';
 import MassingLayer from '@/components/map/MassingLayer';
 import type { DevelopmentApplication } from '@/types/developmentApplication';
 import type { MassingResult } from '@/lib/massingEngine';
+import {
+  handleMapClick as executeMapClickPipeline,
+  type ComplianceEvaluation,
+  type MapClickResult,
+} from '@/lib/mapClickPipeline';
 
 import 'mapbox-gl/dist/mapbox-gl.css';
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
@@ -157,6 +162,9 @@ type Props = {
   generatedMassing?: MassingResult | null;
   overlayGeometries?: OverlayGeometry[];
   showOverlays?: boolean;
+  customLayerIds?: string[]; // IDs of custom Mapbox Studio layers to query on click
+  onZoneClick?: (clickResult: MapClickResult, compliance: ComplianceEvaluation) => void;
+  activeZoneFilter?: string[]; // Active zone codes to display (e.g., ['GRZ', 'NRZ', 'C1Z'])
 };
 
 export type MapPreviewHandle = {
@@ -266,6 +274,9 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
       generatedMassing = null,
       overlayGeometries = [],
       showOverlays = false,
+      customLayerIds = [],
+      onZoneClick,
+      activeZoneFilter,
     },
     ref,
   ) {
@@ -390,7 +401,10 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
       if (!drawRef.current) {
         const draw = new MapboxDraw({
           displayControlsDefault: false,
-          controls: {},
+          controls: {
+            polygon: true,
+            trash: true,
+          },
           styles: [
             // Polygon fill
             {
@@ -435,7 +449,17 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
           ],
         });
         drawRef.current = draw;
-        map.addControl(draw, 'top-right');
+        map.addControl(draw, 'top-left');
+
+        // Add native navigation controls (zoom and compass)
+        map.addControl(
+          new mapboxgl.NavigationControl({
+            showCompass: true,
+            showZoom: true,
+            visualizePitch: false,
+          }),
+          'top-left'
+        );
 
         // Listen for draw events to calculate area and measurements
         function handleDrawCreate(e: any) {
@@ -837,6 +861,43 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
       };
     }, [overlayFeatures, activeLayerIds]);
 
+    // ZONE FILTER: Apply dynamic filter to 'Planning Scheme Zones' layer
+    // Professional zoning interface - users can toggle which zone types are visible
+    // Uses Mapbox setFilter to instantly show/hide zones without reloading data
+    // NOTE: This layer uses ["slice", ["get", "ZONE_CODE"], 0, 3] for matching
+    useEffect(() => {
+      const map = mapRef.current?.getMap();
+      if (!map || !map.isStyleLoaded()) return;
+
+      // Only apply filter if activeZoneFilter is provided
+      if (!activeZoneFilter) return;
+
+      const layerId = 'Planning Scheme Zones';
+
+      // Check if the layer exists in the style
+      if (!map.getLayer(layerId)) {
+        console.warn(`[MapPreview] Zone filter layer '${layerId}' not found in style`);
+        return;
+      }
+
+      // If no zones selected, hide everything in the layer
+      if (activeZoneFilter.length === 0) {
+        map.setFilter(layerId, ['==', ['slice', ['get', 'ZONE_CODE'], 0, 3], 'NONE']);
+        console.log('[MapPreview] Zone filter: All zones hidden (empty filter)');
+        return;
+      }
+
+      // Apply Mapbox filter: show only polygons where first 3 chars of ZONE_CODE match our active array
+      // This matches the layer's paint expression pattern
+      map.setFilter(layerId, [
+        'in',
+        ['slice', ['get', 'ZONE_CODE'], 0, 3],  // Extract first 3 characters
+        ['literal', activeZoneFilter],           // Our zone codes array
+      ]);
+
+      console.log('[MapPreview] Zone filter applied:', activeZoneFilter);
+    }, [activeZoneFilter]);
+
     // School Zone layers - load GeoJSON and add subtle blue boundaries
     // Positioned below property boundary to avoid obstructing user focus
     useEffect(() => {
@@ -1235,6 +1296,31 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
         return;
       }
 
+      // INTELLIGENT ZONE DETECTION PIPELINE
+      // If customLayerIds are provided, query those layers first for zone data
+      if (customLayerIds.length > 0 && onZoneClick) {
+        const map = mapRef.current?.getMap();
+        if (map) {
+          const { clickResult, compliance } = executeMapClickPipeline(
+            map,
+            e.point,
+            customLayerIds
+          );
+
+          // If we got zone data from custom layers, trigger zone click handler
+          if (clickResult.success && compliance) {
+            console.log('[MapPreview] Zone clicked:', {
+              zoneCode: compliance.zoneCode,
+              pathway: compliance.pathway,
+              coordinates: clickResult.coordinates,
+            });
+            onZoneClick(clickResult, compliance);
+            // Don't proceed to parcel click handling - zone click takes precedence
+            return;
+          }
+        }
+      }
+
       // Detect shift-click for multi-parcel selection
       const isShiftHeld = e.originalEvent.shiftKey;
 
@@ -1329,7 +1415,7 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
           ref={mapRef}
           mapboxAccessToken={TOKEN}
           preserveDrawingBuffer
-          initialViewState={{ latitude: lat, longitude: lon, zoom: 19 }}
+          initialViewState={{ latitude: lat, longitude: lon, zoom: 19, pitch: 0, bearing: 0 }}
           mapStyle={getMapStyle(viewMode, currentTheme)}
           style={{ width: '100%', height: '100%' }}
           interactiveLayerIds={
@@ -1409,17 +1495,21 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
                 type="fill"
                 paint={{
                   'fill-color': PARCEL_HIGHLIGHT_LIME,
-                  'fill-opacity': 0.2,
+                  'fill-opacity': 0.15,
                 }}
               />
               <Layer
                 id="cadastral-highlight-line"
                 type="line"
-                paint={{ 'line-color': PARCEL_LINE, 'line-width': 1 }}
+                paint={{
+                  'line-color': PARCEL_HIGHLIGHT_LIME,
+                  'line-width': 3,
+                  'line-opacity': 0.95,
+                }}
               />
             </Source>
           )}
-          {/* Multi-Parcel Selection with Dynamic Zoning Fill */}
+          {/* Multi-Parcel Selection with Brand Lime Stroke */}
           {selectedParcels.map((parcel, idx) => {
             // Extract zone code from parcel properties
             const zoneCode = parcel.properties.ZONE_CODE || parcel.properties.ZONE || '';
@@ -1432,22 +1522,23 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
                 type="geojson"
                 data={parcel}
               >
-                {/* ARCHISTAR-PARITY: Solid teal/cyan fill */}
+                {/* Subtle lime fill for selected parcels */}
                 <Layer
                   id={`multi-parcel-zone-fill-${idx}`}
                   type="fill"
                   paint={{
-                    'fill-color': '#6bc4c5', // Archistar teal/cyan
-                    'fill-opacity': 0.6, // Solid enough to pop, transparent enough to see basemap
+                    'fill-color': PARCEL_HIGHLIGHT_LIME,
+                    'fill-opacity': 0.15,
                   }}
                 />
-                {/* ARCHISTAR-PARITY: Vibrant pink boundary outline */}
+                {/* Razor-sharp brand lime boundary stroke */}
                 <Layer
                   id={`multi-parcel-line-${idx}`}
                   type="line"
                   paint={{
-                    'line-color': '#ec4899', // Vibrant pink (Archistar-style)
-                    'line-width': 3, // Bolder for better visibility
+                    'line-color': PARCEL_HIGHLIGHT_LIME,
+                    'line-width': 3,
+                    'line-opacity': 0.95,
                   }}
                 />
                 {/* ARCHISTAR-PARITY: Boundary dimension labels */}
@@ -1557,7 +1648,7 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
             </Source>
           )}
 
-          {/* Consolidated Super-Lot Glow - Neon Lime Border for Multi-Parcel Aggregation */}
+          {/* Consolidated Super-Lot Glow - Brand Lime Border for Multi-Parcel Aggregation */}
           {consolidatedEnvelope && selectedParcels.length > 1 && (
             <Source
               id="consolidated-super-lot"
@@ -1572,10 +1663,10 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
                 id="consolidated-super-lot-glow"
                 type="line"
                 paint={{
-                  'line-color': '#E9E778', // Neon lime
-                  'line-width': 4,
-                  'line-blur': 2,
-                  'line-opacity': 0.9,
+                  'line-color': PARCEL_HIGHLIGHT_LIME,
+                  'line-width': 5,
+                  'line-blur': 3,
+                  'line-opacity': 0.8,
                 }}
               />
             </Source>
@@ -1734,7 +1825,7 @@ export const MapPreview = forwardRef<MapPreviewHandle, Props>(
           )}
           <ScaleControl maxWidth={100} unit="metric" position="bottom-left" />
 
-          <div className="absolute right-4 top-24">
+          <div className="absolute left-4 top-72">
             <button
               type="button"
               onClick={handleLocateMe}

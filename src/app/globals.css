@@ -1,5 +1,16 @@
 @import "tailwindcss";
 
+@theme {
+  --color-background: #ffffff;
+  --color-foreground: #171717;
+  --color-charcoal: #241F21;
+  --color-lime: #E9E778;
+  --color-lime-ink: #1a1a14;
+  --font-sans: var(--font-inter);
+}
+
+@variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -8,20 +19,9 @@
   --lime-ink: #1a1a14;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-charcoal: var(--charcoal);
-  --color-lime: var(--lime);
-  --color-lime-ink: var(--lime-ink);
-  --font-sans: var(--font-inter);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #241F21;
-    --foreground: #ededed;
-  }
+.dark {
+  --background: #241F21;
+  --foreground: #ededed;
 }
 
 body {
@@ -100,4 +100,26 @@ input[type="number"] {
 
 .easement-tooltip .mapboxgl-popup-tip {
   border-top-color: rgb(24 24 27 / 0.95) !important;
+}
+
+/* Mapbox Controls Positioning - Move to top-left to avoid collision with right sidebar */
+.mapboxgl-ctrl-top-left {
+  top: 80px; /* Clear the top header/search bar */
+  left: 16px; /* Consistent with other left-aligned panels */
+}
+
+/* Ensure Mapbox Draw controls are styled consistently */
+.mapboxgl-ctrl-top-left .mapboxgl-ctrl {
+  margin: 0 0 10px 0;
+}
+
+/* Optional: Adjust control button styling for dark theme */
+.mapboxgl-ctrl-group button {
+  background-color: rgba(0, 0, 0, 0.8) !important;
+  backdrop-filter: blur(12px);
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.mapboxgl-ctrl-group button:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
 }

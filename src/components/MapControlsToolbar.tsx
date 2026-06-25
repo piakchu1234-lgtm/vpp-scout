@@ -14,6 +14,7 @@ import {
   Minus as LineIcon,
   Settings,
   ChevronUp,
+  Crosshair,
 } from 'lucide-react';
 import type { ParcelFeature } from '@/lib/vicPlanApi';
 
@@ -32,6 +33,7 @@ type MapControlsToolbarProps = {
   onZoomIn?: () => void;
   onZoomOut?: () => void;
   onResetBearing?: () => void;
+  onRecenter?: () => void;
   drawMode: DrawMode;
   onDrawModeChange: (mode: DrawMode) => void;
   onClearDrawing?: () => void;
@@ -48,6 +50,7 @@ const LABELS = {
   zoomIn: { en: 'Zoom In', zh: '放大' },
   zoomOut: { en: 'Zoom Out', zh: '缩小' },
   resetBearing: { en: 'Reset North', zh: '重置方向' },
+  recenter: { en: 'Recenter on Property', zh: '重新定位到房产' },
   drawPolygon: { en: 'Draw Polygon', zh: '绘制多边形' },
   measureDistance: { en: 'Measure Distance', zh: '测量距离' },
   clearDrawing: { en: 'Clear Drawing', zh: '清除绘图' },
@@ -64,6 +67,7 @@ export default function MapControlsToolbar({
   onZoomIn,
   onZoomOut,
   onResetBearing,
+  onRecenter,
   drawMode,
   onDrawModeChange,
   onClearDrawing,
@@ -73,12 +77,12 @@ export default function MapControlsToolbar({
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
-    <div className="absolute bottom-4 right-4 z-20 flex flex-col items-end gap-3">
+    <div className="absolute top-20 left-6 z-40 flex flex-col items-start gap-3">
       {/* Multi-Parcel Selection Badge */}
       {selectedParcels.length > 1 && (
-        <div className="flex items-center gap-2 rounded-lg border border-[#E9E778]/30 bg-black/80 backdrop-blur-md px-3 py-2 shadow-xl">
-          <div className="flex items-center gap-2 text-xs font-medium text-[#E9E778]">
-            <Layers className="w-3.5 h-3.5 text-[#E9E778]" />
+        <div className="flex items-center gap-2 rounded-lg border border-lime/30 bg-charcoal/95 backdrop-blur-md px-3 py-2 shadow-xl">
+          <div className="flex items-center gap-2 text-xs font-medium text-lime">
+            <Layers className="w-3.5 h-3.5 text-lime" />
             <span>
               {selectedParcels.length} {LABELS.selectedCount[lang]}
             </span>
@@ -95,11 +99,11 @@ export default function MapControlsToolbar({
         </div>
       )}
 
-      {/* Waze-Style Expandable Toolbar */}
-      <div className="flex flex-col items-end gap-2">
+      {/* Stacked Map Control Suite */}
+      <div className="flex flex-col items-start gap-2">
         {/* Expanded Controls */}
         {isExpanded && (
-          <div className="flex flex-col gap-2 rounded-lg border border-slate-200/50 bg-slate-900/90 backdrop-blur-md shadow-xl p-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div className="flex flex-col gap-2 rounded-lg bg-charcoal shadow-xl p-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
             {/* View Mode */}
             <div className="flex gap-1">
               <button
@@ -107,8 +111,8 @@ export default function MapControlsToolbar({
                 onClick={() => setViewMode('plan')}
                 className={`w-10 h-10 flex items-center justify-center rounded-md transition-all ${
                   viewMode === 'plan'
-                    ? 'bg-[#E9E778] text-[#241F21] shadow-md'
-                    : 'text-zinc-300 hover:bg-white/10'
+                    ? 'bg-lime text-charcoal shadow-md'
+                    : 'bg-charcoal text-zinc-300 hover:bg-zinc-800'
                 }`}
                 title={LABELS.darkPlan[lang]}
               >
@@ -120,8 +124,8 @@ export default function MapControlsToolbar({
                 onClick={() => setViewMode('satellite')}
                 className={`w-10 h-10 flex items-center justify-center rounded-md transition-all ${
                   viewMode === 'satellite'
-                    ? 'bg-[#E9E778] text-[#241F21] shadow-md'
-                    : 'text-zinc-300 hover:bg-white/10'
+                    ? 'bg-lime text-charcoal shadow-md'
+                    : 'bg-charcoal text-zinc-300 hover:bg-zinc-800'
                 }`}
                 title={LABELS.aerialSatellite[lang]}
               >
@@ -133,8 +137,8 @@ export default function MapControlsToolbar({
                 onClick={() => setViewMode('hybrid')}
                 className={`w-10 h-10 flex items-center justify-center rounded-md transition-all ${
                   viewMode === 'hybrid'
-                    ? 'bg-[#E9E778] text-[#241F21] shadow-md'
-                    : 'text-zinc-300 hover:bg-white/10'
+                    ? 'bg-lime text-charcoal shadow-md'
+                    : 'bg-charcoal text-zinc-300 hover:bg-zinc-800'
                 }`}
                 title={LABELS.hybridGlobe[lang]}
               >
@@ -148,8 +152,8 @@ export default function MapControlsToolbar({
               onClick={() => setIs3D(!is3D)}
               className={`w-full h-10 flex items-center justify-center gap-2 rounded-md transition-all ${
                 is3D
-                  ? 'bg-[#E9E778] text-[#241F21] shadow-md'
-                  : 'text-zinc-300 hover:bg-white/10'
+                  ? 'bg-lime text-charcoal shadow-md'
+                  : 'bg-charcoal text-zinc-300 hover:bg-zinc-800'
               }`}
               title={LABELS.toggle3D[lang]}
             >
@@ -162,7 +166,7 @@ export default function MapControlsToolbar({
               <button
                 type="button"
                 onClick={onZoomIn}
-                className="flex-1 h-10 flex items-center justify-center rounded-md text-zinc-300 hover:bg-white/10"
+                className="flex-1 h-10 flex items-center justify-center rounded-md bg-charcoal text-zinc-300 hover:bg-zinc-800"
                 title={LABELS.zoomIn[lang]}
               >
                 <Plus className="w-4 h-4" />
@@ -171,7 +175,7 @@ export default function MapControlsToolbar({
               <button
                 type="button"
                 onClick={onZoomOut}
-                className="flex-1 h-10 flex items-center justify-center rounded-md text-zinc-300 hover:bg-white/10"
+                className="flex-1 h-10 flex items-center justify-center rounded-md bg-charcoal text-zinc-300 hover:bg-zinc-800"
                 title={LABELS.zoomOut[lang]}
               >
                 <Minus className="w-4 h-4" />
@@ -180,10 +184,19 @@ export default function MapControlsToolbar({
               <button
                 type="button"
                 onClick={onResetBearing}
-                className="flex-1 h-10 flex items-center justify-center rounded-md text-zinc-300 hover:bg-white/10"
+                className="flex-1 h-10 flex items-center justify-center rounded-md bg-charcoal text-zinc-300 hover:bg-zinc-800"
                 title={LABELS.resetBearing[lang]}
               >
                 <Compass className="w-4 h-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={onRecenter}
+                className="flex-1 h-10 flex items-center justify-center rounded-md bg-charcoal text-lime hover:bg-lime hover:text-charcoal transition-colors"
+                title={LABELS.recenter[lang]}
+              >
+                <Crosshair className="w-4 h-4" />
               </button>
             </div>
 
@@ -198,8 +211,8 @@ export default function MapControlsToolbar({
                 }
                 className={`flex-1 h-10 flex items-center justify-center rounded-md transition-all ${
                   drawMode === 'draw_polygon'
-                    ? 'bg-[#E9E778] text-[#241F21] shadow-md'
-                    : 'text-zinc-300 hover:bg-white/10'
+                    ? 'bg-lime text-charcoal shadow-md'
+                    : 'bg-charcoal text-zinc-300 hover:bg-zinc-800'
                 }`}
                 title={LABELS.drawPolygon[lang]}
               >
@@ -215,8 +228,8 @@ export default function MapControlsToolbar({
                 }
                 className={`flex-1 h-10 flex items-center justify-center rounded-md transition-all ${
                   drawMode === 'draw_line_string'
-                    ? 'bg-[#E9E778] text-[#241F21] shadow-md'
-                    : 'text-zinc-300 hover:bg-white/10'
+                    ? 'bg-lime text-charcoal shadow-md'
+                    : 'bg-charcoal text-zinc-300 hover:bg-zinc-800'
                 }`}
                 title={LABELS.measureDistance[lang]}
               >
@@ -238,14 +251,14 @@ export default function MapControlsToolbar({
           </div>
         )}
 
-        {/* Main Toggle Button (Waze-style) */}
+        {/* Main Toggle Button */}
         <button
           type="button"
           onClick={() => setIsExpanded(!isExpanded)}
-          className={`w-12 h-12 flex items-center justify-center rounded-full border border-slate-200/50 backdrop-blur-md shadow-xl transition-all ${
+          className={`w-12 h-12 flex items-center justify-center rounded-full backdrop-blur-md shadow-xl transition-all ${
             isExpanded
-              ? 'bg-[#E9E778] text-[#241F21]'
-              : 'bg-slate-900/90 text-zinc-300 hover:bg-slate-800/90'
+              ? 'bg-lime text-charcoal'
+              : 'bg-charcoal text-zinc-300 hover:bg-zinc-800'
           }`}
           aria-label="Map Settings"
           aria-expanded={isExpanded}

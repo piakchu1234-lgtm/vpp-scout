@@ -50,3 +50,32 @@ next-env.d.ts
 
 # Claude Code local session / tool settings (per-machine, never shared)
 /.claude/
+
+# Spatial data files (can be very large)
+*.geojson
+*.csv
+*.sql
+*.shp
+*.dbf
+*.prj
+*.shx
+*.kml
+*.gpx
+*.topojson
+*.xlsx
+*.xls
+*.map
+*.dat
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Large data directories
+/Data/
+/data/
+/spatial/
+/geodata/
+public/data/
+

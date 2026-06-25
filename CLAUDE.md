@@ -148,6 +148,15 @@ npx prisma studio    # Open Prisma Studio GUI
 npx prisma migrate dev --name <name>  # Create and apply migration
 ```
 
+### Stripe Webhooks (Local Development)
+For testing payment upgrades locally, you need to forward Stripe webhooks:
+```bash
+stripe listen --forward-to localhost:3000/api/webhooks/stripe
+```
+Copy the webhook signing secret (`whsec_...`) to `.env.local` as `STRIPE_WEBHOOK_SECRET`.
+
+**See [docs/STRIPE_WEBHOOK_SETUP.md](docs/STRIPE_WEBHOOK_SETUP.md) for complete setup instructions.**
+
 ### Database — Prisma 7 Connection Architecture
 
 **Critical:** Prisma 7 uses a split URL pattern for Supabase:

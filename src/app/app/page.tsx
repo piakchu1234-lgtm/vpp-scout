@@ -5,12 +5,16 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Download, Loader2, Map as MapIcon, FileText, FileDown, Search, MapPin, FolderOpen } from 'lucide-react';
 import { UserButton, useAuth, useUser } from '@clerk/nextjs';
 import GlobalControls from '@/components/GlobalControls';
+import TierBadge from '@/components/TierBadge';
+import FloatingDashboardPanel from '@/components/FloatingDashboardPanel';
 import { useLanguage } from '@/contexts/LanguageContext';
 import area from '@turf/area';
 import distance from '@turf/distance';
 import pointToLineDistance from '@turf/point-to-line-distance';
 import length from '@turf/length';
+import bearing from '@turf/bearing';
 import * as turf from '@turf/helpers';
+import { featureLog } from '@/lib/devLog';
 import StorefrontDrawer from '@/components/sidebar/StorefrontDrawer';
 import SuccessModal from '@/components/sidebar/SuccessModal';
 import { MarketBarChart } from '@/components/charts/MarketBarChart';
@@ -21,6 +25,7 @@ import { PROPERTY_UI, type Language } from '@/lib/i18n/propertyUi';
 import ComprehensiveReport from '@/components/report/ComprehensiveReport';
 import { MapPreview } from '@/components/MapPreview';
 import MapControlsToolbar from '@/components/MapControlsToolbar';
+import ZoneFilterPanel, { ZONE_CATEGORIES } from '@/components/ZoneFilterPanel';
 import PropertySidePanel from '@/components/dashboard/PropertySidePanel';
 import InsightPanel from '@/components/dashboard/InsightPanel';
 import DocumentConfigurator from '@/components/dashboard/DocumentConfigurator';
@@ -64,10 +69,18 @@ import type { AIMarketResponse } from '@/types/property';
 import { detectSchoolZones } from '@/lib/schoolZoneDetection';
 import { getCrimeStatsForLGA } from '@/lib/crimeStats';
 import { calculateEstimatedValue, formatEstimatedValue } from '@/lib/valuationCalculator';
+import type { MapClickResult, ComplianceEvaluation } from '@/lib/mapClickPipeline';
 
 
 const MELBOURNE_FALLBACK = { lat: -37.8136, lon: 144.9631 };
 const VICMAP_TIMEOUT_MS = 15000;
+
+// CUSTOM MAPBOX STUDIO LAYER IDs
+// These are the layer IDs from the custom style: mapbox://styles/pikachu12345/cmqp7w2jj004z01su4vy41nya
+// The click pipeline will query these layers to extract zone codes and overlay data
+const CUSTOM_ZONING_LAYER_IDS: string[] = [
+  'Planning Scheme Zones',
+];
 
 export type AIOverlay = { code: string; description: string };
 
@@ -128,7 +141,10 @@ const MapPreviewMemoized = memo(
       prevProps.overlayCodes === nextProps.overlayCodes &&
       prevProps.vppAuditResult === nextProps.vppAuditResult &&
       prevProps.overlayGeometries === nextProps.overlayGeometries &&
-      prevProps.showOverlays === nextProps.showOverlays
+      prevProps.showOverlays === nextProps.showOverlays &&
+      prevProps.customLayerIds === nextProps.customLayerIds &&
+      prevProps.onZoneClick === nextProps.onZoneClick &&
+      prevProps.activeZoneFilter === nextProps.activeZoneFilter
     );
   }
 );
@@ -151,8 +167,9 @@ function AppCanvas() {
   // parameter but preserves lat/lon, we reverse-geocode to recover the
   // authoritative Vicmap address string so the AI insight fetch can proceed.
   const [recoveredAddress, setRecoveredAddress] = useState<string | null>(null);
+  const [isAddressLoading, setIsAddressLoading] = useState(false);
   // Derived address state - clears recoveredAddress when addressParam is present
-  const address = addressParam || recoveredAddress;
+  const address = isAddressLoading ? 'Loading address...' : (addressParam || recoveredAddress);
   const shouldRecoverAddress = !addressParam && hasCoords;
 
   const [polygon, setPolygon] = useState<ParcelPolygon | null>(null);
@@ -170,14 +187,20 @@ function AppCanvas() {
   const [schoolZones, setSchoolZones] = useState<Array<{ schoolName: string; type: 'primary' | 'secondary' }>>([]);
   const [crimeStats, setCrimeStats] = useState<{ incidents: number; ratePer100k: number } | null>(null);
 
-  // Real user tier from Clerk metadata (replaces simulated state)
-  const isPro = user?.publicMetadata?.plan === 'pro';
+  // Real user tier from Clerk Billing using has()
+  const { has } = useAuth();
+  const isPro = has?.({ plan: 'pro' }) ?? false;
   const userTier = isPro ? 'pro' : 'free';
 
   // Geocoding state for top bar search
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [calculatedFrontageM, setCalculatedFrontageM] = useState<number | null>(null);
+  const [calculatedOrientation, setCalculatedOrientation] = useState<'north' | 'south' | 'east' | 'west' | 'northeast' | 'northwest' | 'southeast' | 'southwest' | null>(null);
+
+  // ZONE FILTER STATE - Professional zoning interface
+  // Default: ALL ZONES HIDDEN (empty array) - user must manually enable zones
+  const [activeZoneFilter, setActiveZoneFilter] = useState<string[]>([]);
 
   const { language } = useLanguage();
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
@@ -216,13 +239,8 @@ function AppCanvas() {
     const [lng, lat] = feature.center;
     const selectedAddress = feature.place_name;
 
-    // Update URL and trigger navigation
-    router.push(`/app?address=${encodeURIComponent(selectedAddress)}`);
-
-    // Store coordinates for automatic parcel extraction after flyTo
-    const searchCoordinates = { lng, lat };
-
-    // Fly camera to location with cinematic animation
+    // ALWAYS fly to the location, even if it's the same address
+    // This fixes the "dead search click" bug when re-selecting the same property
     if (mapPreviewRef.current?.getMap) {
       const mapInstance = mapPreviewRef.current.getMap();
 
@@ -240,11 +258,9 @@ function AppCanvas() {
         console.log('[Geocoding] flyTo complete, triggering automatic parcel extraction...');
 
         // Simulate map click at center to trigger existing parcel extraction logic
-        // This reuses the existing MapPreview parcel fetch infrastructure
         const centerPoint = mapInstance.project([lng, lat]);
 
         // Fire a synthetic click event at the center coordinates
-        // MapPreview's onClick handler will catch this and fetch the parcel
         if (mapPreviewRef.current?.handleClick) {
           mapPreviewRef.current.handleClick({
             lngLat: { lng, lat },
@@ -256,6 +272,8 @@ function AppCanvas() {
       });
     }
 
+    // Update URL and UI state (happens after flyTo is triggered)
+    router.push(`/app?address=${encodeURIComponent(selectedAddress)}`);
     setSearchQuery(selectedAddress);
     setSearchResults([]);
   };
@@ -307,14 +325,65 @@ function AppCanvas() {
       // Round to one decimal place
       const frontageM = Math.round(streetFacingEdgeLength * 10) / 10;
 
-      console.log('[Frontage] ✅ Street-facing edge detected:', {
+      featureLog.frontage('✅ Street-facing edge detected:', {
         distanceFromSearch: closestEdgeDistance.toFixed(1) + 'm',
         frontageLength: frontageM + 'm',
       });
 
       return frontageM;
     } catch (error) {
-      console.error('[Frontage] Calculation failed:', error);
+      featureLog.frontage('Calculation failed:', error);
+      return null;
+    }
+  };
+
+  // Calculate property orientation based on rear boundary bearing
+  const calculateOrientation = (geometry: any, searchLng: number, searchLat: number): 'north' | 'south' | 'east' | 'west' | 'northeast' | 'northwest' | 'southeast' | 'southwest' | null => {
+    try {
+      if (!geometry || geometry.type !== 'Polygon') return null;
+
+      const coordinates = geometry.coordinates[0];
+      if (coordinates.length < 3) return null;
+
+      const searchPoint = turf.point([searchLng, searchLat]);
+
+      // Find the edge FURTHEST from the search point (rear boundary)
+      let farthestEdgeDistance = 0;
+      let rearEdgeIndex = 0;
+
+      for (let i = 0; i < coordinates.length - 1; i++) {
+        const pt1 = coordinates[i];
+        const pt2 = coordinates[i + 1];
+        const edgeLine = turf.lineString([pt1, pt2]);
+        const distanceToEdge = pointToLineDistance(searchPoint, edgeLine, { units: 'meters' });
+
+        if (distanceToEdge > farthestEdgeDistance) {
+          farthestEdgeDistance = distanceToEdge;
+          rearEdgeIndex = i;
+        }
+      }
+
+      // Calculate bearing of rear edge
+      const pt1 = coordinates[rearEdgeIndex];
+      const pt2 = coordinates[rearEdgeIndex + 1];
+      const edgeBearing = bearing(turf.point(pt1), turf.point(pt2));
+
+      // Normalize bearing to 0-360
+      const normalizedBearing = (edgeBearing + 360) % 360;
+
+      // Convert bearing to compass direction (rear-facing orientation)
+      if (normalizedBearing >= 337.5 || normalizedBearing < 22.5) return 'north';
+      if (normalizedBearing >= 22.5 && normalizedBearing < 67.5) return 'northeast';
+      if (normalizedBearing >= 67.5 && normalizedBearing < 112.5) return 'east';
+      if (normalizedBearing >= 112.5 && normalizedBearing < 157.5) return 'southeast';
+      if (normalizedBearing >= 157.5 && normalizedBearing < 202.5) return 'south';
+      if (normalizedBearing >= 202.5 && normalizedBearing < 247.5) return 'southwest';
+      if (normalizedBearing >= 247.5 && normalizedBearing < 292.5) return 'west';
+      if (normalizedBearing >= 292.5 && normalizedBearing < 337.5) return 'northwest';
+
+      return null;
+    } catch (error) {
+      featureLog.orientation('Calculation failed:', error);
       return null;
     }
   };
@@ -636,12 +705,24 @@ function AppCanvas() {
   useEffect(() => {
     if (paymentParam !== 'success') return;
     if (typeof window === 'undefined') return;
+
+    // Reload user data from Clerk to immediately reflect PRO tier upgrade
+    console.log('[Payment Success] Reloading user data from Clerk...');
+    if (user) {
+      user.reload().then(() => {
+        console.log('[Payment Success] ✅ User data reloaded, new tier:', user.publicMetadata?.plan);
+      }).catch((error) => {
+        console.error('[Payment Success] Failed to reload user data:', error);
+      });
+    }
+
+    // Clean up payment success parameters from URL
     const url = new URL(window.location.href);
     url.searchParams.delete('payment');
     url.searchParams.delete('session_id');
     url.searchParams.delete('type');
     window.history.replaceState({}, '', url.toString());
-  }, [paymentParam]);
+  }, [paymentParam, user]);
 
   // Address recovery — when the checkout pipeline drops the address parameter
   // but preserves lat/lon (payment success redirect), reverse-geocode to
@@ -869,6 +950,37 @@ function AppCanvas() {
     return mergedMarketData;
   }, [mergedMarketData, landSizeM2, planData?.zoneCode]);
 
+  // Format sales history from available data sources
+  const salesHistory = useMemo(() => {
+    const history: Array<{ date: string; price: number }> = [];
+
+    // Add from enhanced market data if available
+    if (enhancedMarketData?.lastSoldPrice && enhancedMarketData?.lastSoldDate) {
+      const priceNum = typeof enhancedMarketData.lastSoldPrice === 'number'
+        ? enhancedMarketData.lastSoldPrice
+        : parseInt(enhancedMarketData.lastSoldPrice.replace(/[^\d]/g, '')) || 0;
+
+      if (priceNum > 0) {
+        history.push({
+          date: enhancedMarketData.lastSoldDate,
+          price: priceNum,
+        });
+      }
+    }
+    // Fallback to AI insight data
+    else if (aiInsight?.estimatedLastSoldPrice && aiInsight?.estimatedContractDate) {
+      const priceNum = parseInt(aiInsight.estimatedLastSoldPrice.replace(/[^\d]/g, '')) || 0;
+      if (priceNum > 0) {
+        history.push({
+          date: aiInsight.estimatedContractDate,
+          price: priceNum,
+        });
+      }
+    }
+
+    return history;
+  }, [enhancedMarketData, aiInsight]);
+
   // Automatic frontage calculation when geometry and coordinates are available
   useEffect(() => {
     if (activeSiteGeometry && lat && lon) {
@@ -882,9 +994,21 @@ function AppCanvas() {
         console.warn('[Frontage] ⚠️ Calculation returned null');
         setCalculatedFrontageM(null);
       }
+
+      // Calculate orientation
+      featureLog.orientation('Calculating orientation from geometry...');
+      const orientation = calculateOrientation(activeSiteGeometry, lon, lat);
+      if (orientation) {
+        setCalculatedOrientation(orientation);
+        featureLog.orientation('✅ Detected orientation:', orientation);
+      } else {
+        featureLog.orientation('⚠️ Calculation returned null');
+        setCalculatedOrientation(null);
+      }
     } else {
-      // Clear frontage if geometry or coordinates are missing
+      // Clear frontage and orientation if geometry or coordinates are missing
       setCalculatedFrontageM(null);
+      setCalculatedOrientation(null);
     }
   }, [activeSiteGeometry, lat, lon]);
 
@@ -1317,6 +1441,68 @@ function AppCanvas() {
     });
   }
 
+  // INTELLIGENT ZONE CLICK HANDLER
+  // Triggered when user clicks a zone in the custom Mapbox Studio layer
+  // Extracts zone code and routes through VPP compliance evaluation
+  function handleZoneClick(
+    clickResult: MapClickResult,
+    compliance: ComplianceEvaluation
+  ) {
+    console.log('[ZoneClick] Zone detected from custom layer:', {
+      zoneCode: compliance.zoneCode,
+      pathway: compliance.pathway,
+      isSSDEligible: compliance.isSSDEligible,
+      overlayRisks: compliance.overlayRisks,
+      coordinates: clickResult.coordinates,
+    });
+
+    // Update planData state with zone information from custom layer
+    // This triggers UI updates in PropertySidePanel and other components
+    setPlanData(prev => ({
+      ...prev,
+      zoneCode: compliance.zoneCode,
+      zoneDescription: compliance.zoneDescription,
+      overlayRaw: compliance.overlayRisks.join(','),
+    }));
+
+    // Reverse-geocode clicked coordinates to update address state
+    const [lng, lat] = clickResult.coordinates;
+
+    // IMMEDIATELY set loading flag and address to prevent desync
+    setIsAddressLoading(true);
+    setRecoveredAddress('Loading address...');
+
+    // Clear addressParam by updating URL with only coordinates
+    router.push(`/app?lat=${lat}&lon=${lng}`);
+
+    fetch(
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}`
+    )
+      .then(res => res.json())
+      .then(data => {
+        if (data.features && data.features.length > 0) {
+          const clickedAddress = data.features[0].place_name;
+          console.log('[ZoneClick] Reverse-geocoded address:', clickedAddress);
+
+          // Update recoveredAddress to sync sidebar header
+          setRecoveredAddress(clickedAddress);
+        } else {
+          // No address found - show coordinates
+          setRecoveredAddress(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+        }
+        setIsAddressLoading(false);
+      })
+      .catch(error => {
+        console.error('[ZoneClick] Reverse geocoding failed:', error);
+        // Fallback: show coordinates if reverse geocoding fails
+        setRecoveredAddress(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+        setIsAddressLoading(false);
+      });
+
+    // The existing useEffect that watches planData will automatically
+    // trigger yield recalculation and SSD feasibility analysis
+  }
+
   // Map control handlers for zoom, bearing, and drawing tools
   const handleZoomIn = () => {
     const map = mapPreviewRef.current?.getMap?.();
@@ -1338,6 +1524,28 @@ function AppCanvas() {
       pitch: is3D ? 60 : 0,
       duration: 500,
     });
+  };
+
+  const handleRecenter = () => {
+    const map = mapPreviewRef.current?.getMap?.();
+
+    // Check if we have a map instance and active property coordinates
+    if (!map || !lat || !lon) {
+      console.warn('[Recenter] No active property to recenter on, or map not loaded.');
+      return;
+    }
+
+    // Fly back to the currently analyzed property
+    map.flyTo({
+      center: [lon, lat],
+      zoom: 19,
+      pitch: is3D ? 60 : 0,
+      bearing: 0,
+      speed: 1.5, // Snappy fly-back animation
+      essential: true,
+    });
+
+    console.log('[Recenter] ✅ Recentered on property:', { lat, lon });
   };
 
   const handleDrawModeChange = (mode: DrawMode) => {
@@ -1457,39 +1665,7 @@ function AppCanvas() {
         {/* Right Section: SaaS Monetization + Global Controls */}
         <div className="flex items-center gap-4">
           {/* Tier Badge - Dynamic based on user tier */}
-          {userTier === 'free' ? (
-            <>
-              {/* Free Tier Badge */}
-              <div className="flex flex-col items-end mr-2">
-                <span className="text-[10px] text-zinc-400 uppercase tracking-widest">TIER</span>
-                <span className="text-sm font-bold text-emerald-400">FREE</span>
-              </div>
-
-              {/* Upgrade Button */}
-              <button
-                onClick={() => {
-                  const STRIPE_CHECKOUT_URL = process.env.NEXT_PUBLIC_STRIPE_CHECKOUT_URL || 'https://buy.stripe.com/test_your_product_link';
-                  const finalCheckoutUrl = userId
-                    ? `${STRIPE_CHECKOUT_URL}?client_reference_id=${userId}`
-                    : STRIPE_CHECKOUT_URL;
-                  window.open(finalCheckoutUrl, '_blank');
-                }}
-                className="bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold px-4 py-1.5 rounded-full transition-colors text-sm shadow-[0_0_15px_rgba(16,185,129,0.3)]"
-              >
-                {language === 'en' ? 'Upgrade' : '升级'}
-              </button>
-            </>
-          ) : (
-            <>
-              {/* Pro Tier Badge */}
-              <div className="flex items-center gap-2 px-4 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-full">
-                <svg className="w-3.5 h-3.5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-                <span className="text-sm font-bold text-emerald-400 uppercase tracking-wide">PRO</span>
-              </div>
-            </>
-          )}
+          <TierBadge userTier={userTier} language={language} />
 
           {/* Divider */}
           <div className="w-px h-8 bg-zinc-700/50" />
@@ -1521,6 +1697,7 @@ function AppCanvas() {
               activeScenario={activeScenario}
               onScenarioChange={setActiveScenario}
               scenarioLabel={scenarioMetrics.label}
+              liveCouncil={liveCouncil}
             onTestAgent={async () => {
               setIsTestingAgent(true);
               try {
@@ -1579,7 +1756,7 @@ function AppCanvas() {
 
       {/* Main Content - Full-Screen Map (Hero) - Z-Index: 0 (Base Layer) */}
       <main className="absolute inset-0 w-screen h-screen z-0">
-        {/* Map Canvas */}
+        {/* Map Canvas - Full height since cards are floating */}
         <div className="absolute inset-0 w-full h-full">
           {hasCoords ? (
             <>
@@ -1602,6 +1779,9 @@ function AppCanvas() {
                 drawnArea={drawnArea}
                 onDrawnAreaChange={setDrawnArea}
                 onParcelClick={handleMapParcelClick}
+                customLayerIds={CUSTOM_ZONING_LAYER_IDS}
+                onZoneClick={handleZoneClick}
+                activeZoneFilter={activeZoneFilter}
                 zoneCode={planData?.zoneCode}
                 overlayCodes={planData?.overlayRaw}
                 vppAuditResult={vppAuditResult}
@@ -1628,11 +1808,48 @@ function AppCanvas() {
                 onZoomIn={handleZoomIn}
                 onZoomOut={handleZoomOut}
                 onResetBearing={handleResetBearing}
+                onRecenter={handleRecenter}
                 drawMode={drawMode}
                 onDrawModeChange={handleDrawModeChange}
                 onClearDrawing={handleClearDrawing}
                 drawnArea={drawnArea}
               />
+
+              {/* Floating Dashboard Panel - Three Cards at Bottom */}
+              <FloatingDashboardPanel
+                lang={language}
+                propertyData={{
+                  address,
+                  landSizeM2,
+                  frontageM: calculatedFrontageM ?? undefined,
+                  bedrooms: enhancedMarketData?.bedrooms ?? aiInsight?.bedrooms ?? undefined,
+                  bathrooms: enhancedMarketData?.bathrooms ?? aiInsight?.bathrooms ?? undefined,
+                  carspaces: enhancedMarketData?.carspaces ?? aiInsight?.carspaces ?? undefined,
+                  orientation: calculatedOrientation,
+                  estimatedValue: enhancedMarketData?.estimatedValue ?? undefined,
+                  lastSoldPrice: enhancedMarketData?.lastSoldPrice ?? undefined,
+                  lastSoldDate: enhancedMarketData?.lastSoldDate ?? undefined,
+                  salesHistory,
+                  schoolZones,
+                  crimeStats,
+                }}
+                isPro={isPro}
+                isSidebarOpen={isPanelOpen}
+                onUpgrade={() => {
+                  // Redirect to Stripe checkout
+                  window.location.href = '/api/checkout';
+                }}
+              />
+
+              {/* Zone Filter Panel - Professional zoning interface */}
+              {/* Positioned above bottom panel with scrollable content */}
+              <div className="absolute bottom-24 left-4 z-20 w-80 max-h-[calc(100vh-20rem)] overflow-y-auto">
+                <ZoneFilterPanel
+                  activeZones={activeZoneFilter}
+                  onZonesChange={setActiveZoneFilter}
+                />
+              </div>
+
               {(parcelLoading || parcelMessage || isNavigating) && (
                 <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/10 bg-black/60 backdrop-blur-md text-xs font-medium tracking-wide pointer-events-none">
                   {isNavigating && (
@@ -1674,59 +1891,6 @@ function AppCanvas() {
           )}
       </div>
       </main>
-
-      {/* Clean Metrics Ribbon - Z-Index: 20 (Bottom Overlay - Below Top Bar) */}
-      {hasCoords && planData && (
-        <div className="absolute bottom-6 left-6 z-30 bg-zinc-950/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl px-6 py-4 flex items-center justify-start space-x-8 overflow-x-auto max-w-[calc(100vw-420px)] custom-scrollbar pointer-events-auto transition-all duration-300">
-          <div className="flex items-center gap-12">
-              {/* Zoning */}
-              <div className="flex flex-col">
-                <span className="text-zinc-400 text-[10px] font-bold uppercase tracking-widest">Zoning</span>
-                <span className="text-white text-lg font-semibold mt-0.5">{scenarioMetrics.zoning}</span>
-              </div>
-
-              <div className="w-px h-8 bg-zinc-800" />
-
-              {/* Lot Size */}
-              <div className="flex flex-col">
-                <span className="text-zinc-400 text-[10px] font-bold uppercase tracking-widest">Lot Size</span>
-                <span className="text-white text-lg font-semibold mt-0.5">
-                  {scenarioMetrics.lotSize > 0 ? `${scenarioMetrics.lotSize.toLocaleString()} m²` : '—'}
-                </span>
-              </div>
-
-              <div className="w-px h-8 bg-zinc-800" />
-
-              {/* Frontage */}
-              <div className="flex flex-col">
-                <span className="text-zinc-400 text-[10px] font-bold uppercase tracking-widest">Frontage</span>
-                <span className="text-white text-lg font-semibold mt-0.5">
-                  {scenarioMetrics.frontage > 0 ? `${scenarioMetrics.frontage.toFixed(1)} m` : '—'}
-                </span>
-              </div>
-
-              <div className="w-px h-8 bg-zinc-800" />
-
-              {/* Max Yield (Scenario-Based) */}
-              <div className="flex flex-col">
-                <span className="text-zinc-400 text-[10px] font-bold uppercase tracking-widest">Max Yield</span>
-                <span className="text-blue-400 text-lg font-semibold mt-0.5">{scenarioMetrics.maxYield}</span>
-              </div>
-
-              <div className="w-px h-8 bg-zinc-800" />
-
-              {/* Est. Value (Scenario-Based) */}
-              <div className="flex flex-col">
-                <span className="text-zinc-400 text-[10px] font-bold uppercase tracking-widest">Est. Value</span>
-                <span className="text-green-400 text-lg font-semibold mt-0.5">
-                  {scenarioMetrics.estValue > 0
-                    ? `$${(scenarioMetrics.estValue / 1000000).toFixed(2)}M`
-                    : '—'}
-                </span>
-              </div>
-            </div>
-          </div>
-      )}
 
       {/* Document Configurator Modal */}
       {showDocumentConfigurator && (
@@ -1823,30 +1987,32 @@ function AppCanvas() {
         }
       />
 
-      {/* Hidden PDF Report Template (Client-Side) */}
-      <FeasibilityReportTemplate
-        language={language}
-        address={address || 'N/A'}
-        mapSnapshot={capturedMapSnapshot}
-        zoneCode={planData?.zoneCode || null}
-        zoneDescription={planData?.zoneDescription || null}
-        lotSize={scenarioMetrics.lotSize}
-        frontage={scenarioMetrics.frontage}
-        maxYield={scenarioMetrics.maxYield}
-        estValue={scenarioMetrics.estValue}
-        activeScenario={activeScenario}
-        scenarioLabel={scenarioMetrics.label}
-        overlays={planData?.overlayRaw?.slice(0, 5) || []}
-        ssdRules={
-          activeScenario === 'ssd'
-            ? {
-                maxHeight: '5.0 meters',
-                minGarden: '35%',
-                permitRequired: language === 'en' ? 'No' : '否',
-              }
-            : undefined
-        }
-      />
+      {/* Hidden PDF Report Template (Client-Side - Only visible on print) */}
+      <div className="hidden print:block">
+        <FeasibilityReportTemplate
+          language={language}
+          address={address || 'N/A'}
+          mapSnapshot={capturedMapSnapshot}
+          zoneCode={planData?.zoneCode || null}
+          zoneDescription={planData?.zoneDescription || null}
+          lotSize={scenarioMetrics.lotSize}
+          frontage={scenarioMetrics.frontage}
+          maxYield={scenarioMetrics.maxYield}
+          estValue={scenarioMetrics.estValue}
+          activeScenario={activeScenario}
+          scenarioLabel={scenarioMetrics.label}
+          overlays={planData?.overlayRaw?.slice(0, 5) || []}
+          ssdRules={
+            activeScenario === 'ssd'
+              ? {
+                  maxHeight: '5.0 meters',
+                  minGarden: '35%',
+                  permitRequired: language === 'en' ? 'No' : '否',
+                }
+              : undefined
+          }
+        />
+      </div>
     </div>
   );
 }

@@ -9,10 +9,13 @@
 
 import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, FileDown, Loader2, Search, Save, Lock } from 'lucide-react';
-import { useUser } from '@clerk/nextjs';
+import { useAuth } from '@clerk/nextjs';
 import type { VicPlanData } from '@/lib/vicPlanApi';
 import * as turf from '@turf/turf';
 import { getOverlayDescription } from '@/lib/planningDictionary';
+import { getCouncilContact } from '@/lib/councilContacts';
+import { calculateDevelopmentParameters } from '@/lib/developmentParameters';
+import { evaluateSSDEligibility } from '@/lib/ssdEligibility';
 
 type PropertySidePanelProps = {
   address: string | null;
@@ -48,6 +51,7 @@ type PropertySidePanelProps = {
   userTier?: 'free' | 'pro';
   lotSize?: string;
   frontage?: string;
+  liveCouncil?: string | null;
 };
 
 export default function PropertySidePanel({
@@ -84,14 +88,25 @@ export default function PropertySidePanel({
   userTier = 'free',
   lotSize,
   frontage,
+  liveCouncil = null,
 }: PropertySidePanelProps) {
-  // Get real user plan from Clerk metadata
-  const { user } = useUser();
-  const isPro = user?.publicMetadata?.plan === 'pro';
+  // Get real user plan from Clerk Billing using has()
+  const { has, isLoaded } = useAuth();
+  const isPro = isLoaded && (has?.({ plan: 'pro' }) ?? false);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [overlaysExpanded, setOverlaysExpanded] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'planning' | 'feasibility'>('overview');
+  const [activeTab, setActiveTab] = useState<'statutory' | 'development' | 'feasibility'>('statutory');
+
+  // Get council contact information
+  const councilContact = getCouncilContact(liveCouncil);
+
+  // Calculate development parameters
+  const lotSizeM2 = lotSize ? parseFloat(lotSize.replace(/[^\d.]/g, '')) : null;
+  const devParams = calculateDevelopmentParameters(zoneCode, lotSizeM2);
+
+  // Evaluate SSD eligibility for residential zones
+  const ssdEligibility = evaluateSSDEligibility(zoneCode, lotSizeM2, true);
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && searchQuery.trim()) {
@@ -143,9 +158,9 @@ export default function PropertySidePanel({
   }, [daData, propertyLat, propertyLng]);
 
   return (
-    <div className="h-full bg-zinc-950/70 backdrop-blur-xl border border-white/10 rounded-2xl overflow-y-auto shadow-2xl">
+    <div className="h-full bg-charcoal backdrop-blur-xl border-l border-white/10 overflow-y-auto shadow-2xl">
       {/* Header Section */}
-      <div className="sticky top-0 bg-zinc-950/80 backdrop-blur-xl border-b border-white/10 p-6 z-10 space-y-4">
+      <div className="sticky top-0 bg-charcoal/95 backdrop-blur-xl border-b border-white/10 p-6 z-10 space-y-4">
         {/* Header */}
         <div>
           <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">
@@ -153,55 +168,68 @@ export default function PropertySidePanel({
           </h2>
         </div>
 
-        {/* Address */}
+        {/* Address - Dynamic Loading State */}
         <div>
-          <h1 className="text-lg font-bold text-white mb-2 line-clamp-2">
-            {address || 'No address selected'}
+          <h1 className={`text-lg font-bold mb-2 line-clamp-2 ${
+            !address ? 'italic text-zinc-400 animate-pulse' : 'text-white'
+          }`}>
+            {address || 'Loading planning data...'}
           </h1>
           {zoneCode && (
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="px-2 py-1 bg-[#E9E778]/20 text-[#E9E778] text-xs font-mono font-bold rounded">
+              <span className="px-3 py-1.5 bg-black/40 border border-white/10 text-white text-sm font-mono font-bold rounded-lg">
                 {zoneCode}
               </span>
               {zoneDescription && (
-                <span className="text-xs text-zinc-400 line-clamp-1">{zoneDescription}</span>
+                <span className="text-xs text-lime font-semibold line-clamp-1">{zoneDescription}</span>
               )}
             </div>
           )}
         </div>
 
-        {/* Tab Navigation - 3 Pills */}
-        <div className="flex w-full bg-zinc-900 p-1 rounded-lg">
-          <button
-            onClick={() => setActiveTab('overview')}
-            className={`flex-1 py-2 px-3 text-xs font-bold uppercase tracking-wide rounded-md transition-all ${
-              activeTab === 'overview'
-                ? 'bg-zinc-800 text-white shadow-md border border-zinc-700'
-                : 'text-zinc-500 hover:text-zinc-300'
-            }`}
-          >
-            {language === 'en' ? 'Overview' : '概览'}
-          </button>
-          <button
-            onClick={() => setActiveTab('planning')}
-            className={`flex-1 py-2 px-3 text-xs font-bold uppercase tracking-wide rounded-md transition-all ${
-              activeTab === 'planning'
-                ? 'bg-zinc-800 text-white shadow-md border border-zinc-700'
-                : 'text-zinc-500 hover:text-zinc-300'
-            }`}
-          >
-            {language === 'en' ? 'Planning' : '规划'}
-          </button>
-          <button
-            onClick={() => setActiveTab('feasibility')}
-            className={`flex-1 py-2 px-3 text-xs font-bold uppercase tracking-wide rounded-md transition-all ${
-              activeTab === 'feasibility'
-                ? 'bg-zinc-800 text-white shadow-md border border-zinc-700'
-                : 'text-zinc-500 hover:text-zinc-300'
-            }`}
-          >
-            {language === 'en' ? 'Feasibility' : '可行性'}
-          </button>
+        {/* Tab Navigation - Underline Style with Lime Slider */}
+        <div className="relative border-b border-white/10">
+          <div className="flex gap-6">
+            <button
+              onClick={() => setActiveTab('statutory')}
+              className={`relative py-3 text-sm font-bold uppercase tracking-wide transition-all ${
+                activeTab === 'statutory'
+                  ? 'text-white'
+                  : 'text-white/40 hover:text-white'
+              }`}
+            >
+              {language === 'en' ? 'Statutory' : '法定规划'}
+              {activeTab === 'statutory' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-lime" />
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('development')}
+              className={`relative py-3 text-sm font-bold uppercase tracking-wide transition-all ${
+                activeTab === 'development'
+                  ? 'text-white'
+                  : 'text-white/40 hover:text-white'
+              }`}
+            >
+              {language === 'en' ? 'Development' : '开发参数'}
+              {activeTab === 'development' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-lime" />
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('feasibility')}
+              className={`relative py-3 text-sm font-bold uppercase tracking-wide transition-all ${
+                activeTab === 'feasibility'
+                  ? 'text-white'
+                  : 'text-white/40 hover:text-white'
+              }`}
+            >
+              {language === 'en' ? 'Feasibility' : '可行性'}
+              {activeTab === 'feasibility' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-lime" />
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -270,7 +298,7 @@ export default function PropertySidePanel({
                 {/* Paywall Overlay for Free Users */}
                 {!isPro && (
                   <button
-                    onClick={() => alert('Redirecting to Checkout...')}
+                    onClick={() => window.location.href = '/pricing'}
                     className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900/90 backdrop-blur-sm rounded-xl border border-emerald-500/30 hover:bg-zinc-900/95 transition-all cursor-pointer group"
                   >
                     <Lock className="w-6 h-6 text-emerald-400 mb-2 group-hover:scale-110 transition-transform" />
@@ -315,7 +343,7 @@ export default function PropertySidePanel({
                 {/* Paywall Overlay for Free Users */}
                 {!isPro && (
                   <button
-                    onClick={() => alert('Redirecting to Checkout...')}
+                    onClick={() => window.location.href = '/pricing'}
                     className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900/90 backdrop-blur-sm rounded-xl border border-emerald-500/30 hover:bg-zinc-900/95 transition-all cursor-pointer group"
                   >
                     <Lock className="w-6 h-6 text-emerald-400 mb-2 group-hover:scale-110 transition-transform" />
@@ -329,8 +357,8 @@ export default function PropertySidePanel({
           </div>
         )}
 
-        {/* PLANNING TAB */}
-        {activeTab === 'planning' && (
+        {/* STATUTORY TAB */}
+        {activeTab === 'statutory' && (
           <div className="space-y-4">
             {/* ZONING CARD */}
             {zoneCode && (
@@ -399,6 +427,210 @@ export default function PropertySidePanel({
                 })()}
               </div>
             )}
+
+            {/* COUNCIL INFORMATION CARD */}
+            <div className="bg-black/20 border border-white/5 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-4">
+                <svg className="w-4 h-4 text-lime" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+                <h3 className="text-white text-sm font-semibold uppercase tracking-wide">
+                  {language === 'en' ? 'Local Council' : '地方议会'}
+                </h3>
+              </div>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between py-2 border-b border-white/5">
+                  <span className="text-zinc-400 font-medium">{language === 'en' ? 'LGA' : '地方政府区域'}</span>
+                  <span className="text-white text-xs font-semibold">
+                    {councilContact?.name || liveCouncil || '—'}
+                  </span>
+                </div>
+                <div className="flex justify-between py-2 border-b border-white/5">
+                  <span className="text-zinc-400 font-medium">{language === 'en' ? 'Website' : '网站'}</span>
+                  {councilContact?.website ? (
+                    <a
+                      href={`https://${councilContact.website}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-lime text-xs hover:text-lime/80 transition-colors font-medium"
+                    >
+                      {councilContact.website}
+                    </a>
+                  ) : (
+                    <span className="text-zinc-600 text-xs">—</span>
+                  )}
+                </div>
+                <div className="flex justify-between py-2 border-b border-white/5">
+                  <span className="text-zinc-400 font-medium">{language === 'en' ? 'Planning Phone' : '规划电话'}</span>
+                  {councilContact?.planningPhone ? (
+                    <a
+                      href={`tel:${councilContact.planningPhone.replace(/[^\d+]/g, '')}`}
+                      className="text-white text-xs hover:text-lime transition-colors font-medium"
+                    >
+                      {councilContact.planningPhone}
+                    </a>
+                  ) : (
+                    <span className="text-zinc-600 text-xs">—</span>
+                  )}
+                </div>
+                <div className="flex justify-between py-2">
+                  <span className="text-zinc-400 font-medium">{language === 'en' ? 'Planning Email' : '规划邮箱'}</span>
+                  {councilContact?.planningEmail ? (
+                    <a
+                      href={`mailto:${councilContact.planningEmail}`}
+                      className="text-white text-xs hover:text-lime transition-colors font-medium"
+                    >
+                      {councilContact.planningEmail}
+                    </a>
+                  ) : (
+                    <span className="text-zinc-600 text-xs">—</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* DEVELOPMENT PARAMETERS TAB */}
+        {activeTab === 'development' && (
+          <div className="space-y-4">
+            {/* Section: ResCode & VPP Parameters */}
+            <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <svg className="w-4 h-4 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+                <h3 className="text-white text-sm font-semibold uppercase tracking-wide">
+                  {language === 'en' ? 'Development Parameters' : '开发参数'}
+                </h3>
+              </div>
+
+              <div className="space-y-0 divide-y divide-white/5">
+                {/* Max Building Height */}
+                <div className="flex justify-between items-center py-3">
+                  <span className="text-white text-sm font-medium">
+                    {language === 'en' ? 'Max Building Height' : '最大建筑高度'}
+                  </span>
+                  <span className="text-lime text-sm font-bold">{devParams.maxBuildingHeight || '—'}</span>
+                </div>
+
+                {/* Mandatory Garden Area */}
+                <div className="flex justify-between items-center py-3">
+                  <span className="text-white text-sm font-medium">
+                    {language === 'en' ? 'Mandatory Garden Area' : '必需花园面积'}
+                  </span>
+                  <span className="text-lime text-sm font-bold">{devParams.mandatoryGardenArea || '—'}</span>
+                </div>
+
+                {/* Site Coverage */}
+                <div className="flex justify-between items-center py-3">
+                  <span className="text-white text-sm font-medium">
+                    {language === 'en' ? 'Site Coverage' : '建筑覆盖率'}
+                  </span>
+                  <span className="text-lime text-sm font-bold">{devParams.siteCoverage || '—'}</span>
+                </div>
+
+                {/* Permeability */}
+                <div className="flex justify-between items-center py-3">
+                  <span className="text-white text-sm font-medium">
+                    {language === 'en' ? 'Permeability' : '渗透率'}
+                  </span>
+                  <span className="text-lime text-sm font-bold">{devParams.permeability || '—'}</span>
+                </div>
+
+                {/* Front Setback */}
+                <div className="flex justify-between items-center py-3">
+                  <span className="text-white text-sm font-medium">
+                    {language === 'en' ? 'Front Setback' : '前院退界'}
+                  </span>
+                  <span className="text-lime text-sm font-bold">{devParams.frontSetback || '—'}</span>
+                </div>
+
+                {/* Side/Rear Setbacks */}
+                <div className="flex justify-between items-center py-3">
+                  <span className="text-white text-sm font-medium">
+                    {language === 'en' ? 'Side/Rear Setbacks' : '侧/后退界'}
+                  </span>
+                  <span className="text-lime text-sm font-bold">{devParams.sideRearSetback || '—'}</span>
+                </div>
+
+                {/* FSR - Only show for Commercial zones with lime highlight */}
+                {devParams.floorSpaceRatio && (
+                  <div className="flex justify-between items-center py-3 bg-lime/5 -mx-4 px-4">
+                    <span className="text-white text-sm font-medium">
+                      {language === 'en' ? 'Floor Space Ratio (FSR)' : '容积率 (FSR)'}
+                    </span>
+                    <span className="text-lime text-sm font-bold">{devParams.floorSpaceRatio}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* SSD Eligibility Checklist - Show for residential zones */}
+              {!devParams.floorSpaceRatio && ssdEligibility && (
+                <div className="mt-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <svg className="w-4 h-4 text-lime" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <h3 className="text-white text-sm font-semibold uppercase tracking-wide">
+                      {language === 'en' ? 'Small Second Dwelling (SSD) Eligibility' : '小型第二住宅资格'}
+                    </h3>
+                  </div>
+
+                  {/* Overall Status */}
+                  <div className={`mb-4 p-3 rounded-lg border ${
+                    ssdEligibility.isEligible
+                      ? 'bg-lime/10 border-lime/30'
+                      : 'bg-zinc-800/50 border-zinc-700'
+                  }`}>
+                    <p className={`text-xs font-medium ${
+                      ssdEligibility.isEligible ? 'text-lime' : 'text-zinc-400'
+                    }`}>
+                      {ssdEligibility.summary[language]}
+                    </p>
+                  </div>
+
+                  {/* Criteria Checklist */}
+                  <div className="space-y-2">
+                    {ssdEligibility.criteria.map((criterion) => (
+                      <div key={criterion.id} className="flex items-start gap-3 py-2 border-b border-white/5">
+                        <div className="mt-0.5">
+                          {criterion.isPassing ? (
+                            <svg className="w-4 h-4 text-lime" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          ) : (
+                            <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          )}
+                        </div>
+                        <div className="flex-1">
+                          <p className={`text-xs font-medium ${
+                            criterion.isPassing ? 'text-white' : 'text-zinc-400'
+                          }`}>
+                            {criterion.label[language]}
+                          </p>
+                          {criterion.reasoning && (
+                            <p className="text-xs text-zinc-500 mt-0.5">
+                              {criterion.reasoning}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                <p className="text-xs text-blue-300">
+                  {language === 'en'
+                    ? '📊 VPP schedule data integration coming soon'
+                    : '📊 VPP数据集成即将推出'}
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
@@ -746,7 +978,7 @@ export default function PropertySidePanel({
                   {language === 'en' ? 'School Catchment' : '学校学区'}
                 </h3>
               </div>
-              <div className={`flex flex-col gap-3 ${userTier === 'free' ? 'blur-sm' : ''}`}>
+              <div className={`flex flex-col gap-3 ${!isPro ? 'blur-sm' : ''}`}>
                 {schoolZones.map((zone, idx) => (
                   <div key={idx} className="flex justify-between items-center py-2 border-b border-zinc-800 last:border-0">
                     <span className="text-zinc-400 text-xs font-semibold">
@@ -762,7 +994,7 @@ export default function PropertySidePanel({
               </div>
 
               {/* Paywall Overlay for Free Users */}
-              {userTier === 'free' && (
+              {!isPro && (
                 <button
                   onClick={() => alert('Redirecting to Checkout...')}
                   className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900/90 backdrop-blur-sm rounded-xl border border-emerald-500/30 hover:bg-zinc-900/95 transition-all cursor-pointer group"
@@ -807,7 +1039,7 @@ export default function PropertySidePanel({
               </div>
 
               {/* Paywall Overlay for Free Users */}
-              {userTier === 'free' && (
+              {!isPro && (
                 <button
                   onClick={() => alert('Redirecting to Checkout...')}
                   className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900/90 backdrop-blur-sm rounded-xl border border-emerald-500/30 hover:bg-zinc-900/95 transition-all cursor-pointer group"
@@ -950,13 +1182,13 @@ export default function PropertySidePanel({
           {overlaysExpanded && (
             <div className="px-4 pb-4">
               {planData?.overlayRaw && planData.overlayRaw.length > 0 ? (
-                <div className="space-y-2">
+                <div className="flex flex-wrap gap-2">
                   {planData.overlayRaw.map((overlay, index) => (
                     <div
                       key={index}
-                      className="px-3 py-2 bg-zinc-900/50 border border-zinc-800 rounded text-xs text-zinc-300"
+                      className="px-3 py-1.5 bg-black/40 border border-white/10 rounded-lg text-xs font-mono font-semibold text-white hover:border-lime/50 transition-colors"
                     >
-                      <span className="font-mono font-bold text-[#E9E778]">{overlay}</span>
+                      {overlay}
                     </div>
                   ))}
                 </div>
@@ -1116,10 +1348,6 @@ export default function PropertySidePanel({
           </div>
         </div>
 
-        {/* Additional Statutory Data (Future: Constraints, etc.) */}
-        <div className="text-xs text-zinc-500 italic">
-          Additional statutory data sections will appear here.
-        </div>
       </div>
       {/* End hidden old content */}
     </div>

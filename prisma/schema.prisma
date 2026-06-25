@@ -3,7 +3,8 @@
 // Supports spatial data, market intelligence, AI insights, and acquisition pipeline
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
@@ -154,22 +155,22 @@ model AgentMarketCache {
   address String @unique @db.VarChar(500) // Normalized address for cache lookup
 
   // MARKET ATTRIBUTES (from agentic web search)
-  bedrooms       Int?
-  bathrooms      Int?
-  estimatedValue Int? // AUD (stored as whole dollars, not cents)
+  bedrooms       Int?  @map("bedrooms")
+  bathrooms      Int?  @map("bathrooms")
+  estimatedValue Int?  @map("estimated_value") // AUD (stored as whole dollars, not cents)
 
   // SUBURB-LEVEL MARKET TRENDS (Domain/REA data parity)
-  suburbMedianPrice    Int? // Suburb median price (AUD)
-  suburbGrowthRate     Float? // Annual growth rate (percentage, e.g., 12.5)
-  averageDaysOnMarket  Int? // Average days properties stay on market
+  suburbMedianPrice   Int?   @map("suburb_median_price") // Suburb median price (AUD)
+  suburbGrowthRate    Float? @map("suburb_growth_rate") // Annual growth rate (percentage, e.g., 12.5)
+  averageDaysOnMarket Int?   @map("average_days_on_market") // Average days properties stay on market
 
   // METADATA
-  source    String   @db.VarChar(50) // "agent" | "domain" | "mock"
-  toolCalls Int      @default(1) // Number of LLM tool calls used
+  source    String   @db.VarChar(50) @map("source") // "agent" | "domain" | "mock"
+  toolCalls Int      @default(1) @map("tool_calls") // Number of LLM tool calls used
 
   // TIMESTAMPS (7-day TTL enforced at application level)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // INDEXES
   @@index([address])

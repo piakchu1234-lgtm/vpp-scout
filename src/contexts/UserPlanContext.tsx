@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useUser } from '@clerk/nextjs';
 
 export type UserPlan = 'free' | 'premium';
 
@@ -21,43 +22,38 @@ const UserPlanContext = createContext<UserPlanContextType | undefined>(undefined
 const DEFAULT_FREE_QUOTA = 5;
 
 export function UserPlanProvider({ children }: { children: React.ReactNode }) {
+  const { user, isLoaded } = useUser();
   const [plan, setPlan] = useState<UserPlan>('free');
   const [remainingQuota, setRemainingQuota] = useState<number>(DEFAULT_FREE_QUOTA);
   const [showUpsellModal, setShowUpsellModal] = useState(false);
 
-  // Hydrate plan and quota from localStorage on mount
+  // Sync plan with Clerk metadata (source of truth)
   useEffect(() => {
-    const storedPlan = localStorage.getItem('userPlan');
-    const storedQuota = localStorage.getItem('remainingQuota');
-
-    if (storedPlan === 'free' || storedPlan === 'premium') {
-      setPlan(storedPlan);
-    }
-
-    if (storedQuota) {
-      const parsed = parseInt(storedQuota, 10);
-      if (Number.isFinite(parsed) && parsed >= 0) {
-        setRemainingQuota(parsed);
+    if (isLoaded && user) {
+      const clerkPlan = user.publicMetadata?.plan;
+      if (clerkPlan === 'pro' || clerkPlan === 'premium') {
+        setPlan('premium');
+        setRemainingQuota(Infinity);
+      } else {
+        setPlan('free');
+        // Load remaining quota from localStorage for free users
+        const storedQuota = localStorage.getItem('remainingQuota');
+        if (storedQuota) {
+          const parsed = parseInt(storedQuota, 10);
+          if (Number.isFinite(parsed) && parsed >= 0) {
+            setRemainingQuota(parsed);
+          }
+        }
       }
     }
-  }, []);
+  }, [isLoaded, user]);
 
-  // Persist plan to localStorage
+  // Persist remainingQuota to localStorage (for free users only)
   useEffect(() => {
-    localStorage.setItem('userPlan', plan);
-  }, [plan]);
-
-  // Persist remainingQuota to localStorage
-  useEffect(() => {
-    localStorage.setItem('remainingQuota', remainingQuota.toString());
-  }, [remainingQuota]);
-
-  // Reset quota when switching to premium
-  useEffect(() => {
-    if (plan === 'premium') {
-      setRemainingQuota(Infinity);
+    if (plan === 'free') {
+      localStorage.setItem('remainingQuota', remainingQuota.toString());
     }
-  }, [plan]);
+  }, [remainingQuota, plan]);
 
   /**
    * Defensive function wrapper: decrementQuota()
