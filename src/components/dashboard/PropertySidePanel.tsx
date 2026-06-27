@@ -236,8 +236,8 @@ export default function PropertySidePanel({
       {/* Tab Content Area - No Scroll, Fixed Height */}
       <div className="p-6 space-y-4 h-[calc(100vh-280px)] overflow-hidden">
 
-        {/* OVERVIEW TAB */}
-        {activeTab === 'overview' && (
+        {/* OVERVIEW TAB - DEAD CODE (no button sets activeTab to 'overview') */}
+        {false && (activeTab as string) === 'overview' && (
           <div className="space-y-4">
             {/* Site Summary Card */}
             <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
@@ -327,7 +327,7 @@ export default function PropertySidePanel({
                       {language === 'en' ? 'Incidents (YE Mar 2026)' : '事件数（截至2026年3月）'}
                     </span>
                     <span className="text-white text-sm font-medium">
-                      {crimeStats.incidents.toLocaleString()}
+                      {crimeStats?.incidents.toLocaleString()}
                     </span>
                   </div>
                   <div className="flex justify-between items-center py-2">
@@ -335,7 +335,7 @@ export default function PropertySidePanel({
                       {language === 'en' ? 'Rate per 100,000' : '每10万人比率'}
                     </span>
                     <span className="text-emerald-400 text-sm font-bold">
-                      {crimeStats.ratePer100k.toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                      {crimeStats?.ratePer100k.toLocaleString(undefined, { maximumFractionDigits: 1 })}
                     </span>
                   </div>
                 </div>

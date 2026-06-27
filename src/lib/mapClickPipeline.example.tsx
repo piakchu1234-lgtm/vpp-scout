@@ -205,7 +205,7 @@ export function ExampleWithVicmapFallback() {
         const { evaluatePlanningCompliance } = await import('@/lib/mapClickPipeline');
         const compliance = evaluatePlanningCompliance(
           planData.zoneCode,
-          planData.overlayRaw?.split(',').map(s => s.trim()) || []
+          planData.overlayRaw || []
         );
 
         console.log('Zone data from Vicmap API:', compliance);

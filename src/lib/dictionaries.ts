@@ -214,5 +214,5 @@ export type Language = 'en' | 'zh';
 export type Dictionary = typeof dictionaries.en;
 
 export function getDict(lang: Language): Dictionary {
-  return dictionaries[lang] || dictionaries.en;
+  return dictionaries[lang] as Dictionary || dictionaries.en;
 }

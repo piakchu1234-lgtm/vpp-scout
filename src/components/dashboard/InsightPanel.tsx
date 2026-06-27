@@ -523,7 +523,7 @@ export default function InsightPanel({
                   zoneCode={planData.zoneCode}
                   overlays={planData.overlayRaw || []}
                   language={language}
-                  buildingFootprintGeometry={generatedMassing?.footprint || undefined}
+                  buildingFootprintGeometry={generatedMassing?.envelope.geometry || undefined}
                   overlayGeometries={overlayGeometries}
                 />
               )}

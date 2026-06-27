@@ -56,9 +56,10 @@ export function queryMapAtClick(
   try {
     // Query all rendered features at the click point
     // If customLayerIds provided, filter to those layers
+    const pointLike: [number, number] = [point.x, point.y];
     const features = customLayerIds.length > 0
-      ? map.queryRenderedFeatures(point, { layers: customLayerIds })
-      : map.queryRenderedFeatures(point);
+      ? map.queryRenderedFeatures(pointLike, { layers: customLayerIds })
+      : map.queryRenderedFeatures(pointLike);
 
     if (!features || features.length === 0) {
       console.log('[MapClickPipeline] No features found at click point');

@@ -954,15 +954,15 @@ function AppCanvas() {
   const salesHistory = useMemo(() => {
     const history: Array<{ date: string; price: number }> = [];
 
-    // Add from enhanced market data if available
-    if (enhancedMarketData?.lastSoldPrice && enhancedMarketData?.lastSoldDate) {
-      const priceNum = typeof enhancedMarketData.lastSoldPrice === 'number'
-        ? enhancedMarketData.lastSoldPrice
-        : parseInt(enhancedMarketData.lastSoldPrice.replace(/[^\d]/g, '')) || 0;
+    // Add from market data if available (Domain/RealEstate API)
+    if (marketData?.lastSoldPrice && marketData?.lastSoldDate) {
+      const priceNum = typeof marketData.lastSoldPrice === 'number'
+        ? marketData.lastSoldPrice
+        : parseInt(marketData.lastSoldPrice.replace(/[^\d]/g, '')) || 0;
 
       if (priceNum > 0) {
         history.push({
-          date: enhancedMarketData.lastSoldDate,
+          date: marketData.lastSoldDate,
           price: priceNum,
         });
       }
@@ -979,7 +979,7 @@ function AppCanvas() {
     }
 
     return history;
-  }, [enhancedMarketData, aiInsight]);
+  }, [marketData, aiInsight]);
 
   // Automatic frontage calculation when geometry and coordinates are available
   useEffect(() => {
@@ -1282,7 +1282,7 @@ function AppCanvas() {
     const isCommercialZone = zoneCode.startsWith('CCZ') || zoneCode.startsWith('C1Z') || zoneCode.startsWith('C2Z');
 
     // Calculate commercial land value if applicable
-    const commercialValue = isCommercialZone && landSizeM2 > 0
+    const commercialValue = isCommercialZone && landSizeM2 && landSizeM2 > 0
       ? landSizeM2 * 12000
       : 0;
 
@@ -1462,7 +1462,8 @@ function AppCanvas() {
       ...prev,
       zoneCode: compliance.zoneCode,
       zoneDescription: compliance.zoneDescription,
-      overlayRaw: compliance.overlayRisks.join(','),
+      overlayRaw: compliance.overlayRisks,
+      overlayCodes: prev?.overlayCodes || [],
     }));
 
     // Reverse-geocode clicked coordinates to update address state
@@ -1819,16 +1820,20 @@ function AppCanvas() {
               <FloatingDashboardPanel
                 lang={language}
                 propertyData={{
-                  address,
-                  landSizeM2,
+                  address: address ?? undefined,
+                  landSizeM2: landSizeM2 ?? undefined,
                   frontageM: calculatedFrontageM ?? undefined,
                   bedrooms: enhancedMarketData?.bedrooms ?? aiInsight?.bedrooms ?? undefined,
                   bathrooms: enhancedMarketData?.bathrooms ?? aiInsight?.bathrooms ?? undefined,
-                  carspaces: enhancedMarketData?.carspaces ?? aiInsight?.carspaces ?? undefined,
-                  orientation: calculatedOrientation,
+                  carspaces: marketData?.carspaces ?? aiInsight?.carspaces ?? undefined,
+                  orientation: calculatedOrientation ?? undefined,
                   estimatedValue: enhancedMarketData?.estimatedValue ?? undefined,
-                  lastSoldPrice: enhancedMarketData?.lastSoldPrice ?? undefined,
-                  lastSoldDate: enhancedMarketData?.lastSoldDate ?? undefined,
+                  lastSoldPrice: marketData?.lastSoldPrice
+                    ? (typeof marketData.lastSoldPrice === 'number'
+                        ? marketData.lastSoldPrice
+                        : parseInt(marketData.lastSoldPrice.replace(/[^\d]/g, '')) || undefined)
+                    : undefined,
+                  lastSoldDate: marketData?.lastSoldDate ?? undefined,
                   salesHistory,
                   schoolZones,
                   crimeStats,
