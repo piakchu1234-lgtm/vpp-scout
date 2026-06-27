@@ -2,11 +2,12 @@
 
 import React, { Suspense, useEffect, useMemo, useRef, useState, memo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Download, Loader2, Map as MapIcon, FileText, FileDown, Search, MapPin, FolderOpen } from 'lucide-react';
+import { ArrowLeft, Download, Loader2, Map as MapIcon, FileText, FileDown, Search, MapPin, FolderOpen, PanelRight } from 'lucide-react';
 import { UserButton, useAuth, useUser } from '@clerk/nextjs';
 import GlobalControls from '@/components/GlobalControls';
 import TierBadge from '@/components/TierBadge';
-import FloatingDashboardPanel from '@/components/FloatingDashboardPanel';
+import BottomDashboard from '@/components/BottomDashboard';
+import RightSidebar from '@/components/RightSidebar';
 import { useLanguage } from '@/contexts/LanguageContext';
 import area from '@turf/area';
 import distance from '@turf/distance';
@@ -26,8 +27,6 @@ import ComprehensiveReport from '@/components/report/ComprehensiveReport';
 import { MapPreview } from '@/components/MapPreview';
 import MapControlsToolbar from '@/components/MapControlsToolbar';
 import ZoneFilterPanel, { ZONE_CATEGORIES } from '@/components/ZoneFilterPanel';
-import PropertySidePanel from '@/components/dashboard/PropertySidePanel';
-import InsightPanel from '@/components/dashboard/InsightPanel';
 import DocumentConfigurator from '@/components/dashboard/DocumentConfigurator';
 import DADetailsModal from '@/components/modal/DADetailsModal';
 import SaveProjectModal from '@/components/modal/SaveProjectModal';
@@ -181,7 +180,7 @@ function AppCanvas() {
   const [liveCouncil, setLiveCouncil] = useState<string | null>(null);
   const [overlayGeometries, setOverlayGeometries] = useState<OverlayGeometry[]>([]);
   const [isStorefrontOpen, setIsStorefrontOpen] = useState(false);
-  const [isPanelOpen, setIsPanelOpen] = useState(true); // Collapsible side panel state
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Right sidebar state (initially closed)
   const [activeScenario, setActiveScenario] = useState<'current' | 'ssd' | 'dual_occ' | 'townhouse'>('current'); // Scenario Engine
 
   // School zone and crime stats state
@@ -1766,79 +1765,13 @@ function AppCanvas() {
       {/* Property Side Panel - Z-Index: 40 (Right Side - Adjusted for Top Bar) */}
       {hasCoords && (
         <>
-          {/* Side Panel */}
-          <div
-            className={`fixed right-6 top-24 bottom-6 w-[400px] z-40 transition-transform duration-300 ease-in-out rounded-2xl ${
-              isPanelOpen ? 'translate-x-0' : 'translate-x-[110%]'
-            }`}
-          >
-            <PropertySidePanel
-              address={address}
-              language={language}
-              zoneCode={planData?.zoneCode || null}
-              zoneDescription={planData?.zoneDescription || null}
-              planData={planData}
-              onExportPDF={handleExportPdf}
-              isGeneratingPDF={isGeneratingPdf}
-              onSaveProject={() => setShowSaveModal(true)}
-              isSavingProject={isSavingProject}
-              activeScenario={activeScenario}
-              onScenarioChange={setActiveScenario}
-              scenarioLabel={scenarioMetrics.label}
-              liveCouncil={liveCouncil}
-            onTestAgent={async () => {
-              setIsTestingAgent(true);
-              try {
-                const testAddress = addressParam || '45 Kooyong Road, Armadale VIC 3143';
-                console.log('🤖 [TEST AGENT] Starting agentic search for:', testAddress);
-                const result = await fetchAgentMarketData(testAddress);
-                console.log('🤖 [TEST AGENT] ✅ SUCCESS! Result:', result);
-              } catch (error) {
-                console.error('🤖 [TEST AGENT] ❌ FAILED:', error);
-              } finally {
-                setIsTestingAgent(false);
-              }
-            }}
-            isTestingAgent={isTestingAgent}
-            showEasements={showEasements}
-            onToggleEasements={setShowEasements}
-          showDAs={showDAs}
-          onToggleDAs={setShowDAs}
-          show3DMassing={show3DMassing}
-          onToggle3DMassing={setShow3DMassing}
-          daData={daData}
-          propertyLat={lat}
-          propertyLng={lon}
-          schoolZones={schoolZones}
-          crimeStats={crimeStats}
-          userTier={userTier}
-          lotSize={scenarioMetrics.lotSize > 0 ? `${scenarioMetrics.lotSize.toLocaleString()}m²` : '—'}
-          frontage={scenarioMetrics.frontage > 0 ? `${scenarioMetrics.frontage.toFixed(1)}m` : '—'}
-        />
-          </div>
-
-          {/* Toggle Button - Left Edge of Panel (Chevron) */}
-          <button
-            onClick={() => setIsPanelOpen(!isPanelOpen)}
-            className={`fixed top-1/2 -translate-y-1/2 z-50 w-10 h-16 bg-zinc-950/80 backdrop-blur-xl border border-white/10 border-r-0 rounded-l-xl shadow-lg hover:bg-zinc-900/80 transition-all duration-300 flex items-center justify-center ${
-              isPanelOpen ? 'right-[424px]' : 'right-6'
-            }`}
-            aria-label={isPanelOpen ? 'Collapse panel' : 'Expand panel'}
-            title={isPanelOpen ? 'Collapse panel' : 'Expand panel'}
-          >
-            <svg
-              className="w-4 h-4 text-zinc-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              {isPanelOpen ? (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              )}
-            </svg>
-          </button>
+          {/* Right Sidebar - New Premium Component */}
+          <RightSidebar
+            propertyData={propertyAnalysisData}
+            isOpen={isSidebarOpen}
+            onClose={() => setIsSidebarOpen(false)}
+            lang={language}
+          />
         </>
       )}
 
@@ -1920,34 +1853,27 @@ function AppCanvas() {
                 drawnArea={drawnArea}
               />
 
-              {/* Floating Dashboard Panel - Three Cards at Bottom */}
-              <FloatingDashboardPanel
+              {/* Sidebar Toggle Button - Left Controls */}
+              <button
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                className={`fixed left-4 top-[400px] z-30 w-12 h-12 rounded-xl shadow-lg transition-all duration-300 flex items-center justify-center ${
+                  isSidebarOpen 
+                    ? 'bg-brand-lime text-brand-dark' 
+                    : 'bg-brand-dark/80 backdrop-blur-xl border border-white/10 text-brand-lime hover:bg-brand-dark/90'
+                }`}
+                aria-label={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+                title={isSidebarOpen ? 'Close statutory analysis' : 'Open statutory analysis'}
+              >
+                <PanelRight className={`w-5 h-5 transition-transform ${isSidebarOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+
+              {/* Bottom Dashboard - New Premium Component */}
+              <BottomDashboard
+                propertyData={propertyAnalysisData}
+                isLoading={isLoadingProperty}
+                isSidebarOpen={isSidebarOpen}
                 lang={language}
-                propertyData={{
-                  address: address ?? undefined,
-                  landSizeM2: landSizeM2 ?? undefined,
-                  frontageM: calculatedFrontageM ?? undefined,
-                  bedrooms: enhancedMarketData?.bedrooms ?? aiInsight?.bedrooms ?? undefined,
-                  bathrooms: enhancedMarketData?.bathrooms ?? aiInsight?.bathrooms ?? undefined,
-                  carspaces: marketData?.carspaces ?? aiInsight?.carspaces ?? undefined,
-                  orientation: calculatedOrientation ?? undefined,
-                  estimatedValue: enhancedMarketData?.estimatedValue ?? undefined,
-                  lastSoldPrice: marketData?.lastSoldPrice
-                    ? (typeof marketData.lastSoldPrice === 'number'
-                        ? marketData.lastSoldPrice
-                        : parseInt(marketData.lastSoldPrice.replace(/[^\d]/g, '')) || undefined)
-                    : undefined,
-                  lastSoldDate: marketData?.lastSoldDate ?? undefined,
-                  salesHistory,
-                  schoolZones,
-                  crimeStats,
-                }}
-                isPro={isPro}
-                isSidebarOpen={isPanelOpen}
-                onUpgrade={() => {
-                  // Redirect to Stripe checkout
-                  window.location.href = '/api/checkout';
-                }}
               />
 
               {/* Zone Filter Panel - Professional zoning interface */}
