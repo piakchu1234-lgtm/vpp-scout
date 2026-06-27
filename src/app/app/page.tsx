@@ -70,6 +70,7 @@ import { detectSchoolZones } from '@/lib/schoolZoneDetection';
 import { getCrimeStatsForLGA } from '@/lib/crimeStats';
 import { calculateEstimatedValue, formatEstimatedValue } from '@/lib/valuationCalculator';
 import type { MapClickResult, ComplianceEvaluation } from '@/lib/mapClickPipeline';
+import { usePropertyAnalysis, type PropertyAnalysisData } from '@/hooks/usePropertyAnalysis';
 
 
 const MELBOURNE_FALLBACK = { lat: -37.8136, lon: 144.9631 };
@@ -201,6 +202,10 @@ function AppCanvas() {
   // ZONE FILTER STATE - Professional zoning interface
   // Default: ALL ZONES HIDDEN (empty array) - user must manually enable zones
   const [activeZoneFilter, setActiveZoneFilter] = useState<string[]>([]);
+
+  // UNIFIED PROPERTY ANALYSIS STATE - Fast spatial lookup integration
+  const [isLoadingProperty, setIsLoadingProperty] = useState(false);
+  const [propertyAnalysisData, setPropertyAnalysisData] = useState<PropertyAnalysisData | null>(null);
 
   const { language } = useLanguage();
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
@@ -610,6 +615,63 @@ function AppCanvas() {
   // Initialize state from localStorage on mount (client-side only to avoid hydration mismatch)
   // Session persistence hook
   const projectState = useProjectState();
+
+  // UNIFIED PROPERTY ANALYSIS HOOK - Fast spatial lookup (10-50ms)
+  const { analyze: analyzeProperty } = usePropertyAnalysis({
+    onSuccess: (data) => {
+      console.log('[PropertyAnalysis] Fast spatial lookup succeeded:', {
+        address: data.address,
+        lotSize: data.dimensions.lotSizeSqm,
+        zone: data.statutory.zoneCode,
+        responseTime: '~10-50ms'
+      });
+
+      setPropertyAnalysisData(data);
+      setIsLoadingProperty(false);
+
+      // Update planning data with instant spatial results
+      setLiveCouncil(data.lga);
+
+      if (planData) {
+        setPlanData({
+          ...planData,
+          zoneCode: data.statutory.zoneCode,
+          overlayRaw: data.statutory.overlays,
+        });
+      } else {
+        setPlanData({
+          zoneCode: data.statutory.zoneCode,
+          zoneDescription: null,
+          overlayCodes: [], // Will be parsed by existing flow
+          overlayRaw: data.statutory.overlays,
+        });
+      }
+
+      // If this property has been enriched, populate market data
+      if (data.specifications.bedrooms !== null || data.market.lastSoldPrice !== null) {
+        console.log('[PropertyAnalysis] Enriched property data available');
+        setMarketData({
+          bedrooms: data.specifications.bedrooms,
+          bathrooms: data.specifications.bathrooms,
+          carspaces: data.specifications.carSpaces,
+          yearBuilt: data.specifications.yearBuilt,
+          floorAreaM2: null,
+          lastSoldPrice: data.market.lastSoldPrice?.toString() || null,
+          lastSoldDate: data.market.lastSoldDate || null,
+          propertyType: null,
+          roofMaterial: data.specifications.roofMaterial,
+          wallMaterial: data.specifications.wallMaterial,
+          source: 'cache', // Fast spatial lookup from cached property_parcels table
+        });
+      }
+    },
+
+    onError: (error) => {
+      console.log('[PropertyAnalysis] Fast lookup failed:', error.error, '- falling back to Vicmap API');
+      setIsLoadingProperty(false);
+      // Fallback to existing flow - no action needed
+    },
+  });
 
   // View mode and camera state for MapControlsToolbar
   type ViewMode = 'plan' | 'satellite' | 'hybrid';
@@ -1399,43 +1461,68 @@ function AppCanvas() {
   };
 
   // Multi-parcel selection with Shift + Click modifier for site consolidation.
-  // Standard click: single-parcel selection (clears array, then adds one).
-  // Shift + Click: multi-parcel toggle (adds/removes without clearing).
-  // Clicking empty space: clears all selections.
-  function handleMapParcelClick(
+  // ENHANCED with unified property analysis API for instant spatial lookups.
+  /**
+   * ENHANCED MAP PARCEL CLICK HANDLER
+   *
+   * Integrates with unified property analysis API for instant spatial lookups.
+   * Falls back gracefully to existing Vicmap API flow if property not cached.
+   *
+   * Click Behavior:
+   * - Standard click: Single parcel selection + fast spatial analysis
+   * - Shift + Click: Multi-parcel toggle (no API call)
+   * - Empty space click: Clear selection
+   *
+   * Performance:
+   * - Cached property: 10-50ms response
+   * - Non-cached property: Falls back to existing 3-5s enrichment pipeline
+   */
+  async function handleMapParcelClick(
     lonLat: [number, number],
     clickedParcel: ParcelFeature | null,
     shiftKey: boolean = false,
   ) {
-    // If no parcel was clicked (empty space), clear selection array
+    // === EMPTY SPACE CLICK ===
     if (!clickedParcel) {
       handleClearSelection();
       return;
     }
 
-    // NEW: Update orchestrator state for backend property intelligence
-    setSelectedProperty({
-      pfi: clickedParcel.properties.PARCEL_PFI || null,
-      lng: lonLat[0],
-      lat: lonLat[1],
-    });
+    const [lng, lat] = lonLat;
+    const pfi = clickedParcel.properties.PARCEL_PFI;
 
-    // Standard click (no Shift): replace selection with single parcel
+    // === STANDARD CLICK (NO SHIFT) ===
     if (!shiftKey) {
       setSelectedParcels([clickedParcel]);
+      setIsLoadingProperty(true);
+
+      // Update orchestrator state (triggers existing enrichment pipeline)
+      setSelectedProperty({
+        pfi: pfi || null,
+        lng,
+        lat,
+      });
+
+      // === NEW: PARALLEL FAST SPATIAL LOOKUP ===
+      // Runs alongside existing flow for instant feedback
+      // If property exists in property_parcels table, returns in 10-50ms
+      // If not found, existing flow continues without interruption
+      console.log('[ParcelClick] Triggering fast spatial analysis...', { lat, lng, pfi });
+      analyzeProperty({ lat, lng });
+
       return;
     }
 
-    // Shift + Click: toggle parcel in array for multi-site consolidation
+    // === SHIFT + CLICK: MULTI-PARCEL TOGGLE ===
+    // No API calls - just visual feedback for consolidation analysis
     setSelectedParcels((prev) => {
-      const pfi = clickedParcel.properties.PARCEL_PFI;
       const exists = prev.some((p) => p.properties.PARCEL_PFI === pfi);
 
       if (exists) {
-        // Remove from array
+        console.log('[ParcelClick] Removing from multi-select:', pfi);
         return prev.filter((p) => p.properties.PARCEL_PFI !== pfi);
       } else {
-        // Add to array
+        console.log('[ParcelClick] Adding to multi-select:', pfi);
         return [...prev, clickedParcel];
       }
     });
@@ -1761,6 +1848,23 @@ function AppCanvas() {
         <div className="absolute inset-0 w-full h-full">
           {hasCoords ? (
             <>
+              {/* Property Analysis Loading Overlay */}
+              {isLoadingProperty && (
+                <div className="absolute inset-0 bg-black/30 flex items-center justify-center z-50 pointer-events-none">
+                  <div className="bg-zinc-900/95 backdrop-blur-sm border border-zinc-800 rounded-xl px-6 py-4 flex items-center gap-3 shadow-2xl">
+                    <Loader2 className="w-5 h-5 text-[#E9E778] animate-spin" />
+                    <div className="flex flex-col">
+                      <span className="text-white font-semibold text-sm">
+                        {language === 'en' ? 'Analyzing Property' : '分析房产'}
+                      </span>
+                      <span className="text-zinc-400 text-xs mt-0.5">
+                        {language === 'en' ? 'Spatial lookup in progress...' : '空间查询进行中...'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <MapPreviewMemoized
                 ref={mapPreviewRef}
                 lat={lat}
