@@ -12,6 +12,13 @@ const config: Config = {
       colors: {
         background: "var(--background)",
         foreground: "var(--foreground)",
+        // SimplySite Brand Colors
+        brand: {
+          lime: '#E9E778',      // Primary accent - use for CTAs, highlights, success states
+          dark: '#241F21',      // Primary background - deep charcoal
+          'lime-light': '#F0EE9A', // Lighter lime for hovers
+          'lime-dark': '#D4D15C',  // Darker lime for active states
+        },
       },
     },
   },
